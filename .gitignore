@@ -1,0 +1,192 @@
+# =================================
+# Dependencies
+# =================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =================================
+# Production Builds
+# =================================
+dist/
+build/
+.next/
+out/
+
+# =================================
+# Environment Variables
+# =================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =================================
+# IDE & Editor Files
+# =================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.com.apple.timemachine.supported
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# =================================
+# Logs
+# =================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# =================================
+# Runtime Data
+# =================================
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =================================
+# Coverage Directory
+# =================================
+coverage/
+*.lcov
+.nyc_output
+
+# =================================
+# Dependency Lock Files
+# =================================
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# =================================
+# TypeScript Cache
+# =================================
+*.tsbuildinfo
+
+# =================================
+# Optional NPM Cache Directory
+# =================================
+.npm
+
+# =================================
+# Optional ESLint Cache
+# =================================
+.eslintcache
+
+# =================================
+# Micro Specific
+# =================================
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Uploads & Media
+uploads/
+public/uploads/
+media/
+
+# Docker
+.dockerignore
+
+# Kubernetes
+*.kubeconfig
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# =================================
+# Testing
+# =================================
+test-results/
+playwright-report/
+test-results.xml
+
+# =================================
+# Temporary Files
+# =================================
+tmp/
+temp/
+.tmp/
+
+# =================================
+# OS Files
+# =================================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# =================================
+# VSCode Extensions
+# =================================
+.vscode/extensions.json
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# =================================
+# Local Development
+# =================================
+.cache/
+.parcel-cache/
+
+# =================================
+# Storybook
+# =================================
+storybook-static/
+
+# =================================
+# Prisma
+# =================================
+prisma/migrations/
+
+# =================================
+# Sentry
+# =================================
+.sentryclirc
+
+# =================================
+# PWA
+# =================================
+sw.js
+sw.js.map
+workbox-*.js
+workbox-*.js.map
+
+# =================================
+# Backup Files
+# =================================
+*.bak
+*.backup
+*.old

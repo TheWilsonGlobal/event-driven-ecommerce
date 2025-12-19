@@ -1,0 +1,63 @@
+{
+  "name": "microservices-ecommerce",
+  "version": "1.0.0",
+  "description": "A scalable microservices e-commerce platform built with Node.js, TypeScript, and React",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api-gateway\" \"npm run dev:user-service\" \"npm run dev:product-service\" \"npm run dev:order-service\" \"npm run dev:frontend\"",
+    "dev:api-gateway": "npm run dev --workspace=@ecommerce/api-gateway",
+    "dev:user-service": "npm run dev --workspace=@ecommerce/user-service",
+    "dev:product-service": "npm run dev --workspace=@ecommerce/product-service",
+    "dev:order-service": "npm run dev --workspace=@ecommerce/order-service",
+    "dev:frontend": "npm run dev --workspace=@ecommerce/frontend",
+    "build": "npm run build --workspaces",
+    "build:shared": "npm run build --workspace=@ecommerce/shared",
+    "test": "npm run test --workspaces",
+    "test:watch": "npm run test:watch --workspaces",
+    "lint": "npm run lint --workspaces",
+    "lint:fix": "npm run lint:fix --workspaces",
+    "clean": "lerna clean && rimraf node_modules",
+    "bootstrap": "npm install && lerna bootstrap",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "lerna": "^8.0.0",
+    "concurrently": "^8.2.2",
+    "rimraf": "^5.0.5",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "prettier": "^3.1.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/microservices-ecommerce.git"
+  },
+  "author": "Your Name",
+  "license": "MIT",
+  "keywords": [
+    "microservices",
+    "ecommerce",
+    "nodejs",
+    "typescript",
+    "react",
+    "docker",
+    "kubernetes"
+  ]
+}
