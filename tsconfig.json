@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "ES2020",
     "lib": ["ES2020"],
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "node16",
+    "moduleResolution": "node16",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
@@ -27,18 +27,18 @@
     "resolveJsonModule": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "baseUrl": ".",
     "paths": {
-      "@ecommerce/shared": ["packages/shared/src"],
-      "@ecommerce/shared-types": ["packages/shared/types/src"],
-      "@ecommerce/shared-utils": ["packages/shared/utils/src"],
-      "@ecommerce/shared-database": ["packages/shared/database/src"],
-      "@ecommerce/shared-messaging": ["packages/shared/messaging/src"],
-      "@ecommerce/gateway": ["packages/gateway/src"],
-      "@ecommerce/ms-user": ["packages/ms-user/src"],
-      "@ecommerce/ms-product": ["packages/ms-product/src"],
-      "@ecommerce/ms-order": ["packages/ms-order/src"],
-      "@ecommerce/frontend": ["packages/frontend/src"]
+      "@ecommerce/shared": ["./packages/shared/src"],
+      "@ecommerce/shared-types": ["./packages/shared/types/src"],
+      "@ecommerce/shared-utils": ["./packages/shared/utils/src"],
+      "@ecommerce/shared-database": ["./packages/shared/database/src"],
+      "@ecommerce/shared-messaging": ["./packages/shared/messaging/src"],
+      "@ecommerce/gateway": ["./packages/gateway/src"],
+      "@ecommerce/ms-user": ["./packages/ms-user/src"],
+      "@ecommerce/ms-product": ["./packages/ms-product/src"],
+      "@ecommerce/ms-order": ["./packages/ms-order/src"],
+      "@ecommerce/frontend": ["./packages/frontend/src"],
+      "@ecommerce/admin": ["./packages/admin/src"]
     }
   },
   "include": [
@@ -61,6 +61,7 @@
     { "path": "./packages/ms-user" },
     { "path": "./packages/ms-product" },
     { "path": "./packages/ms-order" },
-    { "path": "./packages/frontend" }
+    { "path": "./packages/frontend" },
+    { "path": "./packages/admin" }
   ]
 }
