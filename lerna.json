@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "npmClient": "npm",
+  "npmClient": "pnpm",
   "command": {
     "publish": {
       "conventionalCommits": true,
@@ -8,13 +8,12 @@
       "registry": "https://registry.npmjs.org/"
     },
     "bootstrap": {
-      "ignore": "component-*",
-      "npmClientArgs": ["--no-package-lock"]
+      "ignore": "component-*"
     }
   },
   "packages": [
     "packages/*",
-    "apps/*"
+    "packages/shared/*"
   ],
   "ignoreChanges": [
     "**/*.md",

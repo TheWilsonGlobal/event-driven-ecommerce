@@ -3,25 +3,22 @@
   "version": "1.0.0",
   "description": "A scalable microservices e-commerce platform built with Node.js, TypeScript, and React",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
+  "packageManager": "pnpm@10.29.2",
   "scripts": {
-    "dev": "concurrently \"npm run dev:api-gateway\" \"npm run dev:user-service\" \"npm run dev:product-service\" \"npm run dev:order-service\" \"npm run dev:frontend\"",
-    "dev:api-gateway": "npm run dev --workspace=@ecommerce/api-gateway",
-    "dev:user-service": "npm run dev --workspace=@ecommerce/user-service",
-    "dev:product-service": "npm run dev --workspace=@ecommerce/product-service",
-    "dev:order-service": "npm run dev --workspace=@ecommerce/order-service",
-    "dev:frontend": "npm run dev --workspace=@ecommerce/frontend",
-    "build": "npm run build --workspaces",
-    "build:shared": "npm run build --workspace=@ecommerce/shared",
-    "test": "npm run test --workspaces",
-    "test:watch": "npm run test:watch --workspaces",
-    "lint": "npm run lint --workspaces",
-    "lint:fix": "npm run lint:fix --workspaces",
-    "clean": "lerna clean && rimraf node_modules",
-    "bootstrap": "npm install && lerna bootstrap",
+    "dev": "concurrently \"pnpm run dev:api-gateway\" \"pnpm run dev:user-service\" \"pnpm run dev:product-service\" \"pnpm run dev:order-service\" \"pnpm run dev:frontend\"",
+    "dev:api-gateway": "pnpm --filter @ecommerce/api-gateway dev",
+    "dev:user-service": "pnpm --filter @ecommerce/user-service dev",
+    "dev:product-service": "pnpm --filter @ecommerce/product-service dev",
+    "dev:order-service": "pnpm --filter @ecommerce/order-service dev",
+    "dev:frontend": "pnpm --filter @ecommerce/frontend dev",
+    "build": "pnpm -r run build",
+    "build:shared": "pnpm --filter \"@ecommerce/shared*\" run build",
+    "test": "pnpm -r run test",
+    "test:watch": "pnpm -r run test:watch",
+    "lint": "pnpm -r run lint",
+    "lint:fix": "pnpm -r run lint:fix",
+    "clean": "pnpm -r exec rimraf dist && rimraf node_modules pnpm-lock.yaml",
+    "bootstrap": "pnpm install",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down"
@@ -29,7 +26,6 @@
   "devDependencies": {
     "@types/node": "^20.10.0",
     "typescript": "^5.3.0",
-    "lerna": "^8.0.0",
     "concurrently": "^8.2.2",
     "rimraf": "^5.0.5",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
@@ -43,7 +39,7 @@
   },
   "engines": {
     "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "pnpm": ">=8.0.0"
   },
   "repository": {
     "type": "git",
@@ -58,6 +54,7 @@
     "typescript",
     "react",
     "docker",
-    "kubernetes"
+    "kubernetes",
+    "pnpm"
   ]
 }

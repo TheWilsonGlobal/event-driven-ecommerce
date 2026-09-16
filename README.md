@@ -25,7 +25,7 @@ This monorepo contains the following services:
 
 ### Prerequisites
 - Node.js 18+
-- npm 9+
+- pnpm 8+ (`npm install -g pnpm` or `corepack enable`)
 - Docker & Docker Compose
 - PostgreSQL
 - Redis
@@ -47,46 +47,47 @@ cp .env.example .env
 
 3. Install dependencies:
 ```bash
-npm run bootstrap
+pnpm install
 ```
 
 4. Start development servers:
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 ## 📦 Available Scripts
 
 ### Root Level Scripts
-- `npm run dev` - Start all services in development mode
-- `npm run build` - Build all packages
-- `npm run test` - Run all tests
-- `npm run lint` - Lint all packages
-- `npm run docker:up` - Start services with Docker Compose
+- `pnpm run dev` - Start all services in development mode
+- `pnpm run build` - Build all packages
+- `pnpm run test` - Run all tests across workspace
+- `pnpm run lint` - Lint all packages
+- `pnpm run docker:up` - Start services with Docker Compose
+- `pnpm run docker:down` - Stop Docker Compose services
 
 ### Service-Specific Scripts
-- `npm run dev:api-gateway` - Start API Gateway only
-- `npm run dev:user-service` - Start User Service only
-- `npm run dev:product-service` - Start Product Service only
-- `npm run dev:order-service` - Start Order Service only
-- `npm run dev:frontend` - Start Frontend only
+- `pnpm run dev:api-gateway` - Start API Gateway only
+- `pnpm run dev:user-service` - Start User Service only
+- `pnpm run dev:product-service` - Start Product Service only
+- `pnpm run dev:order-service` - Start Order Service only
+- `pnpm run dev:frontend` - Start Frontend only
 
 ## 🏃 Development Workflow
 
 ### Adding a New Service
 1. Create a new directory under `packages/`
-2. Initialize with `npm init`
-3. Add to `workspaces` in root `package.json`
-4. Add to `tsconfig.json` references
+2. Initialize with `pnpm init`
+3. Verify matching glob in `pnpm-workspace.yaml`
+4. Add to `tsconfig.json` references and paths
 5. Update Docker Compose configuration
 
 ### Database Migrations
 ```bash
 # Run migrations
-npm run migrate --workspace=@ecommerce/user-service
+pnpm --filter @ecommerce/user-service run migrate
 
 # Generate new migration
-npm run migrate:generate --workspace=@ecommerce/user-service -- MigrationName
+pnpm --filter @ecommerce/user-service run migrate:generate -- MigrationName
 ```
 
 ## 📊 Monitoring & Observability
@@ -109,10 +110,10 @@ npm run migrate:generate --workspace=@ecommerce/user-service -- MigrationName
 ### Docker Deployment
 ```bash
 # Build all services
-npm run docker:build
+pnpm run docker:build
 
 # Start with Docker Compose
-npm run docker:up
+pnpm run docker:up
 ```
 
 ### Kubernetes
@@ -128,13 +129,13 @@ API documentation is available at:
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run tests in watch mode
-npm run test:watch
+pnpm run test:watch
 
 # Run tests with coverage
-npm run test:coverage
+pnpm --filter @ecommerce/frontend run test:coverage
 ```
 
 ## 📝 License

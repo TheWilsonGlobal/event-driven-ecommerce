@@ -14,9 +14,9 @@
     "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
-    "@ecommerce/shared": "^1.0.0",
-    "@ecommerce/shared-types": "^1.0.0",
-    "@ecommerce/shared-utils": "^1.0.0",
+    "@ecommerce/shared": "workspace:*",
+    "@ecommerce/shared-types": "workspace:*",
+    "@ecommerce/shared-utils": "workspace:*",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",

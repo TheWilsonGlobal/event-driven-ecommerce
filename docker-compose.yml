@@ -194,7 +194,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: apps/frontend/Dockerfile
+      dockerfile: packages/frontend/Dockerfile
     container_name: ecommerce-frontend
     environment:
       NODE_ENV: development
@@ -206,8 +206,8 @@ services:
     networks:
       - ecommerce-network
     volumes:
-      - ./apps/frontend/src:/app/src
-      - ./apps/frontend/public:/app/public
+      - ./packages/frontend/src:/app/src
+      - ./packages/frontend/public:/app/public
       - /app/node_modules
 
   # Monitoring

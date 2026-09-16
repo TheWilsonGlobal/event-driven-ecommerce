@@ -1,48 +1,46 @@
 FROM node:18-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
 # Install dependencies only when needed
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package*.json ./
-COPY ../../package*.json ../../
-COPY ../../packages/shared/package*.json ../../packages/shared/
-COPY ../../packages/shared/types/package*.json ../../packages/shared/types/
-COPY ../../packages/shared/utils/package*.json ../../packages/shared/utils/
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY packages/shared ./packages/shared
+COPY packages/api-gateway/package.json ./packages/api-gateway/
 
-RUN npm ci --only=production
+RUN pnpm --filter @ecommerce/api-gateway... install --frozen-lockfile
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /app ./
+COPY packages/api-gateway ./packages/api-gateway
 
-# Build the application
-RUN npm run build
+RUN pnpm --filter @ecommerce/api-gateway run build
 
 # Production image, copy all the files and run the app
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
 # Create a non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 
 # Copy the built application
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/packages/api-gateway/dist ./dist
+COPY --from=builder /app/packages/api-gateway/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
 
 USER nodejs
 
 EXPOSE 3000
 
-ENV PORT 3000
+ENV PORT=3000
 
 CMD ["node", "dist/index.js"]

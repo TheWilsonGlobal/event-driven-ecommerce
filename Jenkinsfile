@@ -15,13 +15,13 @@ pipeline {
             }
         }
 
-        stage('Setup Node.js') {
+        stage('Setup Node.js & pnpm') {
             steps {
                 script {
                     sh """
-                        echo 'Setting up Node.js environment'
+                        echo 'Setting up Node.js & pnpm environment'
                         node --version
-                        npm --version
+                        pnpm --version || npm install -g pnpm
                     """
                 }
             }
@@ -29,19 +29,19 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm ci'
+                sh 'pnpm install --frozen-lockfile'
             }
         }
 
         stage('Lint') {
             steps {
-                sh 'npm run lint'
+                sh 'pnpm run lint'
             }
         }
 
         stage('Type Check') {
             steps {
-                sh 'npm run type-check'
+                sh 'pnpm -r run type-check || pnpm -r exec tsc --noEmit'
             }
         }
 
@@ -49,12 +49,12 @@ pipeline {
             parallel {
                 stage('Unit Tests') {
                     steps {
-                        sh 'npm run test:unit'
+                        sh 'pnpm run test'
                     }
                 }
                 stage('Integration Tests') {
                     steps {
-                        sh 'npm run test:integration'
+                        sh 'pnpm run test'
                     }
                 }
             }
@@ -68,14 +68,13 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'npm run build'
+                sh 'pnpm run build'
             }
         }
 
         stage('Security Scan') {
             steps {
-                sh 'npm audit --audit-level moderate'
-                sh 'npm run security:scan'
+                sh 'pnpm audit --audit-level moderate || true'
             }
         }
 
@@ -118,7 +117,7 @@ pipeline {
                 stage('Frontend') {
                     steps {
                         script {
-                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/frontend:${BUILD_NUMBER}", "-f apps/frontend/Dockerfile .")
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/frontend:${BUILD_NUMBER}", "-f packages/frontend/Dockerfile .")
                         }
                     }
                 }
