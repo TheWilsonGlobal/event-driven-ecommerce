@@ -10,17 +10,17 @@ WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/shared ./packages/shared
-COPY packages/api-gateway/package.json ./packages/api-gateway/
+COPY packages/gateway/package.json ./packages/gateway/
 
-RUN pnpm --filter @ecommerce/api-gateway... install --frozen-lockfile
+RUN pnpm --filter @ecommerce/gateway... install --frozen-lockfile
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app ./
-COPY packages/api-gateway ./packages/api-gateway
+COPY packages/gateway ./packages/gateway
 
-RUN pnpm --filter @ecommerce/api-gateway run build
+RUN pnpm --filter @ecommerce/gateway run build
 
 # Production image, copy all the files and run the app
 FROM base AS runner
@@ -33,8 +33,8 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 
 # Copy the built application
-COPY --from=builder /app/packages/api-gateway/dist ./dist
-COPY --from=builder /app/packages/api-gateway/package.json ./package.json
+COPY --from=builder /app/packages/gateway/dist ./dist
+COPY --from=builder /app/packages/gateway/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 
 USER nodejs

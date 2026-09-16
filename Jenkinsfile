@@ -89,7 +89,7 @@ pipeline {
                 stage('API Gateway') {
                     steps {
                         script {
-                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/api-gateway:${BUILD_NUMBER}", "-f packages/api-gateway/Dockerfile .")
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/api-gateway:${BUILD_NUMBER}", "-f packages/gateway/Dockerfile .")
                         }
                     }
                 }

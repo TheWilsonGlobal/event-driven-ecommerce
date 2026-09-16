@@ -1,5 +1,5 @@
 {
-  "name": "@ecommerce/api-gateway",
+  "name": "@ecommerce/gateway",
   "version": "1.0.0",
   "description": "API Gateway for routing and handling external requests",
   "main": "dist/index.js",

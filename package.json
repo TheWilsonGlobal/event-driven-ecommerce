@@ -5,8 +5,8 @@
   "private": true,
   "packageManager": "pnpm@10.29.2",
   "scripts": {
-    "dev": "concurrently \"pnpm run dev:api-gateway\" \"pnpm run dev:ms-user\" \"pnpm run dev:ms-product\" \"pnpm run dev:ms-order\" \"pnpm run dev:frontend\"",
-    "dev:api-gateway": "pnpm --filter @ecommerce/api-gateway dev",
+    "dev": "concurrently \"pnpm run dev:gateway\" \"pnpm run dev:ms-user\" \"pnpm run dev:ms-product\" \"pnpm run dev:ms-order\" \"pnpm run dev:frontend\"",
+    "dev:gateway": "pnpm --filter @ecommerce/gateway dev",
     "dev:ms-user": "pnpm --filter @ecommerce/ms-user dev",
     "dev:ms-product": "pnpm --filter @ecommerce/ms-product dev",
     "dev:ms-order": "pnpm --filter @ecommerce/ms-order dev",

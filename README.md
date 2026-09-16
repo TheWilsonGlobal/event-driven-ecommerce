@@ -7,7 +7,7 @@ A scalable, production-ready microservices e-commerce platform built with Node.j
 This monorepo contains the following services:
 
 ### Backend Services (Fastify 4)
-- **API Gateway** (`packages/api-gateway` · Port 3000) - Reverse proxy, JWT verification, rate limiting
+- **API Gateway** (`packages/gateway` · Port 3000) - Reverse proxy, JWT verification, rate limiting
 - **User Service** (`packages/ms-user` · Port 3001) - Authentication, authorization, and user management
 - **Product Service** (`packages/ms-product` · Port 3002) - Product catalog, Elasticsearch search, and inventory
 - **Order Service** (`packages/ms-order` · Port 3003) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal
@@ -70,7 +70,7 @@ pnpm run dev
 - `pnpm run docker:down` - Stop Docker Compose services
 
 ### Service-Specific Scripts
-- `pnpm run dev:api-gateway` - Start API Gateway only
+- `pnpm run dev:gateway` - Start API Gateway only (`@ecommerce/gateway`)
 - `pnpm run dev:ms-user` - Start User Service (`@ecommerce/ms-user`) only
 - `pnpm run dev:ms-product` - Start Product Service (`@ecommerce/ms-product`) only
 - `pnpm run dev:ms-order` - Start Order Service (`@ecommerce/ms-order`) only

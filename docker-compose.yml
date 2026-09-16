@@ -60,7 +60,7 @@ services:
   api-gateway:
     build:
       context: .
-      dockerfile: packages/api-gateway/Dockerfile
+      dockerfile: packages/gateway/Dockerfile
     container_name: ecommerce-api-gateway
     environment:
       NODE_ENV: development
@@ -86,7 +86,7 @@ services:
     networks:
       - ecommerce-network
     volumes:
-      - ./packages/api-gateway/src:/app/src
+      - ./packages/gateway/src:/app/src
       - /app/node_modules
 
   user-service:
