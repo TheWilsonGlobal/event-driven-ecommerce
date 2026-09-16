@@ -1,14 +1,19 @@
-import fastify, { FastifyInstance } from 'fastify';
+import fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { loadDatabaseConfig } from '@ecommerce/shared-database';
+import * as crypto from 'crypto';
+import { loadDatabaseConfig, createRustFSClient } from '@ecommerce/shared-database';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const dbConfig = loadDatabaseConfig(process.env);
 const PORT = parseInt(process.env.PRODUCT_SERVICE_PORT || '3002', 10);
+
+// Initialise the RustFS client (singleton per process)
+const rustfs = createRustFSClient(process.env);
 
 const server: FastifyInstance = fastify({
   logger: {
@@ -24,7 +29,18 @@ const server: FastifyInstance = fastify({
 async function bootstrap() {
   await server.register(cors, { origin: '*' });
   await server.register(helmet);
+  await server.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10 MB max per file
+    },
+  });
 
+  // Ensure the RustFS bucket exists on startup (non-blocking)
+  rustfs.ensureBucket().catch((err) => {
+    server.log.warn(`[RustFS] Could not ensure bucket on startup: ${err?.message}`);
+  });
+
+  // ─── Health ───────────────────────────────────────────────────────────────
   server.get('/health', async () => {
     return {
       status: 'ok',
@@ -37,6 +53,22 @@ async function bootstrap() {
     };
   });
 
+  // ─── Storage Health ───────────────────────────────────────────────────────
+  // GET /api/v1/storage/health  → probe RustFS and return live status
+  server.get('/api/v1/storage/health', async (_req, reply) => {
+    const result = await rustfs.healthCheck();
+    reply.status(result.healthy ? 200 : 503);
+    return {
+      provider: 'rustfs',
+      healthy: result.healthy,
+      latencyMs: result.latencyMs,
+      endpoint: result.endpoint,
+      bucket: process.env.RUSTFS_BUCKET || 'ecommerce-uploads',
+      timestamp: new Date().toISOString(),
+    };
+  });
+
+  // ─── Products ─────────────────────────────────────────────────────────────
   server.get('/api/v1/products', async () => {
     return {
       products: [],
@@ -54,6 +86,69 @@ async function bootstrap() {
         { id: '3', name: 'Books', slug: 'books' },
       ],
     };
+  });
+
+  // ─── Product Image Upload ─────────────────────────────────────────────────
+  // POST /api/v1/products/upload  (multipart/form-data, field: "image")
+  // Streams the file into RustFS and returns the public URL.
+  server.post('/api/v1/products/upload', async (req: FastifyRequest, reply) => {
+    const data = await req.file();
+    if (!data) {
+      return reply.status(400).send({ error: 'No file uploaded' });
+    }
+
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedMimes.includes(data.mimetype)) {
+      return reply.status(415).send({
+        error: 'Unsupported media type. Allowed: jpeg, png, webp, gif',
+      });
+    }
+
+    // Collect stream into buffer
+    const chunks: Buffer[] = [];
+    for await (const chunk of data.file) {
+      chunks.push(chunk as Buffer);
+    }
+    const buffer = Buffer.concat(chunks);
+
+    const ext = data.filename.split('.').pop() ?? 'jpg';
+    const uid = crypto.randomUUID();
+    const key = `products/${uid}.${ext}`;
+
+    try {
+      const { url } = await rustfs.uploadObject(key, buffer, data.mimetype);
+      return reply.status(201).send({ key, url, size: buffer.byteLength });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      server.log.error(`[RustFS] Upload failed: ${message}`);
+      return reply.status(500).send({ error: 'Storage upload failed', detail: message });
+    }
+  });
+
+  // ─── Receipt Upload (Order Saga) ─────────────────────────────────────────
+  // POST /api/v1/receipts/upload  (multipart/form-data, field: "receipt")
+  server.post('/api/v1/receipts/upload', async (req: FastifyRequest, reply) => {
+    const data = await req.file();
+    if (!data) {
+      return reply.status(400).send({ error: 'No file uploaded' });
+    }
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of data.file) {
+      chunks.push(chunk as Buffer);
+    }
+    const buffer = Buffer.concat(chunks);
+
+    const uid = crypto.randomUUID();
+    const key = `receipts/${uid}.pdf`;
+
+    try {
+      const { url } = await rustfs.uploadObject(key, buffer, 'application/pdf');
+      return reply.status(201).send({ key, url, size: buffer.byteLength });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      return reply.status(500).send({ error: 'Receipt upload failed', detail: message });
+    }
   });
 
   try {

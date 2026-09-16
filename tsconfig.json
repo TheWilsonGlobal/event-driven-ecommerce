@@ -50,18 +50,5 @@
     "dist",
     "**/*.test.ts",
     "**/*.spec.ts"
-  ],
-  "references": [
-    { "path": "./packages/shared" },
-    { "path": "./packages/shared/types" },
-    { "path": "./packages/shared/utils" },
-    { "path": "./packages/shared/database" },
-    { "path": "./packages/shared/messaging" },
-    { "path": "./packages/gateway" },
-    { "path": "./packages/ms-user" },
-    { "path": "./packages/ms-product" },
-    { "path": "./packages/ms-order" },
-    { "path": "./packages/client" },
-    { "path": "./packages/admin" }
   ]
 }
