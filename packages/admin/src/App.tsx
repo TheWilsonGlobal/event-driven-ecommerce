@@ -1,81 +1,81 @@
-import { useState, useMemo } from 'react';
-import type { ServiceItem, UserRecord, ProductRecord, OrderRecord } from './types';
-import { INITIAL_SERVICES, INITIAL_USERS, INITIAL_PRODUCTS, INITIAL_ORDERS } from './data/seed';
-import { useHealthMonitoring } from './hooks/useHealthMonitoring';
+import { useState, useMemo } from 'react'
+import type { ServiceItem, UserRecord, ProductRecord, OrderRecord } from './types'
+import { INITIAL_SERVICES, INITIAL_USERS, INITIAL_PRODUCTS, INITIAL_ORDERS } from './data/seed'
+import { useHealthMonitoring } from './hooks/useHealthMonitoring'
 
 // Components & Tabs
-import AdminHeader from './components/AdminHeader';
-import ServicesTab from './tabs/ServicesTab';
-import UsersTab from './tabs/UsersTab';
-import ProductsTab from './tabs/ProductsTab';
-import OrdersTab from './tabs/OrdersTab';
-import PersistenceTab from './tabs/PersistenceTab';
-import ConfigTab from './tabs/ConfigTab';
+import AdminHeader from './components/AdminHeader'
+import ServicesTab from './tabs/ServicesTab'
+import UsersTab from './tabs/UsersTab'
+import ProductsTab from './tabs/ProductsTab'
+import OrdersTab from './tabs/OrdersTab'
+import PersistenceTab from './tabs/PersistenceTab'
+import ConfigTab from './tabs/ConfigTab'
 
 // Modals
-import ServiceModal from './modals/ServiceModal';
-import OrderModal from './modals/OrderModal';
-import UserViewModal from './modals/UserViewModal';
-import UserFormModal from './modals/UserFormModal';
-import ProductFormModal from './modals/ProductFormModal';
+import ServiceModal from './modals/ServiceModal'
+import OrderModal from './modals/OrderModal'
+import UserViewModal from './modals/UserViewModal'
+import UserFormModal from './modals/UserFormModal'
+import ProductFormModal from './modals/ProductFormModal'
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config'>('services');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<
+    'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config'
+  >('services')
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Core Data States
-  const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES);
-  const [users, setUsers] = useState<UserRecord[]>(INITIAL_USERS);
-  const [products, setProducts] = useState<ProductRecord[]>(INITIAL_PRODUCTS);
-  const [orders, setOrders] = useState<OrderRecord[]>(INITIAL_ORDERS);
+  const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES)
+  const [users, setUsers] = useState<UserRecord[]>(INITIAL_USERS)
+  const [products, setProducts] = useState<ProductRecord[]>(INITIAL_PRODUCTS)
+  const [orders, setOrders] = useState<OrderRecord[]>(INITIAL_ORDERS)
 
   // Health & RustFS Monitoring Hook
   const { lastUpdated, autoRefresh, setAutoRefresh, rustfsHealth, pingRustFS, pingServices } =
-    useHealthMonitoring(services, setServices);
+    useHealthMonitoring(services, setServices)
 
   // Selection / Modal States
-  const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
-  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+  const [selectedService, setSelectedService] = useState<ServiceItem | null>(null)
+  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null)
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null)
 
   // Form Modals
-  const [isUserModalOpen, setIsUserModalOpen] = useState<boolean>(false);
-  const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
-  const [isProductModalOpen, setIsProductModalOpen] = useState<boolean>(false);
-  const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
+  const [isUserModalOpen, setIsUserModalOpen] = useState<boolean>(false)
+  const [editingUser, setEditingUser] = useState<UserRecord | null>(null)
+  const [isProductModalOpen, setIsProductModalOpen] = useState<boolean>(false)
+  const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null)
 
   // Filtering & Search
-  const [userSearch, setUserSearch] = useState<string>('');
-  const [userRoleFilter, setUserRoleFilter] = useState<string>('ALL');
-  const [productSearch, setProductSearch] = useState<string>('');
-  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('ALL');
-  const [orderSearch, setOrderSearch] = useState<string>('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
+  const [userSearch, setUserSearch] = useState<string>('')
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('ALL')
+  const [productSearch, setProductSearch] = useState<string>('')
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('ALL')
+  const [orderSearch, setOrderSearch] = useState<string>('')
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL')
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(null), 3000)
+  }
 
   // User Handlers
   const handleSaveUser = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const firstName = formData.get('firstName') as string;
-    const lastName = formData.get('lastName') as string;
-    const email = formData.get('email') as string;
-    const role = formData.get('role') as any;
-    const isActive = formData.get('isActive') === 'on';
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    const firstName = formData.get('firstName') as string
+    const lastName = formData.get('lastName') as string
+    const email = formData.get('email') as string
+    const role = formData.get('role') as any
+    const isActive = formData.get('isActive') === 'on'
 
     if (editingUser) {
       setUsers((prev) =>
         prev.map((u) =>
-          u.id === editingUser.id
-            ? { ...u, firstName, lastName, email, role, isActive }
-            : u
+          u.id === editingUser.id ? { ...u, firstName, lastName, email, role, isActive } : u
         )
-      );
-      showToast(`User ${firstName} updated successfully!`);
+      )
+      showToast(`User ${firstName} updated successfully!`)
     } else {
       const newUser: UserRecord = {
         id: `user-${Date.now()}`,
@@ -96,39 +96,39 @@ export default function App() {
           },
         ],
         createdAt: new Date().toISOString(),
-      };
-      setUsers((prev) => [newUser, ...prev]);
-      showToast(`User ${firstName} created successfully!`);
+      }
+      setUsers((prev) => [newUser, ...prev])
+      showToast(`User ${firstName} created successfully!`)
     }
-    setIsUserModalOpen(false);
-    setEditingUser(null);
-  };
+    setIsUserModalOpen(false)
+    setEditingUser(null)
+  }
 
   const handleDeleteUser = (id: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    showToast('User deleted from database');
-  };
+    if (!confirm('Are you sure you want to delete this user?')) return
+    setUsers((prev) => prev.filter((u) => u.id !== id))
+    showToast('User deleted from database')
+  }
 
   const handleToggleUserStatus = (user: UserRecord) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, isActive: !u.isActive } : u))
-    );
-    showToast(`User ${user.firstName} ${!user.isActive ? 'activated' : 'deactivated'}`);
-  };
+    setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, isActive: !u.isActive } : u)))
+    showToast(`User ${user.firstName} ${!user.isActive ? 'activated' : 'deactivated'}`)
+  }
 
   // Product Handlers
   const handleSaveProduct = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const title = formData.get('title') as string;
-    const sku = formData.get('sku') as string;
-    const price = parseFloat(formData.get('price') as string) || 99.99;
-    const compareAtPrice = parseFloat(formData.get('compareAtPrice') as string) || price * 1.2;
-    const stock = parseInt(formData.get('stock') as string, 10) || 50;
-    const description = formData.get('description') as string;
-    const categoryName = formData.get('category') as string;
-    const imageUrl = (formData.get('imageUrl') as string) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80';
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    const title = formData.get('title') as string
+    const sku = formData.get('sku') as string
+    const price = parseFloat(formData.get('price') as string) || 99.99
+    const compareAtPrice = parseFloat(formData.get('compareAtPrice') as string) || price * 1.2
+    const stock = parseInt(formData.get('stock') as string, 10) || 50
+    const description = formData.get('description') as string
+    const categoryName = formData.get('category') as string
+    const imageUrl =
+      (formData.get('imageUrl') as string) ||
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'
 
     if (editingProduct) {
       setProducts((prev) =>
@@ -150,8 +150,8 @@ export default function App() {
               }
             : p
         )
-      );
-      showToast(`Product "${title}" updated!`);
+      )
+      showToast(`Product "${title}" updated!`)
     } else {
       const newProd: ProductRecord = {
         id: `prod-${Date.now()}`,
@@ -173,30 +173,28 @@ export default function App() {
         images: [{ url: imageUrl, alt: title, isPrimary: true }],
         attributes: [{ name: 'Warranty', value: '2 Years' }],
         ratings: { average: 5.0, count: 1 },
-      };
-      setProducts((prev) => [newProd, ...prev]);
-      showToast(`Product "${title}" added to catalog!`);
+      }
+      setProducts((prev) => [newProd, ...prev])
+      showToast(`Product "${title}" added to catalog!`)
     }
-    setIsProductModalOpen(false);
-    setEditingProduct(null);
-  };
+    setIsProductModalOpen(false)
+    setEditingProduct(null)
+  }
 
   const handleDeleteProduct = (id: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    showToast('Product deleted');
-  };
+    if (!confirm('Are you sure you want to delete this product?')) return
+    setProducts((prev) => prev.filter((p) => p.id !== id))
+    showToast('Product deleted')
+  }
 
   // Order Handlers
   const handleUpdateOrderStatus = (orderId: string, newStatus: any) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-    );
-    showToast(`Order status transitioned to ${newStatus}`);
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)))
+    showToast(`Order status transitioned to ${newStatus}`)
     if (selectedOrder?.id === orderId) {
-      setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : null));
+      setSelectedOrder((prev) => (prev ? { ...prev, status: newStatus } : null))
     }
-  };
+  }
 
   // Filtered lists
   const filteredUsers = useMemo(() => {
@@ -204,33 +202,34 @@ export default function App() {
       const matchesSearch =
         u.firstName.toLowerCase().includes(userSearch.toLowerCase()) ||
         u.lastName.toLowerCase().includes(userSearch.toLowerCase()) ||
-        u.email.toLowerCase().includes(userSearch.toLowerCase());
-      const matchesRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
-      return matchesSearch && matchesRole;
-    });
-  }, [users, userSearch, userRoleFilter]);
+        u.email.toLowerCase().includes(userSearch.toLowerCase())
+      const matchesRole = userRoleFilter === 'ALL' || u.role === userRoleFilter
+      return matchesSearch && matchesRole
+    })
+  }, [users, userSearch, userRoleFilter])
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       const matchesSearch =
         p.title.toLowerCase().includes(productSearch.toLowerCase()) ||
         p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
-        p.description.toLowerCase().includes(productSearch.toLowerCase());
-      const matchesCategory = productCategoryFilter === 'ALL' || p.category.name === productCategoryFilter;
-      return matchesSearch && matchesCategory;
-    });
-  }, [products, productSearch, productCategoryFilter]);
+        p.description.toLowerCase().includes(productSearch.toLowerCase())
+      const matchesCategory =
+        productCategoryFilter === 'ALL' || p.category.name === productCategoryFilter
+      return matchesSearch && matchesCategory
+    })
+  }, [products, productSearch, productCategoryFilter])
 
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       const matchesSearch =
         o.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
         o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) ||
-        o.customerEmail.toLowerCase().includes(orderSearch.toLowerCase());
-      const matchesStatus = orderStatusFilter === 'ALL' || o.status === orderStatusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [orders, orderSearch, orderStatusFilter]);
+        o.customerEmail.toLowerCase().includes(orderSearch.toLowerCase())
+      const matchesStatus = orderStatusFilter === 'ALL' || o.status === orderStatusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [orders, orderSearch, orderStatusFilter])
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-16">
@@ -274,13 +273,13 @@ export default function App() {
             onRoleFilter={setUserRoleFilter}
             onSelectUser={setSelectedUser}
             onEditUser={(u) => {
-              setEditingUser(u);
-              setIsUserModalOpen(true);
+              setEditingUser(u)
+              setIsUserModalOpen(true)
             }}
             onDeleteUser={handleDeleteUser}
             onAddUser={() => {
-              setEditingUser(null);
-              setIsUserModalOpen(true);
+              setEditingUser(null)
+              setIsUserModalOpen(true)
             }}
             onToggleStatus={handleToggleUserStatus}
           />
@@ -294,13 +293,13 @@ export default function App() {
             productCategoryFilter={productCategoryFilter}
             onCategoryFilter={setProductCategoryFilter}
             onEditProduct={(p) => {
-              setEditingProduct(p);
-              setIsProductModalOpen(true);
+              setEditingProduct(p)
+              setIsProductModalOpen(true)
             }}
             onDeleteProduct={handleDeleteProduct}
             onAddProduct={() => {
-              setEditingProduct(null);
-              setIsProductModalOpen(true);
+              setEditingProduct(null)
+              setIsProductModalOpen(true)
             }}
           />
         )}
@@ -319,30 +318,18 @@ export default function App() {
         )}
 
         {activeTab === 'persistence' && (
-          <PersistenceTab
-            rustfsHealth={rustfsHealth}
-            onPingRustFS={pingRustFS}
-          />
+          <PersistenceTab rustfsHealth={rustfsHealth} onPingRustFS={pingRustFS} />
         )}
 
         {activeTab === 'config' && <ConfigTab />}
       </main>
 
       {/* Modals */}
-      <ServiceModal
-        service={selectedService}
-        onClose={() => setSelectedService(null)}
-      />
+      <ServiceModal service={selectedService} onClose={() => setSelectedService(null)} />
 
-      <OrderModal
-        order={selectedOrder}
-        onClose={() => setSelectedOrder(null)}
-      />
+      <OrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
 
-      <UserViewModal
-        user={selectedUser}
-        onClose={() => setSelectedUser(null)}
-      />
+      <UserViewModal user={selectedUser} onClose={() => setSelectedUser(null)} />
 
       <UserFormModal
         isOpen={isUserModalOpen}
@@ -358,5 +345,5 @@ export default function App() {
         onSave={handleSaveProduct}
       />
     </div>
-  );
+  )
 }

@@ -1,14 +1,14 @@
-import type { ProductRecord } from '../types';
+import type { ProductRecord } from '../types'
 
 interface Props {
-  filteredProducts: ProductRecord[];
-  productSearch: string;
-  onProductSearch: (v: string) => void;
-  productCategoryFilter: string;
-  onCategoryFilter: (v: string) => void;
-  onEditProduct: (p: ProductRecord) => void;
-  onDeleteProduct: (id: string) => void;
-  onAddProduct: () => void;
+  filteredProducts: ProductRecord[]
+  productSearch: string
+  onProductSearch: (v: string) => void
+  productCategoryFilter: string
+  onCategoryFilter: (v: string) => void
+  onEditProduct: (p: ProductRecord) => void
+  onDeleteProduct: (id: string) => void
+  onAddProduct: () => void
 }
 
 export default function ProductsTab({
@@ -69,9 +69,11 @@ export default function ProductsTab({
               <span className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                 {p.category.name}
               </span>
-              <span className={`absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                p.stock > 20 ? 'bg-emerald-500/90 text-white' : 'bg-rose-500/90 text-white'
-              }`}>
+              <span
+                className={`absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  p.stock > 20 ? 'bg-emerald-500/90 text-white' : 'bg-rose-500/90 text-white'
+                }`}
+              >
                 {p.stock} in stock
               </span>
             </div>
@@ -80,7 +82,9 @@ export default function ProductsTab({
               <div>
                 <div className="flex justify-between items-start gap-2">
                   <h4 className="font-bold text-sm text-white line-clamp-1">{p.title}</h4>
-                  <span className="text-xs font-mono font-bold text-amber-400">${p.price.toFixed(2)}</span>
+                  <span className="text-xs font-mono font-bold text-amber-400">
+                    ${p.price.toFixed(2)}
+                  </span>
                 </div>
                 <span className="text-[11px] font-mono text-slate-400 block mt-0.5">{p.sku}</span>
                 <p className="text-xs text-slate-400 mt-2 line-clamp-2">{p.description}</p>
@@ -113,5 +117,5 @@ export default function ProductsTab({
         ))}
       </div>
     </div>
-  );
+  )
 }

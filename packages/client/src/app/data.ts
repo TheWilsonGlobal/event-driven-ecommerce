@@ -1,4 +1,4 @@
-﻿import type { Product } from './types';
+﻿import type { Product } from './types'
 
 export const INITIAL_PRODUCTS: Product[] = [
   {
@@ -6,7 +6,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     title: 'Aura Pro Wireless ANC Headphones',
     slug: 'aura-pro-wireless-anc-headphones',
     sku: 'AUDIO-AURA-01',
-    description: 'Industry-leading active noise cancellation with 40-hour battery life, custom spatial audio tuning, and ultra-plush memory foam earcups.',
+    description:
+      'Industry-leading active noise cancellation with 40-hour battery life, custom spatial audio tuning, and ultra-plush memory foam earcups.',
     price: 349.99,
     compareAtPrice: 399.99,
     currency: 'USD',
@@ -44,7 +45,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     title: 'NovaBook Pro 16" M3 Max Workstation',
     slug: 'novabook-pro-16-m3-workstation',
     sku: 'LAPTOP-NOVA-16',
-    description: 'Uncompromising performance for creators and engineers. Liquid Retina XDR display with 120Hz ProMotion, 36GB Unified Memory, and 1TB NVMe SSD.',
+    description:
+      'Uncompromising performance for creators and engineers. Liquid Retina XDR display with 120Hz ProMotion, 36GB Unified Memory, and 1TB NVMe SSD.',
     price: 2499.0,
     compareAtPrice: 2699.0,
     currency: 'USD',
@@ -78,7 +80,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     title: 'Titanium Horizon Smartwatch Ultra',
     slug: 'titanium-horizon-smartwatch-ultra',
     sku: 'WATCH-HORIZON-U',
-    description: 'Rugged titanium chassis with sapphire glass, dual-frequency GPS, 100m water resistance, ECG heart rate tracking, and 7-day battery life.',
+    description:
+      'Rugged titanium chassis with sapphire glass, dual-frequency GPS, 100m water resistance, ECG heart rate tracking, and 7-day battery life.',
     price: 799.0,
     compareAtPrice: 849.0,
     currency: 'USD',
@@ -111,7 +114,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     title: 'Pulse Studio Wireless Earbuds',
     slug: 'pulse-studio-wireless-earbuds',
     sku: 'AUDIO-PULSE-02',
-    description: 'Compact ergonomic earbuds with adaptive transparency mode, wireless Qi charging case, IPX5 water resistance, and crystal clear 6-mic beamforming calls.',
+    description:
+      'Compact ergonomic earbuds with adaptive transparency mode, wireless Qi charging case, IPX5 water resistance, and crystal clear 6-mic beamforming calls.',
     price: 189.99,
     compareAtPrice: 229.99,
     currency: 'USD',
@@ -143,7 +147,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     title: 'Vortex RGB Mechanical Gaming Keyboard',
     slug: 'vortex-rgb-mechanical-gaming-keyboard',
     sku: 'GAME-VORTEX-KB',
-    description: 'Hot-swappable linear optical switches, aircraft-grade aluminum frame, per-key RGB lighting, PBT double-shot keycaps, and detachable braided Type-C cable.',
+    description:
+      'Hot-swappable linear optical switches, aircraft-grade aluminum frame, per-key RGB lighting, PBT double-shot keycaps, and detachable braided Type-C cable.',
     price: 149.99,
     compareAtPrice: 179.99,
     currency: 'USD',
@@ -175,7 +180,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     title: 'Lumix Neo 4K 144Hz IPS Monitor 27"',
     slug: 'lumix-neo-4k-144hz-monitor',
     sku: 'MONITOR-LUMIX-27',
-    description: 'Crisp 4K UHD resolution with 144Hz refresh rate, 1ms response time, 99% DCI-P3 color gamut, HDR600, USB-C 90W Power Delivery, and ergonomic tilt/swivel stand.',
+    description:
+      'Crisp 4K UHD resolution with 144Hz refresh rate, 1ms response time, 99% DCI-P3 color gamut, HDR600, USB-C 90W Power Delivery, and ergonomic tilt/swivel stand.',
     price: 649.99,
     compareAtPrice: 729.99,
     currency: 'USD',
@@ -203,7 +209,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       count: 98,
     },
   },
-];
+]
 
 export const CATEGORIES = [
   { id: 'all', name: 'All Products', icon: '✨' },
@@ -211,4 +217,4 @@ export const CATEGORIES = [
   { id: 'cat-2', name: 'Computers & Laptops', icon: '💻' },
   { id: 'cat-3', name: 'Smartphones & Watches', icon: '⌚' },
   { id: 'cat-4', name: 'Gaming & VR', icon: '🎮' },
-];
+]

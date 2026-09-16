@@ -1,15 +1,15 @@
-﻿import React from 'react';
-import type { UserRecord } from '../types';
+﻿import React from 'react'
+import type { UserRecord } from '../types'
 
 interface Props {
-  isOpen: boolean;
-  editingUser: UserRecord | null;
-  onClose: () => void;
-  onSave: (e: React.FormEvent<HTMLFormElement>) => void;
+  isOpen: boolean
+  editingUser: UserRecord | null
+  onClose: () => void
+  onSave: (e: React.FormEvent<HTMLFormElement>) => void
 }
 
 export default function UserFormModal({ isOpen, editingUser, onClose, onSave }: Props) {
-  if (!isOpen) return null;
+  if (!isOpen) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative">
@@ -130,5 +130,5 @@ export default function UserFormModal({ isOpen, editingUser, onClose, onSave }: 
         </form>
       </div>
     </div>
-  );
+  )
 }

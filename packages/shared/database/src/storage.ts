@@ -5,40 +5,38 @@ import {
   HeadBucketCommand,
   GetObjectCommand,
   CreateBucketCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+} from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-export type StorageProvider = 'rustfs' | 's3' | 'local';
+export type StorageProvider = 'rustfs' | 's3' | 'local'
 
 export interface StorageConfiguration {
-  provider: StorageProvider;
+  provider: StorageProvider
   rustfs: {
-    endpoint: string;
-    consoleEndpoint: string;
-    accessKey: string;
-    secretKey: string;
-    bucket: string;
-    region: string;
-    useSSL: boolean;
-  };
+    endpoint: string
+    consoleEndpoint: string
+    accessKey: string
+    secretKey: string
+    bucket: string
+    region: string
+    useSSL: boolean
+  }
   s3: {
-    accessKeyId: string;
-    secretAccessKey: string;
-    region: string;
-    bucket: string;
-    endpoint?: string | undefined;
-  };
+    accessKeyId: string
+    secretAccessKey: string
+    region: string
+    bucket: string
+    endpoint?: string | undefined
+  }
   local: {
-    uploadPath: string;
-    maxFileSize: number;
-  };
+    uploadPath: string
+    maxFileSize: number
+  }
 }
 
-export function loadStorageConfig(
-  env: NodeJS.ProcessEnv = process.env
-): StorageConfiguration {
+export function loadStorageConfig(env: NodeJS.ProcessEnv = process.env): StorageConfiguration {
   const provider: StorageProvider =
-    (env.STORAGE_PROVIDER?.toLowerCase() as StorageProvider) || 'rustfs';
+    (env.STORAGE_PROVIDER?.toLowerCase() as StorageProvider) || 'rustfs'
 
   return {
     provider,
@@ -62,16 +60,20 @@ export function loadStorageConfig(
       uploadPath: env.UPLOAD_PATH || './uploads',
       maxFileSize: parseInt(env.MAX_FILE_SIZE || '5242880', 10),
     },
-  };
+  }
 }
 
 export interface ObjectStorageClient {
-  uploadObject(key: string, buffer: Buffer, contentType?: string): Promise<{ url: string; key: string }>;
-  getSignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>;
-  getObjectUrl(key: string): string;
-  deleteObject(key: string): Promise<boolean>;
-  ensureBucket(): Promise<void>;
-  healthCheck(): Promise<{ healthy: boolean; latencyMs: number; endpoint: string }>;
+  uploadObject(
+    key: string,
+    buffer: Buffer,
+    contentType?: string
+  ): Promise<{ url: string; key: string }>
+  getSignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>
+  getObjectUrl(key: string): string
+  deleteObject(key: string): Promise<boolean>
+  ensureBucket(): Promise<void>
+  healthCheck(): Promise<{ healthy: boolean; latencyMs: number; endpoint: string }>
 }
 
 /**
@@ -79,9 +81,9 @@ export interface ObjectStorageClient {
  * Uses @aws-sdk/client-s3 against the RustFS endpoint (RustFS is S3-API compatible).
  */
 export class RustFSStorageClient implements ObjectStorageClient {
-  private s3: S3Client;
-  private bucket: string;
-  private endpoint: string;
+  private s3: S3Client
+  private bucket: string
+  private endpoint: string
 
   constructor(
     endpoint: string,
@@ -90,8 +92,8 @@ export class RustFSStorageClient implements ObjectStorageClient {
     secretKey: string,
     region = 'us-east-1'
   ) {
-    this.endpoint = endpoint.replace(/\/$/, '');
-    this.bucket = bucket;
+    this.endpoint = endpoint.replace(/\/$/, '')
+    this.bucket = bucket
 
     this.s3 = new S3Client({
       endpoint: this.endpoint,
@@ -101,15 +103,15 @@ export class RustFSStorageClient implements ObjectStorageClient {
         secretAccessKey: secretKey,
       },
       forcePathStyle: true, // required for RustFS / MinIO style endpoints
-    });
+    })
   }
 
   /** Ensure the target bucket exists, create it if not. */
   async ensureBucket(): Promise<void> {
     try {
-      await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }))
     } catch {
-      await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }));
+      await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }))
     }
   }
 
@@ -127,28 +129,26 @@ export class RustFSStorageClient implements ObjectStorageClient {
         ContentType: contentType,
         ContentLength: buffer.byteLength,
       })
-    );
-    const url = `${this.endpoint}/${this.bucket}/${key}`;
-    return { url, key };
+    )
+    const url = `${this.endpoint}/${this.bucket}/${key}`
+    return { url, key }
   }
 
   /** Generate a pre-signed GET URL valid for the given number of seconds (default 1 hour). */
   async getSignedDownloadUrl(key: string, expiresInSeconds = 3600): Promise<string> {
-    const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: key });
-    return getSignedUrl(this.s3, cmd, { expiresIn: expiresInSeconds });
+    const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: key })
+    return getSignedUrl(this.s3, cmd, { expiresIn: expiresInSeconds })
   }
 
   /** Returns the direct public URL for an object key. */
   getObjectUrl(key: string): string {
-    return `${this.endpoint}/${this.bucket}/${key}`;
+    return `${this.endpoint}/${this.bucket}/${key}`
   }
 
   /** Delete an object by key. Returns true on success. */
   async deleteObject(key: string): Promise<boolean> {
-    await this.s3.send(
-      new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
-    );
-    return true;
+    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }))
+    return true
   }
 
   /**
@@ -156,12 +156,12 @@ export class RustFSStorageClient implements ObjectStorageClient {
    * Returns { healthy, latencyMs, endpoint }.
    */
   async healthCheck(): Promise<{ healthy: boolean; latencyMs: number; endpoint: string }> {
-    const start = Date.now();
+    const start = Date.now()
     try {
-      await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
-      return { healthy: true, latencyMs: Date.now() - start, endpoint: this.endpoint };
+      await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }))
+      return { healthy: true, latencyMs: Date.now() - start, endpoint: this.endpoint }
     } catch {
-      return { healthy: false, latencyMs: Date.now() - start, endpoint: this.endpoint };
+      return { healthy: false, latencyMs: Date.now() - start, endpoint: this.endpoint }
     }
   }
 }
@@ -169,15 +169,13 @@ export class RustFSStorageClient implements ObjectStorageClient {
 /**
  * Factory: create a ready-to-use RustFSStorageClient from environment config.
  */
-export function createRustFSClient(
-  env: NodeJS.ProcessEnv = process.env
-): RustFSStorageClient {
-  const cfg = loadStorageConfig(env);
+export function createRustFSClient(env: NodeJS.ProcessEnv = process.env): RustFSStorageClient {
+  const cfg = loadStorageConfig(env)
   return new RustFSStorageClient(
     cfg.rustfs.endpoint,
     cfg.rustfs.bucket,
     cfg.rustfs.accessKey,
     cfg.rustfs.secretKey,
     cfg.rustfs.region
-  );
+  )
 }

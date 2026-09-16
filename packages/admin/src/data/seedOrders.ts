@@ -1,4 +1,4 @@
-import type { OrderRecord } from '../types';
+import type { OrderRecord } from '../types'
 
 export const INITIAL_ORDERS: OrderRecord[] = [
   {
@@ -124,4 +124,4 @@ export const INITIAL_ORDERS: OrderRecord[] = [
     createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 6).toISOString(),
   },
-];
+]

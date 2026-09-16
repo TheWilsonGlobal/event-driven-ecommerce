@@ -1,15 +1,17 @@
-import type { ServiceItem } from '../types';
+import type { ServiceItem } from '../types'
 
 interface Props {
-  activeTab: 'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config';
-  setActiveTab: (tab: 'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config') => void;
-  services: ServiceItem[];
-  usersCount: number;
-  productsCount: number;
-  ordersCount: number;
-  autoRefresh: boolean;
-  setAutoRefresh: (val: boolean) => void;
-  onRefresh: () => void;
+  activeTab: 'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config'
+  setActiveTab: (
+    tab: 'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config'
+  ) => void
+  services: ServiceItem[]
+  usersCount: number
+  productsCount: number
+  ordersCount: number
+  autoRefresh: boolean
+  setAutoRefresh: (val: boolean) => void
+  onRefresh: () => void
 }
 
 export default function AdminHeader({
@@ -23,7 +25,7 @@ export default function AdminHeader({
   setAutoRefresh,
   onRefresh,
 }: Props) {
-  const onlineCount = services.filter((s) => s.status === 'HEALTHY').length;
+  const onlineCount = services.filter((s) => s.status === 'HEALTHY').length
 
   return (
     <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-30">
@@ -39,22 +41,31 @@ export default function AdminHeader({
                 Control Plane v2.0
               </span>
             </div>
-            <p className="text-xs text-slate-400">Microservices Architecture, Catalog, Customers &amp; Sagas</p>
+            <p className="text-xs text-slate-400">
+              Microservices Architecture, Catalog, Customers &amp; Sagas
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3 text-xs">
           <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
-            <span className={`w-2.5 h-2.5 rounded-full ${onlineCount === services.length && services.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span
+              className={`w-2.5 h-2.5 rounded-full ${onlineCount === services.length && services.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}
+            />
             <span className="font-semibold text-slate-300">
-              Services: <b className="text-white">{onlineCount}/{services.length} Healthy</b>
+              Services:{' '}
+              <b className="text-white">
+                {onlineCount}/{services.length} Healthy
+              </b>
             </span>
           </div>
 
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`px-3 py-1.5 rounded-lg font-semibold border transition ${
-              autoRefresh ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700'
+              autoRefresh
+                ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                : 'bg-slate-800 text-slate-400 border-slate-700'
             }`}
           >
             {autoRefresh ? '⟳ Auto (5s)' : '⏸ Paused'}
@@ -100,9 +111,13 @@ export default function AdminHeader({
           >
             <span>{tab.label}</span>
             {tab.count !== undefined && (
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                activeTab === tab.id ? 'bg-indigo-900/80 text-indigo-200' : 'bg-slate-800 text-slate-400'
-              }`}>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                  activeTab === tab.id
+                    ? 'bg-indigo-900/80 text-indigo-200'
+                    : 'bg-slate-800 text-slate-400'
+                }`}
+              >
                 {tab.count}
               </span>
             )}
@@ -110,5 +125,5 @@ export default function AdminHeader({
         ))}
       </div>
     </header>
-  );
+  )
 }

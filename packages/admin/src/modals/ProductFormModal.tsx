@@ -1,15 +1,15 @@
-﻿import React from 'react';
-import type { ProductRecord } from '../types';
+﻿import React from 'react'
+import type { ProductRecord } from '../types'
 
 interface Props {
-  isOpen: boolean;
-  editingProduct: ProductRecord | null;
-  onClose: () => void;
-  onSave: (e: React.FormEvent<HTMLFormElement>) => void;
+  isOpen: boolean
+  editingProduct: ProductRecord | null
+  onClose: () => void
+  onSave: (e: React.FormEvent<HTMLFormElement>) => void
 }
 
 export default function ProductFormModal({ isOpen, editingProduct, onClose, onSave }: Props) {
-  if (!isOpen) return null;
+  if (!isOpen) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
@@ -99,7 +99,10 @@ export default function ProductFormModal({ isOpen, editingProduct, onClose, onSa
             <label className="text-slate-400 block mb-1">CDN Image URL</label>
             <input
               name="imageUrl"
-              defaultValue={editingProduct?.images[0]?.url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'}
+              defaultValue={
+                editingProduct?.images[0]?.url ||
+                'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'
+              }
               className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500 font-mono text-[11px]"
             />
           </div>
@@ -123,5 +126,5 @@ export default function ProductFormModal({ isOpen, editingProduct, onClose, onSa
         </form>
       </div>
     </div>
-  );
+  )
 }

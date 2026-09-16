@@ -1,14 +1,14 @@
-import type { OrderRecord } from '../types';
+import type { OrderRecord } from '../types'
 
 interface Props {
-  filteredOrders: OrderRecord[];
-  orders: OrderRecord[];
-  orderSearch: string;
-  onOrderSearch: (v: string) => void;
-  orderStatusFilter: string;
-  onStatusFilter: (v: string) => void;
-  onSelectOrder: (o: OrderRecord) => void;
-  onUpdateStatus: (id: string, status: string) => void;
+  filteredOrders: OrderRecord[]
+  orders: OrderRecord[]
+  orderSearch: string
+  onOrderSearch: (v: string) => void
+  orderStatusFilter: string
+  onStatusFilter: (v: string) => void
+  onSelectOrder: (o: OrderRecord) => void
+  onUpdateStatus: (id: string, status: string) => void
 }
 
 export default function OrdersTab({
@@ -48,7 +48,10 @@ export default function OrdersTab({
         </div>
 
         <div className="text-xs text-slate-400">
-          Total Orders: <b className="text-white">{orders.length}</b> · Revenue: <b className="text-emerald-400">${orders.reduce((a, b) => a + b.totalAmount, 0).toFixed(2)}</b>
+          Total Orders: <b className="text-white">{orders.length}</b> · Revenue:{' '}
+          <b className="text-emerald-400">
+            ${orders.reduce((a, b) => a + b.totalAmount, 0).toFixed(2)}
+          </b>
         </div>
       </div>
 
@@ -69,14 +72,14 @@ export default function OrdersTab({
           <tbody className="divide-y divide-slate-700/60 font-medium">
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-slate-500">No orders found matching filter.</td>
+                <td colSpan={7} className="p-8 text-center text-slate-500">
+                  No orders found matching filter.
+                </td>
               </tr>
             ) : (
               filteredOrders.map((ord) => (
                 <tr key={ord.id} className="hover:bg-slate-800 transition">
-                  <td className="p-4 font-mono font-bold text-indigo-400">
-                    {ord.orderNumber}
-                  </td>
+                  <td className="p-4 font-mono font-bold text-indigo-400">{ord.orderNumber}</td>
                   <td className="p-4">
                     <span className="font-bold text-white block">{ord.customerName}</span>
                     <span className="text-slate-400 text-[11px]">{ord.customerEmail}</span>
@@ -86,9 +89,7 @@ export default function OrdersTab({
                       {ord.items.reduce((a, b) => a + b.quantity, 0)} items
                     </span>
                   </td>
-                  <td className="p-4 font-bold text-emerald-400">
-                    ${ord.totalAmount.toFixed(2)}
-                  </td>
+                  <td className="p-4 font-bold text-emerald-400">${ord.totalAmount.toFixed(2)}</td>
                   <td className="p-4">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
                       {ord.paymentMethod} ({ord.paymentStatus})
@@ -123,5 +124,5 @@ export default function OrdersTab({
         </table>
       </div>
     </div>
-  );
+  )
 }

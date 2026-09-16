@@ -1,63 +1,63 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'fs'
+import * as path from 'path'
 
 export interface SeedProduct {
-  id: string;
-  title: string;
-  slug: string;
-  sku: string;
-  description: string;
-  price: number;
-  compareAtPrice: number;
-  currency: string;
-  stock: number;
-  isAvailable: boolean;
+  id: string
+  title: string
+  slug: string
+  sku: string
+  description: string
+  price: number
+  compareAtPrice: number
+  currency: string
+  stock: number
+  isAvailable: boolean
   category: {
-    id: string;
-    name: string;
-    slug: string;
-  };
-  tags: string[];
+    id: string
+    name: string
+    slug: string
+  }
+  tags: string[]
   images: {
-    url: string;
-    alt: string;
-    isPrimary: boolean;
-  }[];
+    url: string
+    alt: string
+    isPrimary: boolean
+  }[]
   attributes: {
-    name: string;
-    value: string;
-  }[];
+    name: string
+    value: string
+  }[]
   ratings: {
-    average: number;
-    count: number;
-  };
+    average: number
+    count: number
+  }
 }
 
 export interface SeedCategory {
-  id: string;
-  name: string;
-  slug: string;
-  icon: string;
-  description: string;
-  productCount: number;
+  id: string
+  name: string
+  slug: string
+  icon: string
+  description: string
+  productCount: number
 }
 
 export interface SeedUser {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: 'CUSTOMER' | 'ADMIN' | 'VENDOR';
-  isActive: boolean;
-  isEmailVerified: boolean;
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  role: 'CUSTOMER' | 'ADMIN' | 'VENDOR'
+  isActive: boolean
+  isEmailVerified: boolean
   addresses: {
-    addressLine1: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-    isDefaultShipping: boolean;
-  }[];
+    addressLine1: string
+    city: string
+    state: string
+    postalCode: string
+    country: string
+    isDefaultShipping: boolean
+  }[]
 }
 
 export const SEED_CATEGORIES: SeedCategory[] = [
@@ -93,7 +93,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     description: 'Console peripherals, mechanical keyboards, and immersive headsets',
     productCount: 2,
   },
-];
+]
 
 export const SEED_PRODUCTS: SeedProduct[] = [
   {
@@ -101,7 +101,8 @@ export const SEED_PRODUCTS: SeedProduct[] = [
     title: 'Aura Pro Wireless ANC Headphones',
     slug: 'aura-pro-wireless-anc-headphones',
     sku: 'AUDIO-AURA-01',
-    description: 'Industry-leading active noise cancellation with 40-hour battery life, custom spatial audio tuning, and ultra-plush memory foam earcups.',
+    description:
+      'Industry-leading active noise cancellation with 40-hour battery life, custom spatial audio tuning, and ultra-plush memory foam earcups.',
     price: 349.99,
     compareAtPrice: 399.99,
     currency: 'USD',
@@ -140,7 +141,8 @@ export const SEED_PRODUCTS: SeedProduct[] = [
     title: 'NovaBook Pro 16" M3 Max Workstation',
     slug: 'novabook-pro-16-m3-workstation',
     sku: 'LAPTOP-NOVA-16',
-    description: 'Uncompromising performance for creators and engineers. Liquid Retina XDR display with 120Hz ProMotion, 36GB Unified Memory, and 1TB NVMe SSD.',
+    description:
+      'Uncompromising performance for creators and engineers. Liquid Retina XDR display with 120Hz ProMotion, 36GB Unified Memory, and 1TB NVMe SSD.',
     price: 2499.0,
     compareAtPrice: 2699.0,
     currency: 'USD',
@@ -175,7 +177,8 @@ export const SEED_PRODUCTS: SeedProduct[] = [
     title: 'Titanium Horizon Smartwatch Ultra',
     slug: 'titanium-horizon-smartwatch-ultra',
     sku: 'WATCH-HORIZON-U',
-    description: 'Rugged titanium chassis with sapphire glass, dual-frequency GPS, 100m water resistance, ECG heart rate tracking, and 7-day battery life.',
+    description:
+      'Rugged titanium chassis with sapphire glass, dual-frequency GPS, 100m water resistance, ECG heart rate tracking, and 7-day battery life.',
     price: 799.0,
     compareAtPrice: 849.0,
     currency: 'USD',
@@ -209,7 +212,8 @@ export const SEED_PRODUCTS: SeedProduct[] = [
     title: 'Pulse Studio Wireless Earbuds',
     slug: 'pulse-studio-wireless-earbuds',
     sku: 'AUDIO-PULSE-02',
-    description: 'Compact ergonomic earbuds with adaptive transparency mode, wireless Qi charging case, IPX5 water resistance, and crystal clear 6-mic beamforming calls.',
+    description:
+      'Compact ergonomic earbuds with adaptive transparency mode, wireless Qi charging case, IPX5 water resistance, and crystal clear 6-mic beamforming calls.',
     price: 189.99,
     compareAtPrice: 229.99,
     currency: 'USD',
@@ -242,7 +246,8 @@ export const SEED_PRODUCTS: SeedProduct[] = [
     title: 'Vortex RGB Mechanical Gaming Keyboard',
     slug: 'vortex-rgb-mechanical-gaming-keyboard',
     sku: 'GAME-VORTEX-KB',
-    description: 'Hot-swappable linear optical switches, aircraft-grade aluminum frame, per-key RGB lighting, PBT double-shot keycaps, and detachable braided Type-C cable.',
+    description:
+      'Hot-swappable linear optical switches, aircraft-grade aluminum frame, per-key RGB lighting, PBT double-shot keycaps, and detachable braided Type-C cable.',
     price: 149.99,
     compareAtPrice: 179.99,
     currency: 'USD',
@@ -275,7 +280,8 @@ export const SEED_PRODUCTS: SeedProduct[] = [
     title: 'Lumix Neo 4K 144Hz IPS Monitor 27"',
     slug: 'lumix-neo-4k-144hz-monitor',
     sku: 'MONITOR-LUMIX-27',
-    description: 'Crisp 4K UHD resolution with 144Hz refresh rate, 1ms response time, 99% DCI-P3 color gamut, HDR600, USB-C 90W Power Delivery, and ergonomic tilt/swivel stand.',
+    description:
+      'Crisp 4K UHD resolution with 144Hz refresh rate, 1ms response time, 99% DCI-P3 color gamut, HDR600, USB-C 90W Power Delivery, and ergonomic tilt/swivel stand.',
     price: 649.99,
     compareAtPrice: 729.99,
     currency: 'USD',
@@ -304,7 +310,7 @@ export const SEED_PRODUCTS: SeedProduct[] = [
       count: 98,
     },
   },
-];
+]
 
 export const SEED_USERS: SeedUser[] = [
   {
@@ -345,33 +351,33 @@ export const SEED_USERS: SeedUser[] = [
       },
     ],
   },
-];
+]
 
 export async function runSeed(outputDir: string = path.resolve(__dirname, '../../../../data')) {
-  console.log('🚀 [Seed] Initializing E-Commerce database seed process...');
+  console.log('🚀 [Seed] Initializing E-Commerce database seed process...')
 
   if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+    fs.mkdirSync(outputDir, { recursive: true })
   }
 
-  const productsFile = path.join(outputDir, 'products.json');
-  const categoriesFile = path.join(outputDir, 'categories.json');
-  const usersFile = path.join(outputDir, 'users.json');
+  const productsFile = path.join(outputDir, 'products.json')
+  const categoriesFile = path.join(outputDir, 'categories.json')
+  const usersFile = path.join(outputDir, 'users.json')
 
-  fs.writeFileSync(productsFile, JSON.stringify(SEED_PRODUCTS, null, 2), 'utf8');
-  fs.writeFileSync(categoriesFile, JSON.stringify(SEED_CATEGORIES, null, 2), 'utf8');
-  fs.writeFileSync(usersFile, JSON.stringify(SEED_USERS, null, 2), 'utf8');
+  fs.writeFileSync(productsFile, JSON.stringify(SEED_PRODUCTS, null, 2), 'utf8')
+  fs.writeFileSync(categoriesFile, JSON.stringify(SEED_CATEGORIES, null, 2), 'utf8')
+  fs.writeFileSync(usersFile, JSON.stringify(SEED_USERS, null, 2), 'utf8')
 
-  console.log(`✅ [Seed] Successfully seeded:`);
-  console.log(`   - ${SEED_CATEGORIES.length} Categories -> ${categoriesFile}`);
-  console.log(`   - ${SEED_PRODUCTS.length} Products -> ${productsFile}`);
-  console.log(`   - ${SEED_USERS.length} Users -> ${usersFile}`);
-  console.log(`✨ [Seed] Database seeding completed successfully!`);
+  console.log(`✅ [Seed] Successfully seeded:`)
+  console.log(`   - ${SEED_CATEGORIES.length} Categories -> ${categoriesFile}`)
+  console.log(`   - ${SEED_PRODUCTS.length} Products -> ${productsFile}`)
+  console.log(`   - ${SEED_USERS.length} Users -> ${usersFile}`)
+  console.log(`✨ [Seed] Database seeding completed successfully!`)
 }
 
 if (require.main === module) {
   runSeed().catch((err) => {
-    console.error('❌ [Seed] Error seeding data:', err);
-    process.exit(1);
-  });
+    console.error('❌ [Seed] Error seeding data:', err)
+    process.exit(1)
+  })
 }

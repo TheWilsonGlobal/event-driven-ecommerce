@@ -1,25 +1,25 @@
-﻿'use client';
+﻿'use client'
 
-import React from 'react';
-import type { CartItem } from '../app/types';
+import React from 'react'
+import type { CartItem } from '../app/types'
 
 interface CartDrawerProps {
-  isOpen: boolean;
-  cart: CartItem[];
-  subtotal: number;
-  discountAmount: number;
-  estimatedTax: number;
-  shippingFee: number;
-  finalTotal: number;
-  appliedDiscount: number;
-  discountCode: string;
-  discountError: string;
-  onClose: () => void;
-  onUpdateQuantity: (id: string, delta: number) => void;
-  onRemove: (id: string) => void;
-  onDiscountChange: (v: string) => void;
-  onApplyPromo: () => void;
-  onCheckout: () => void;
+  isOpen: boolean
+  cart: CartItem[]
+  subtotal: number
+  discountAmount: number
+  estimatedTax: number
+  shippingFee: number
+  finalTotal: number
+  appliedDiscount: number
+  discountCode: string
+  discountError: string
+  onClose: () => void
+  onUpdateQuantity: (id: string, delta: number) => void
+  onRemove: (id: string) => void
+  onDiscountChange: (v: string) => void
+  onApplyPromo: () => void
+  onCheckout: () => void
 }
 
 export default function CartDrawer({
@@ -40,9 +40,9 @@ export default function CartDrawer({
   onApplyPromo,
   onCheckout,
 }: CartDrawerProps) {
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
-  const totalCartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const totalCartCount = cart.reduce((acc, item) => acc + item.quantity, 0)
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -124,9 +124,7 @@ export default function CartDrawer({
                       >
                         -
                       </button>
-                      <span className="text-xs font-bold text-slate-800 px-1">
-                        {item.quantity}
-                      </span>
+                      <span className="text-xs font-bold text-slate-800 px-1">{item.quantity}</span>
                       <button
                         onClick={() => onUpdateQuantity(item.product.id, 1)}
                         className="w-6 h-6 rounded bg-white border border-slate-300 text-slate-700 font-bold flex items-center justify-center hover:bg-slate-100"
@@ -192,7 +190,13 @@ export default function CartDrawer({
                 </div>
                 <div className="flex justify-between">
                   <span>Shipping</span>
-                  <span>{shippingFee === 0 ? <b className="text-emerald-600">FREE</b> : `$${shippingFee.toFixed(2)}`}</span>
+                  <span>
+                    {shippingFee === 0 ? (
+                      <b className="text-emerald-600">FREE</b>
+                    ) : (
+                      `$${shippingFee.toFixed(2)}`
+                    )}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-2 border-t border-slate-200">
                   <span>Total Amount</span>
@@ -212,5 +216,5 @@ export default function CartDrawer({
         </div>
       </div>
     </div>
-  );
+  )
 }

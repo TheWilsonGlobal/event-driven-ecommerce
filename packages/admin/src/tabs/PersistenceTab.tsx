@@ -1,15 +1,14 @@
-
 interface RustfsHealth {
-  healthy: boolean | null;
-  latencyMs: number;
-  endpoint: string;
-  bucket: string;
-  lastChecked: string;
+  healthy: boolean | null
+  latencyMs: number
+  endpoint: string
+  bucket: string
+  lastChecked: string
 }
 
 interface Props {
-  rustfsHealth: RustfsHealth;
-  onPingRustFS: () => void;
+  rustfsHealth: RustfsHealth
+  onPingRustFS: () => void
 }
 
 export default function PersistenceTab({ rustfsHealth, onPingRustFS }: Props) {
@@ -19,7 +18,9 @@ export default function PersistenceTab({ rustfsHealth, onPingRustFS }: Props) {
         <h2 className="text-sm font-bold text-white uppercase tracking-wider">
           Persistence &amp; Storage Engine Topology
         </h2>
-        <p className="text-xs text-slate-400 mt-0.5">Active relational, document, key-value and object storage drivers</p>
+        <p className="text-xs text-slate-400 mt-0.5">
+          Active relational, document, key-value and object storage drivers
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -38,7 +39,9 @@ export default function PersistenceTab({ rustfsHealth, onPingRustFS }: Props) {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Active URL</span>
-              <span className="font-mono text-slate-300 truncate max-w-[150px]">postgresql://***@localhost:5432</span>
+              <span className="font-mono text-slate-300 truncate max-w-[150px]">
+                postgresql://***@localhost:5432
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Target Services</span>
@@ -99,14 +102,20 @@ export default function PersistenceTab({ rustfsHealth, onPingRustFS }: Props) {
         <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 shadow-lg">
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-bold text-sm text-white">Object Storage</h3>
-            <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
-              rustfsHealth.healthy === null
-                ? 'bg-slate-600/20 text-slate-400'
+            <span
+              className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
+                rustfsHealth.healthy === null
+                  ? 'bg-slate-600/20 text-slate-400'
+                  : rustfsHealth.healthy
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : 'bg-rose-500/20 text-rose-300'
+              }`}
+            >
+              {rustfsHealth.healthy === null
+                ? 'Probing…'
                 : rustfsHealth.healthy
-                ? 'bg-emerald-500/20 text-emerald-300'
-                : 'bg-rose-500/20 text-rose-300'
-            }`}>
-              {rustfsHealth.healthy === null ? 'Probing…' : rustfsHealth.healthy ? '✓ RustFS Live' : '✗ RustFS Offline'}
+                  ? '✓ RustFS Live'
+                  : '✗ RustFS Offline'}
             </span>
           </div>
           <div className="space-y-2 text-xs">
@@ -120,7 +129,9 @@ export default function PersistenceTab({ rustfsHealth, onPingRustFS }: Props) {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Latency</span>
-              <span className={`font-mono font-bold ${rustfsHealth.healthy ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <span
+                className={`font-mono font-bold ${rustfsHealth.healthy ? 'text-emerald-400' : 'text-rose-400'}`}
+              >
                 {rustfsHealth.latencyMs > 0 ? `${rustfsHealth.latencyMs} ms` : '—'}
               </span>
             </div>
@@ -129,7 +140,12 @@ export default function PersistenceTab({ rustfsHealth, onPingRustFS }: Props) {
               <span className="text-slate-400 font-mono">ms-product :3002</span>
             </div>
             <div className="flex justify-between items-center pt-1 border-t border-slate-700">
-              <a href="http://localhost:9001" target="_blank" rel="noreferrer" className="text-indigo-400 font-bold hover:underline">
+              <a
+                href="http://localhost:9001"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-400 font-bold hover:underline"
+              >
                 Console → Port 9001
               </a>
               <button
@@ -148,5 +164,5 @@ export default function PersistenceTab({ rustfsHealth, onPingRustFS }: Props) {
         </div>
       </div>
     </div>
-  );
+  )
 }

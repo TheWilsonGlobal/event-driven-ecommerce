@@ -1,12 +1,12 @@
-﻿'use client';
+﻿'use client'
 
-import React from 'react';
+import React from 'react'
 
 interface StorefrontHeaderProps {
-  searchQuery: string;
-  onSearch: (v: string) => void;
-  totalCartCount: number;
-  onOpenCart: () => void;
+  searchQuery: string
+  onSearch: (v: string) => void
+  totalCartCount: number
+  onOpenCart: () => void
 }
 
 export default function StorefrontHeader({
@@ -19,9 +19,15 @@ export default function StorefrontHeader({
     <>
       {/* Top Banner */}
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white text-xs py-2 px-4 text-center font-medium flex justify-center items-center gap-4">
-        <span>⚡ <b>SPRING TECH EVENT</b> — Use code <code className="bg-white/20 px-1.5 py-0.5 rounded font-mono text-amber-300">SAVE20</code> for 20% off all orders</span>
+        <span>
+          ⚡ <b>SPRING TECH EVENT</b> — Use code{' '}
+          <code className="bg-white/20 px-1.5 py-0.5 rounded font-mono text-amber-300">SAVE20</code>{' '}
+          for 20% off all orders
+        </span>
         <span className="hidden md:inline text-indigo-300">|</span>
-        <span className="hidden md:inline text-indigo-200">RustFS Object Storage &amp; Prisma Powered</span>
+        <span className="hidden md:inline text-indigo-200">
+          RustFS Object Storage &amp; Prisma Powered
+        </span>
       </div>
 
       {/* Navigation Header */}
@@ -100,5 +106,5 @@ export default function StorefrontHeader({
         </div>
       </header>
     </>
-  );
+  )
 }

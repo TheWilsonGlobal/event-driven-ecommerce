@@ -1,16 +1,16 @@
-import type { UserRecord } from '../types';
+import type { UserRecord } from '../types'
 
 interface Props {
-  filteredUsers: UserRecord[];
-  userSearch: string;
-  onUserSearch: (v: string) => void;
-  userRoleFilter: string;
-  onRoleFilter: (v: string) => void;
-  onSelectUser: (u: UserRecord) => void;
-  onEditUser: (u: UserRecord) => void;
-  onDeleteUser: (id: string) => void;
-  onAddUser: () => void;
-  onToggleStatus: (u: UserRecord) => void;
+  filteredUsers: UserRecord[]
+  userSearch: string
+  onUserSearch: (v: string) => void
+  userRoleFilter: string
+  onRoleFilter: (v: string) => void
+  onSelectUser: (u: UserRecord) => void
+  onEditUser: (u: UserRecord) => void
+  onDeleteUser: (id: string) => void
+  onAddUser: () => void
+  onToggleStatus: (u: UserRecord) => void
 }
 
 export default function UsersTab({
@@ -71,28 +71,35 @@ export default function UsersTab({
           <tbody className="divide-y divide-slate-700/60 font-medium">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-slate-500">No users found matching query.</td>
+                <td colSpan={5} className="p-8 text-center text-slate-500">
+                  No users found matching query.
+                </td>
               </tr>
             ) : (
               filteredUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-slate-800 transition">
                   <td className="p-4 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-700 to-indigo-900 flex items-center justify-center text-white font-bold">
-                      {user.firstName[0]}{user.lastName[0]}
+                      {user.firstName[0]}
+                      {user.lastName[0]}
                     </div>
                     <div>
-                      <span className="font-bold text-white block">{user.firstName} {user.lastName}</span>
+                      <span className="font-bold text-white block">
+                        {user.firstName} {user.lastName}
+                      </span>
                       <span className="text-slate-400 text-[11px]">{user.email}</span>
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                      user.role === 'ADMIN'
-                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
-                        : user.role === 'VENDOR'
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                    }`}>
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                        user.role === 'ADMIN'
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                          : user.role === 'VENDOR'
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                            : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                      }`}
+                    >
                       {user.role}
                     </span>
                   </td>
@@ -138,5 +145,5 @@ export default function UsersTab({
         </table>
       </div>
     </div>
-  );
+  )
 }

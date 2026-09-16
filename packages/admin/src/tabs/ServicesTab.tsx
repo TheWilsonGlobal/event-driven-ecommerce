@@ -1,9 +1,9 @@
-import type { ServiceItem } from '../types';
+import type { ServiceItem } from '../types'
 
 interface Props {
-  services: ServiceItem[];
-  lastUpdated: string;
-  onSelectService: (svc: ServiceItem) => void;
+  services: ServiceItem[]
+  lastUpdated: string
+  onSelectService: (svc: ServiceItem) => void
 }
 
 export default function ServicesTab({ services, lastUpdated, onSelectService }: Props) {
@@ -14,7 +14,10 @@ export default function ServicesTab({ services, lastUpdated, onSelectService }: 
           <h2 className="text-sm font-bold text-white uppercase tracking-wider">
             Live Perimeter &amp; Microservices Registry
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Real-time health probe aggregator across all active Fastify &amp; Next.js service listeners</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Real-time health probe aggregator across all active Fastify &amp; Next.js service
+            listeners
+          </p>
         </div>
         <span className="text-xs text-slate-500">Last scanned: {lastUpdated}</span>
       </div>
@@ -29,7 +32,9 @@ export default function ServicesTab({ services, lastUpdated, onSelectService }: 
             <div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <span className={`w-3 h-3 rounded-full ${svc.status === 'HEALTHY' ? 'bg-emerald-400' : 'bg-rose-500'}`} />
+                  <span
+                    className={`w-3 h-3 rounded-full ${svc.status === 'HEALTHY' ? 'bg-emerald-400' : 'bg-rose-500'}`}
+                  />
                   <h3 className="font-bold text-base text-white group-hover:text-indigo-400 transition">
                     {svc.name}
                   </h3>
@@ -64,11 +69,13 @@ export default function ServicesTab({ services, lastUpdated, onSelectService }: 
               >
                 Endpoint &rarr;
               </a>
-              <span className="text-slate-500 group-hover:text-slate-300 transition">Inspect Payload 🔍</span>
+              <span className="text-slate-500 group-hover:text-slate-300 transition">
+                Inspect Payload 🔍
+              </span>
             </div>
           </div>
         ))}
       </div>
     </div>
-  );
+  )
 }

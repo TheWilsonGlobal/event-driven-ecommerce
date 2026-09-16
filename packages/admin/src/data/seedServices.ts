@@ -1,4 +1,4 @@
-import type { ServiceItem } from '../types';
+import type { ServiceItem } from '../types'
 
 export const INITIAL_SERVICES: ServiceItem[] = [
   {
@@ -71,4 +71,4 @@ export const INITIAL_SERVICES: ServiceItem[] = [
     details: { status: 'online', framework: 'nextjs-14', port: 3004 },
     lastChecked: new Date().toISOString(),
   },
-];
+]

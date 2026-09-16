@@ -9,7 +9,7 @@
     "seed": "ts-node src/seed.ts",
     "dev": "tsc --watch",
     "clean": "rimraf dist",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "test:watch": "jest --watch"
   },
   "dependencies": {

@@ -1,16 +1,16 @@
-﻿'use client';
+﻿'use client'
 
-import React from 'react';
-import type { Product } from '../app/types';
+import React from 'react'
+import type { Product } from '../app/types'
 
 interface QuickViewModalProps {
-  product: Product | null;
-  onClose: () => void;
-  onAddToCart: (p: Product) => void;
+  product: Product | null
+  onClose: () => void
+  onAddToCart: (p: Product) => void
 }
 
 export default function QuickViewModal({ product, onClose, onAddToCart }: QuickViewModalProps) {
-  if (!product) return null;
+  if (!product) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
@@ -38,11 +38,11 @@ export default function QuickViewModal({ product, onClose, onAddToCart }: QuickV
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-amber-400">★</span>
                 <span className="text-xs font-bold">{product.ratings.average}</span>
-                <span className="text-xs text-slate-400">({product.ratings.count} verified customer ratings)</span>
+                <span className="text-xs text-slate-400">
+                  ({product.ratings.count} verified customer ratings)
+                </span>
               </div>
-              <p className="text-xs text-slate-600 mt-4 leading-relaxed">
-                {product.description}
-              </p>
+              <p className="text-xs text-slate-600 mt-4 leading-relaxed">{product.description}</p>
 
               {/* Specifications */}
               <div className="mt-6 border-t border-slate-100 pt-4">
@@ -62,7 +62,9 @@ export default function QuickViewModal({ product, onClose, onAddToCart }: QuickV
                   </div>
                   <div className="flex justify-between text-xs py-0.5">
                     <span className="text-slate-500">Stock Status</span>
-                    <span className="font-bold text-emerald-600">✓ In Stock ({product.stock} units)</span>
+                    <span className="font-bold text-emerald-600">
+                      ✓ In Stock ({product.stock} units)
+                    </span>
                   </div>
                 </div>
               </div>
@@ -79,8 +81,8 @@ export default function QuickViewModal({ product, onClose, onAddToCart }: QuickV
               </div>
               <button
                 onClick={() => {
-                  onAddToCart(product);
-                  onClose();
+                  onAddToCart(product)
+                  onClose()
                 }}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm py-3 rounded-xl shadow-lg shadow-indigo-100 transition text-center"
               >
@@ -91,5 +93,5 @@ export default function QuickViewModal({ product, onClose, onAddToCart }: QuickV
         </div>
       </div>
     </div>
-  );
+  )
 }

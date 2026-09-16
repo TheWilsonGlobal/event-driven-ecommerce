@@ -1,16 +1,16 @@
-﻿'use client';
+﻿'use client'
 
-import React from 'react';
+import React from 'react'
 
 interface CheckoutModalProps {
-  isOpen: boolean;
-  checkoutStep: 'shipping' | 'payment' | 'confirmed';
-  finalTotal: number;
-  lastOrderId: string;
-  onClose: () => void;
-  onContinueToPayment: () => void;
-  onBack: () => void;
-  onCompleteOrder: () => void;
+  isOpen: boolean
+  checkoutStep: 'shipping' | 'payment' | 'confirmed'
+  finalTotal: number
+  lastOrderId: string
+  onClose: () => void
+  onContinueToPayment: () => void
+  onBack: () => void
+  onCompleteOrder: () => void
 }
 
 export default function CheckoutModal({
@@ -23,7 +23,7 @@ export default function CheckoutModal({
   onBack,
   onCompleteOrder,
 }: CheckoutModalProps) {
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
@@ -61,7 +61,9 @@ export default function CheckoutModal({
               />
             </div>
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Email Address (Order Confirmation)</label>
+              <label className="font-bold text-slate-700 block mb-1">
+                Email Address (Order Confirmation)
+              </label>
               <input
                 type="email"
                 defaultValue="customer@ecommerce.com"
@@ -117,8 +119,12 @@ export default function CheckoutModal({
           <div className="space-y-4 text-xs">
             <div className="p-4 rounded-xl border-2 border-indigo-500 bg-indigo-50/50 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-indigo-900 text-sm">💳 Credit / Debit Card (Stripe Gateway)</span>
-                <span className="text-[10px] bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded font-bold">Encrypted</span>
+                <span className="font-bold text-indigo-900 text-sm">
+                  💳 Credit / Debit Card (Stripe Gateway)
+                </span>
+                <span className="text-[10px] bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded font-bold">
+                  Encrypted
+                </span>
               </div>
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Card Number</label>
@@ -178,7 +184,8 @@ export default function CheckoutModal({
             </div>
             <h3 className="text-xl font-black text-slate-900">Thank you for your purchase!</h3>
             <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-              Your order has been registered via <b>Order Service (Port 3003)</b> and receipt archived to <b>RustFS Object Storage</b>.
+              Your order has been registered via <b>Order Service (Port 3003)</b> and receipt
+              archived to <b>RustFS Object Storage</b>.
             </p>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-1.5 text-xs">
               <div className="flex justify-between">
@@ -204,5 +211,5 @@ export default function CheckoutModal({
         )}
       </div>
     </div>
-  );
+  )
 }

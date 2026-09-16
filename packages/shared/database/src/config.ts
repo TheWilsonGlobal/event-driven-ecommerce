@@ -1,82 +1,78 @@
-export type DatabaseMode = 'server' | 'embedded';
-export type RelationalDriver = 'postgres' | 'sqlite';
-export type DocumentDriver = 'mongodb' | 'nedb';
-export type KeyValueDriver = 'redis' | 'rocksdb' | 'embedded';
+export type DatabaseMode = 'server' | 'embedded'
+export type RelationalDriver = 'postgres' | 'sqlite'
+export type DocumentDriver = 'mongodb' | 'nedb'
+export type KeyValueDriver = 'redis' | 'rocksdb' | 'embedded'
 
 export interface DatabaseConfiguration {
-  mode: DatabaseMode;
+  mode: DatabaseMode
   relational: {
-    driver: RelationalDriver;
+    driver: RelationalDriver
     postgres: {
-      host: string;
-      port: number;
-      username: string;
-      password?: string | undefined;
-      database: string;
-      url: string;
-    };
+      host: string
+      port: number
+      username: string
+      password?: string | undefined
+      database: string
+      url: string
+    }
     sqlite: {
-      filePath: string;
-      url: string;
-    };
-    activeUrl: string;
-  };
+      filePath: string
+      url: string
+    }
+    activeUrl: string
+  }
   document: {
-    driver: DocumentDriver;
+    driver: DocumentDriver
     mongodb: {
-      uri: string;
-    };
+      uri: string
+    }
     nedb: {
-      dataPath: string;
-      inMemory: boolean;
-    };
-  };
+      dataPath: string
+      inMemory: boolean
+    }
+  }
   keyValue: {
-    driver: KeyValueDriver;
+    driver: KeyValueDriver
     redis: {
-      host: string;
-      port: number;
-      password?: string | undefined;
-      db: number;
-    };
+      host: string
+      port: number
+      password?: string | undefined
+      db: number
+    }
     rocksdb: {
-      dataPath: string;
-    };
+      dataPath: string
+    }
     embedded: {
-      inMemory: boolean;
-    };
-  };
+      inMemory: boolean
+    }
+  }
 }
 
-export function loadDatabaseConfig(
-  env: NodeJS.ProcessEnv = process.env
-): DatabaseConfiguration {
-  const mode: DatabaseMode =
-    env.DB_MODE?.toLowerCase() === 'embedded' ? 'embedded' : 'server';
+export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): DatabaseConfiguration {
+  const mode: DatabaseMode = env.DB_MODE?.toLowerCase() === 'embedded' ? 'embedded' : 'server'
 
   const relationalDriver: RelationalDriver =
     (env.RELATIONAL_DB_DRIVER?.toLowerCase() as RelationalDriver) ||
-    (mode === 'embedded' ? 'sqlite' : 'postgres');
+    (mode === 'embedded' ? 'sqlite' : 'postgres')
 
   const docDriver: DocumentDriver =
     (env.DOCUMENT_DB_DRIVER?.toLowerCase() as DocumentDriver) ||
-    (mode === 'embedded' ? 'nedb' : 'mongodb');
+    (mode === 'embedded' ? 'nedb' : 'mongodb')
 
   const kvDriver: KeyValueDriver =
     (env.KV_CACHE_DRIVER?.toLowerCase() as KeyValueDriver) ||
-    (mode === 'embedded' ? 'rocksdb' : 'redis');
+    (mode === 'embedded' ? 'rocksdb' : 'redis')
 
-  const pgHost = env.DB_HOST || 'localhost';
-  const pgPort = parseInt(env.DB_PORT || '5432', 10);
-  const pgUser = env.DB_USERNAME || 'postgres';
-  const pgPass = env.DB_PASSWORD || 'password';
-  const pgDb = env.DB_DATABASE || 'ecommerce';
+  const pgHost = env.DB_HOST || 'localhost'
+  const pgPort = parseInt(env.DB_PORT || '5432', 10)
+  const pgUser = env.DB_USERNAME || 'postgres'
+  const pgPass = env.DB_PASSWORD || 'password'
+  const pgDb = env.DB_DATABASE || 'ecommerce'
   const pgUrl =
-    env.DATABASE_URL ||
-    `postgresql://${pgUser}:${pgPass}@${pgHost}:${pgPort}/${pgDb}?schema=public`;
+    env.DATABASE_URL || `postgresql://${pgUser}:${pgPass}@${pgHost}:${pgPort}/${pgDb}?schema=public`
 
-  const sqlitePath = env.SQLITE_DB_PATH || './data/ecommerce.db';
-  const sqliteUrl = `file:${sqlitePath}`;
+  const sqlitePath = env.SQLITE_DB_PATH || './data/ecommerce.db'
+  const sqliteUrl = `file:${sqlitePath}`
 
   return {
     mode,
@@ -121,5 +117,5 @@ export function loadDatabaseConfig(
         inMemory: env.EMBEDDED_KV_IN_MEMORY !== 'false',
       },
     },
-  };
+  }
 }

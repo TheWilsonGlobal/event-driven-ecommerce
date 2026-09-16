@@ -1,12 +1,12 @@
-import type { UserRecord } from '../types';
+import type { UserRecord } from '../types'
 
 interface Props {
-  user: UserRecord | null;
-  onClose: () => void;
+  user: UserRecord | null
+  onClose: () => void
 }
 
 export default function UserViewModal({ user, onClose }: Props) {
-  if (!user) return null;
+  if (!user) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative">
@@ -22,10 +22,13 @@ export default function UserViewModal({ user, onClose }: Props) {
         <div className="space-y-3 text-xs">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-lg">
-              {user.firstName[0]}{user.lastName[0]}
+              {user.firstName[0]}
+              {user.lastName[0]}
             </div>
             <div>
-              <h4 className="font-bold text-sm text-white">{user.firstName} {user.lastName}</h4>
+              <h4 className="font-bold text-sm text-white">
+                {user.firstName} {user.lastName}
+              </h4>
               <p className="text-slate-400">{user.email}</p>
             </div>
           </div>
@@ -40,17 +43,20 @@ export default function UserViewModal({ user, onClose }: Props) {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Email Status:</span>
-              <span className="font-bold text-emerald-400">{user.isEmailVerified ? 'Verified ✓' : 'Pending'}</span>
+              <span className="font-bold text-emerald-400">
+                {user.isEmailVerified ? 'Verified ✓' : 'Pending'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Primary Address:</span>
               <span className="text-right text-slate-300">
-                {user.addresses[0]?.addressLine1}, {user.addresses[0]?.city} {user.addresses[0]?.state}
+                {user.addresses[0]?.addressLine1}, {user.addresses[0]?.city}{' '}
+                {user.addresses[0]?.state}
               </span>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }

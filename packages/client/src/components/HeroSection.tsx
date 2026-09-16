@@ -1,11 +1,11 @@
-﻿'use client';
+﻿'use client'
 
-import React from 'react';
+import React from 'react'
 
 interface HeroSectionProps {
-  productCount: number;
-  onScrollToCatalog: () => void;
-  onQuickAddFlagship: () => void;
+  productCount: number
+  onScrollToCatalog: () => void
+  onQuickAddFlagship: () => void
 }
 
 export default function HeroSection({
@@ -25,13 +25,15 @@ export default function HeroSection({
                 <span>🚀 Next-Gen Hardware &amp; Spatial Sound</span>
               </div>
               <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight">
-                Architectural Performance.<br />
+                Architectural Performance.
+                <br />
                 <span className="bg-gradient-to-r from-indigo-400 via-sky-300 to-violet-300 bg-clip-text text-transparent">
                   Engineered for Creators.
                 </span>
               </h1>
               <p className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed">
-                Experience high-performance computing, pristine acoustic spatial sound, and titanium wearables powered by real-time microservice architecture.
+                Experience high-performance computing, pristine acoustic spatial sound, and titanium
+                wearables powered by real-time microservice architecture.
               </p>
               <div className="flex flex-wrap gap-4 justify-center lg:justify-start pt-2">
                 <button
@@ -65,7 +67,9 @@ export default function HeroSection({
                 <div className="mt-4 flex justify-between items-end">
                   <div>
                     <h3 className="font-bold text-lg text-white">Aura Pro Wireless ANC</h3>
-                    <p className="text-xs text-slate-400">40h Battery · Spatial Audio · Bluetooth 5.3</p>
+                    <p className="text-xs text-slate-400">
+                      40h Battery · Spatial Audio · Bluetooth 5.3
+                    </p>
                   </div>
                   <div className="text-right">
                     <span className="text-xs text-slate-400 line-through block">$399.99</span>
@@ -104,5 +108,5 @@ export default function HeroSection({
         </div>
       </section>
     </>
-  );
+  )
 }

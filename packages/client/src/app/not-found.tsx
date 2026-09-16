@@ -1,1 +1,7 @@
-export default function NotFound() { return <div className='p-8 text-center'><h2>Page Not Found</h2></div>; }
+export default function NotFound() {
+  return (
+    <div className="p-8 text-center">
+      <h2>Page Not Found</h2>
+    </div>
+  )
+}

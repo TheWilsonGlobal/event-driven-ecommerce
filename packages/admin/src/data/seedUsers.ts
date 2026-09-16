@@ -1,4 +1,4 @@
-import type { UserRecord } from '../types';
+import type { UserRecord } from '../types'
 
 export const INITIAL_USERS: UserRecord[] = [
   {
@@ -81,4 +81,4 @@ export const INITIAL_USERS: UserRecord[] = [
     ],
     createdAt: new Date().toISOString(),
   },
-];
+]
