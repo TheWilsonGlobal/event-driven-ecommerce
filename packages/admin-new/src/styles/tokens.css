@@ -1,0 +1,49 @@
+/* Admin dashboard tokens & colors */
+:root {
+  --bg: #0b0f19;
+  --panel: #161f30;
+  --panel-alt: #111827;
+  --row-even: #131c2c;
+  --border: #24334a;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --text-faint: #64748b;
+  --text-bright: #f8fafc;
+
+  --blue: #3b82f6;
+  --blue-hover: #2563eb;
+  --blue-light: #60a5fa;
+  --green: #22c55e;
+  --green-light: #4ade80;
+  --amber: #f59e0b;
+  --amber-light: #fbbf24;
+  --red: #ef4444;
+  --red-light: #f87171;
+  --purple: #a78bfa;
+
+  --green-bg: #052e16;
+  --green-border: #166534;
+  --amber-bg: #422006;
+  --amber-border: #92400e;
+  --red-bg: #450a0a;
+  --red-border: #991b1b;
+  --blue-bg: #0f2744;
+  --blue-border: #1e40af;
+  --purple-bg: #2e1065;
+  --purple-border: #6b21a8;
+
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
