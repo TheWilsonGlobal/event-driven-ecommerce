@@ -20,23 +20,18 @@ COPY packages/admin ./packages/admin
 
 RUN pnpm --filter @ecommerce/admin run build
 
-FROM base AS runner
-WORKDIR /app
+FROM nginx:alpine AS runner
+COPY --from=builder /app/packages/admin/dist /usr/share/nginx/html
 
-ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/packages/admin/public ./public
-COPY --from=builder /app/packages/admin/.next/standalone ./
-COPY --from=builder /app/packages/admin/.next/static ./.next/static
-
-USER nextjs
+RUN echo 'server { \
+    listen 3005; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $$uri $$uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 3005
 
-ENV PORT=3005
-ENV HOSTNAME="0.0.0.0"
-
-CMD ["node", "server.js"]
+CMD ["nginx", "-g", "daemon off;"]
