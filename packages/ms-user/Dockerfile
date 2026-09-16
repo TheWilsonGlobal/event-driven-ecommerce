@@ -11,6 +11,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/shared ./packages/shared
 COPY packages/ms-user/package.json ./packages/ms-user/
+COPY packages/ms-user/prisma ./packages/ms-user/prisma
 
 RUN pnpm --filter @ecommerce/ms-user... install --frozen-lockfile
 
@@ -20,6 +21,7 @@ WORKDIR /app
 COPY --from=deps /app ./
 COPY packages/ms-user ./packages/ms-user
 
+RUN pnpm --filter @ecommerce/ms-user exec prisma generate
 RUN pnpm --filter @ecommerce/ms-user run build
 
 # Production image

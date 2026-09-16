@@ -11,9 +11,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
-    "migrate": "typeorm migration:run",
-    "migrate:revert": "typeorm migration:revert"
+    "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
     "@ecommerce/shared": "workspace:*",

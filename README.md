@@ -15,7 +15,7 @@ This monorepo contains the following services:
 ### Shared Libraries
 - **Types** (`packages/shared/types`) - Common TypeScript type definitions & DTOs
 - **Utils** (`packages/shared/utils`) - Shared utility functions & response wrappers
-- **Database** (`packages/shared/database`) - TypeORM, Mongoose & Redis clients
+- **Database** (`packages/shared/database`) - Prisma ORM, Mongoose & Redis clients
 - **Messaging** (`packages/shared/messaging`) - BullMQ queues & workers over Redis 7
 
 ### Frontend
@@ -46,9 +46,10 @@ cp .env.example .env
 # Update .env with your configuration
 ```
 
-3. Install dependencies:
+3. Install dependencies and generate Prisma clients:
 ```bash
 pnpm install
+pnpm run db:generate
 ```
 
 4. Start development servers:
@@ -61,6 +62,8 @@ pnpm run dev
 ### Root Level Scripts
 - `pnpm run dev` - Start all services concurrently in development mode
 - `pnpm run build` - Build all workspace packages
+- `pnpm run db:generate` - Generate Prisma clients across all microservices
+- `pnpm run db:migrate` - Deploy database migrations across PostgreSQL services
 - `pnpm run test` - Run all tests across workspace
 - `pnpm run lint` - Lint all packages
 - `pnpm run docker:up` - Start 11 container services with Docker Compose
@@ -82,13 +85,18 @@ pnpm run dev
 4. Add to `tsconfig.json` references and paths
 5. Update Docker Compose configuration
 
-### Database Migrations
+### Database Migrations (Prisma)
 ```bash
-# Run migrations
-pnpm --filter @ecommerce/ms-user run migrate
+# Generate Prisma Client after schema changes
+pnpm --filter @ecommerce/ms-user run prisma:generate
+pnpm --filter @ecommerce/ms-order run prisma:generate
 
-# Generate new migration
-pnpm --filter @ecommerce/ms-user run migrate:generate -- MigrationName
+# Create and apply new migration in development
+pnpm --filter @ecommerce/ms-user run migrate:dev --name add_user_avatar
+pnpm --filter @ecommerce/ms-order run migrate:dev --name add_payment_metadata
+
+# Deploy migrations in production / CI
+pnpm run db:migrate
 ```
 
 ## 📊 Monitoring & Observability

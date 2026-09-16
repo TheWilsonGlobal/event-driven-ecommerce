@@ -8,19 +8,15 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rimraf dist",
-    "migrate": "typeorm migration:run",
-    "migrate:revert": "typeorm migration:revert",
-    "migrate:generate": "typeorm migration:generate",
     "test": "jest",
     "test:watch": "jest --watch"
   },
   "dependencies": {
-    "typeorm": "^0.3.17",
+    "@prisma/client": "^5.10.2",
     "pg": "^8.11.3",
     "redis": "^4.6.10",
     "ioredis": "^5.3.2",
-    "mongoose": "^8.0.3",
-    "reflect-metadata": "^0.1.13"
+    "mongoose": "^8.0.3"
   },
   "devDependencies": {
     "@types/pg": "^8.10.9",

@@ -13,6 +13,8 @@
     "dev:frontend": "pnpm --filter @ecommerce/frontend dev",
     "build": "pnpm -r run build",
     "build:shared": "pnpm --filter \"@ecommerce/shared*\" run build",
+    "db:generate": "pnpm --filter @ecommerce/ms-user run prisma:generate && pnpm --filter @ecommerce/ms-order run prisma:generate",
+    "db:migrate": "pnpm --filter @ecommerce/ms-user run migrate && pnpm --filter @ecommerce/ms-order run migrate",
     "test": "pnpm -r run test",
     "test:watch": "pnpm -r run test:watch",
     "lint": "pnpm -r run lint",

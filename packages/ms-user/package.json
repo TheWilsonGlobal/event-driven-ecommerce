@@ -12,14 +12,16 @@
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "migrate": "typeorm migration:run",
-    "migrate:revert": "typeorm migration:revert"
+    "prisma:generate": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev"
   },
   "dependencies": {
     "@ecommerce/shared": "workspace:*",
     "@ecommerce/shared-types": "workspace:*",
     "@ecommerce/shared-utils": "workspace:*",
     "@ecommerce/shared-database": "workspace:*",
+    "@prisma/client": "^5.10.2",
     "fastify": "^4.24.3",
     "@fastify/jwt": "^7.2.4",
     "@fastify/auth": "^4.4.1",
@@ -35,6 +37,7 @@
     "pino-pretty": "^10.2.3"
   },
   "devDependencies": {
+    "prisma": "^5.10.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/nodemailer": "^6.4.14",
     "@types/node": "^20.10.0",
