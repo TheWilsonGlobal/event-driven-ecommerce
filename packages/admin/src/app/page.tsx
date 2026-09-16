@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
+// Types
 interface ServiceItem {
   id: string;
   name: string;
@@ -50,6 +51,17 @@ interface ConfigData {
       embeddedInMemory: boolean;
     };
   };
+  storage: {
+    provider: string;
+    rustfs: {
+      endpoint: string;
+      consoleEndpoint: string;
+      bucket: string;
+      region: string;
+    };
+    s3Bucket: string;
+    localUploadPath: string;
+  };
   queues: {
     broker: string;
     concurrency: number;
@@ -72,500 +84,1418 @@ interface ConfigData {
   };
 }
 
+interface UserRecord {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'ADMIN' | 'CUSTOMER' | 'VENDOR';
+  isActive: boolean;
+  isEmailVerified: boolean;
+  addresses: {
+    addressLine1: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+    isDefaultShipping: boolean;
+  }[];
+  createdAt?: string;
+}
+
+interface ProductRecord {
+  id: string;
+  title: string;
+  slug: string;
+  sku: string;
+  description: string;
+  price: number;
+  compareAtPrice: number;
+  currency: string;
+  stock: number;
+  isAvailable?: boolean;
+  category: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  tags: string[];
+  images: {
+    url: string;
+    alt: string;
+    isPrimary: boolean;
+  }[];
+  attributes: {
+    name: string;
+    value: string;
+  }[];
+  ratings: {
+    average: number;
+    count: number;
+  };
+}
+
+interface OrderRecord {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  status: 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+  subtotal: number;
+  taxAmount: number;
+  shippingAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  currency: string;
+  paymentMethod: 'STRIPE' | 'PAYPAL' | 'MOCK';
+  paymentStatus: 'PAID' | 'PENDING' | 'FAILED' | 'REFUNDED';
+  transactionId: string;
+  shippingAddress: {
+    addressLine1: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+  };
+  items: {
+    productId: string;
+    sku: string;
+    title: string;
+    unitPrice: number;
+    quantity: number;
+    totalPrice: number;
+    imageUrl?: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+  receiptUrl?: string;
+}
+
 export default function AdminDashboard() {
-  const [services, setServices] = useState<ServiceItem[]>([]);
-  const [config, setConfig] = useState<ConfigData | null>(null);
+  const [activeTab, setActiveTab] = useState<'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config'>('services');
   const [loading, setLoading] = useState<boolean>(true);
-  const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'services' | 'persistence' | 'config'>('services');
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  // Core Data States
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [config, setConfig] = useState<ConfigData | null>(null);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [products, setProducts] = useState<ProductRecord[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+
+  // Selection / Modal States
+  const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
+
+  // Form Modals
+  const [isUserModalOpen, setIsUserModalOpen] = useState<boolean>(false);
+  const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
+  const [isProductModalOpen, setIsProductModalOpen] = useState<boolean>(false);
+  const [editingProduct, setEditingProduct] = useState<ProductRecord | null>(null);
+
+  // Filtering & Search
+  const [userSearch, setUserSearch] = useState<string>('');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('ALL');
+
+  const [productSearch, setProductSearch] = useState<string>('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('ALL');
+
+  const [orderSearch, setOrderSearch] = useState<string>('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('ALL');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const fetchAllData = useCallback(async () => {
     try {
-      const [statusRes, configRes] = await Promise.all([
+      const [statusRes, configRes, usersRes, productsRes, ordersRes] = await Promise.all([
         fetch('/api/status', { cache: 'no-store' }),
         fetch('/api/config', { cache: 'no-store' }),
+        fetch('/api/users', { cache: 'no-store' }),
+        fetch('/api/products', { cache: 'no-store' }),
+        fetch('/api/orders', { cache: 'no-store' }),
       ]);
 
       if (statusRes.ok) {
-        const statusData = await statusRes.json();
-        setServices(statusData.services || []);
+        const data = await statusRes.json();
+        setServices(data.services || []);
       }
       if (configRes.ok) {
-        const cfgData = await configRes.json();
-        setConfig(cfgData.config || null);
+        const data = await configRes.json();
+        setConfig(data.config || null);
       }
+      if (usersRes.ok) {
+        const data = await usersRes.json();
+        setUsers(data.users || []);
+      }
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        setProducts(data.products || []);
+      }
+      if (ordersRes.ok) {
+        const data = await ordersRes.json();
+        setOrders(data.orders || []);
+      }
+
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
-      console.error('Failed to fetch admin data', err);
+      console.error('Error fetching admin data:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchAllData();
     if (!autoRefresh) return;
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchAllData, 5000);
     return () => clearInterval(interval);
-  }, [fetchData, autoRefresh]);
+  }, [fetchAllData, autoRefresh]);
+
+  // User Handlers
+  const handleSaveUser = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      id: editingUser?.id,
+      firstName: formData.get('firstName') as string,
+      lastName: formData.get('lastName') as string,
+      email: formData.get('email') as string,
+      role: formData.get('role') as string,
+      isActive: formData.get('isActive') === 'on',
+      isEmailVerified: true,
+      addressLine1: formData.get('addressLine1') as string,
+      city: formData.get('city') as string,
+      state: formData.get('state') as string,
+      postalCode: formData.get('postalCode') as string,
+      country: formData.get('country') as string,
+    };
+
+    const method = editingUser ? 'PUT' : 'POST';
+    const res = await fetch('/api/users', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      showToast(editingUser ? 'User updated successfully' : 'User created successfully');
+      setIsUserModalOpen(false);
+      setEditingUser(null);
+      fetchAllData();
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+    const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('User deleted');
+      fetchAllData();
+    }
+  };
+
+  const handleToggleUserStatus = async (user: UserRecord) => {
+    const res = await fetch('/api/users', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: user.id, isActive: !user.isActive }),
+    });
+    if (res.ok) {
+      showToast(`User ${user.firstName} ${!user.isActive ? 'activated' : 'deactivated'}`);
+      fetchAllData();
+    }
+  };
+
+  // Product Handlers
+  const handleSaveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const categoryName = formData.get('category') as string;
+    const payload = {
+      id: editingProduct?.id,
+      title: formData.get('title') as string,
+      sku: formData.get('sku') as string,
+      price: parseFloat(formData.get('price') as string),
+      compareAtPrice: parseFloat(formData.get('compareAtPrice') as string),
+      stock: parseInt(formData.get('stock') as string, 10),
+      description: formData.get('description') as string,
+      imageUrl: formData.get('imageUrl') as string,
+      category: {
+        id: categoryName.toLowerCase().replace(/\s+/g, '-'),
+        name: categoryName,
+        slug: categoryName.toLowerCase().replace(/\s+/g, '-'),
+      },
+    };
+
+    const method = editingProduct ? 'PUT' : 'POST';
+    const res = await fetch('/api/products', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      showToast(editingProduct ? 'Product updated successfully' : 'Product created successfully');
+      setIsProductModalOpen(false);
+      setEditingProduct(null);
+      fetchAllData();
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this product?')) return;
+    const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Product deleted');
+      fetchAllData();
+    }
+  };
+
+  // Order Handlers
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+    const res = await fetch('/api/orders', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: orderId, status: newStatus }),
+    });
+    if (res.ok) {
+      showToast(`Order status updated to ${newStatus}`);
+      fetchAllData();
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder((prev) => prev ? { ...prev, status: newStatus as any } : null);
+      }
+    }
+  };
+
+  // Filtered lists
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchesSearch =
+        u.firstName.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.lastName.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(userSearch.toLowerCase());
+      const matchesRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, userSearch, userRoleFilter]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesSearch =
+        p.title.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
+        p.description.toLowerCase().includes(productSearch.toLowerCase());
+      const matchesCategory = productCategoryFilter === 'ALL' || p.category.name === productCategoryFilter;
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, productSearch, productCategoryFilter]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const matchesSearch =
+        o.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        o.customerName.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        o.customerEmail.toLowerCase().includes(orderSearch.toLowerCase());
+      const matchesStatus = orderStatusFilter === 'ALL' || o.status === orderStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, orderSearch, orderStatusFilter]);
 
   const onlineCount = services.filter((s) => s.status === 'HEALTHY').length;
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0f172a', color: '#f8fafc', padding: '24px' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Header */}
-        <header
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            borderBottom: '1px solid #334155',
-            paddingBottom: '20px',
-            marginBottom: '24px',
-            gap: '16px',
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: '#38bdf8' }}>
-                ⚡ Microservices Admin Cockpit
-              </h1>
-              <span
-                style={{
-                  fontSize: '12px',
-                  backgroundColor: '#0284c7',
-                  color: '#ffffff',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontWeight: '600',
-                }}
-              >
-                v1.0.0
+    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-16">
+      {/* Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-indigo-400 animate-bounce">
+          <span>✓</span>
+          <span className="text-sm font-semibold">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-black text-xl text-white shadow-lg shadow-indigo-500/30">
+              ⚡
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-black tracking-tight text-white">ADMIN COCKPIT</h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                  Control Plane v2.0
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">Microservices Architecture, Catalog, Customers & Sagas</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+              <span className={`w-2.5 h-2.5 rounded-full ${onlineCount === services.length && services.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className="font-semibold text-slate-300">
+                Services: <b className="text-white">{onlineCount}/{services.length} Healthy</b>
+                {loading && <span className="ml-1.5 text-indigo-400 animate-pulse font-mono text-[10px]">syncing</span>}
               </span>
             </div>
-            <p style={{ color: '#94a3b8', fontSize: '14px', margin: '4px 0 0 0' }}>
-              Centralized topology monitoring, live health status, and system configuration control plane
-            </p>
-          </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '13px', color: '#94a3b8' }}>
-              {loading ? 'Fetching status...' : `Last updated: ${lastUpdated}`}
-            </span>
             <button
               onClick={() => setAutoRefresh(!autoRefresh)}
-              style={{
-                backgroundColor: autoRefresh ? '#065f46' : '#334155',
-                color: autoRefresh ? '#34d399' : '#94a3b8',
-                border: '1px solid #1e293b',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                fontWeight: '500',
-              }}
+              className={`px-3 py-1.5 rounded-lg font-semibold border transition ${
+                autoRefresh ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50' : 'bg-slate-800 text-slate-400 border-slate-700'
+              }`}
             >
-              {autoRefresh ? '● Auto-Refresh: ON (5s)' : '○ Auto-Refresh: OFF'}
+              {autoRefresh ? '⟳ Auto (5s)' : '⏸ Paused'}
             </button>
+
             <button
-              onClick={() => {
-                setLoading(true);
-                fetchData();
-              }}
-              style={{
-                backgroundColor: '#2563eb',
-                color: '#ffffff',
-                border: 'none',
-                padding: '6px 14px',
-                borderRadius: '6px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                fontWeight: '600',
-              }}
+              onClick={fetchAllData}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 font-semibold transition"
             >
-              {loading ? '⏳ Refreshing...' : '🔄 Refresh Now'}
+              Refresh ↻
             </button>
-          </div>
-        </header>
 
-        {/* Stats Row */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '16px',
-            marginBottom: '24px',
-          }}
-        >
-          <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '4px' }}>Services Operational</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: onlineCount === services.length && services.length > 0 ? '#34d399' : '#fbbf24' }}>
-              {onlineCount} / {services.length}
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              {onlineCount === services.length && services.length > 0 ? 'All services running normally' : 'Some services offline'}
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '4px' }}>Persistence Mode</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#38bdf8' }}>
-              {config?.persistence?.mode?.toUpperCase() || 'SERVER'}
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              Relational: {config?.persistence?.relational?.driver || 'postgres'} · Doc: {config?.persistence?.document?.driver || 'mongodb'}
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '4px' }}>Distributed Task Queues</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#c084fc' }}>
-              BullMQ 4.11
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              Concurrency: {config?.queues?.concurrency || 10} · Retries: {config?.queues?.maxRetries || 5}
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '16px' }}>
-            <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '4px' }}>Runtime Environment</div>
-            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#f59e0b' }}>
-              {config?.environment?.nodeEnv?.toUpperCase() || 'DEVELOPMENT'}
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              API Version: {config?.environment?.apiVersion || 'v1'}
-            </div>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #334155', paddingBottom: '12px', marginBottom: '20px' }}>
-          <button
-            onClick={() => setActiveTab('services')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '600',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === 'services' ? '#38bdf8' : '#1e293b',
-              color: activeTab === 'services' ? '#0f172a' : '#94a3b8',
-            }}
-          >
-            📡 Microservices Registry ({services.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('persistence')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '600',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === 'persistence' ? '#38bdf8' : '#1e293b',
-              color: activeTab === 'persistence' ? '#0f172a' : '#94a3b8',
-            }}
-          >
-            💾 Persistence & Storage Drivers
-          </button>
-          <button
-            onClick={() => setActiveTab('config')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '600',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: activeTab === 'config' ? '#38bdf8' : '#1e293b',
-              color: activeTab === 'config' ? '#0f172a' : '#94a3b8',
-            }}
-          >
-            ⚙️ Environment & Security Matrix
-          </button>
-        </div>
-
-        {/* Tab Content: Services */}
-        {activeTab === 'services' && (
-          <div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-                gap: '16px',
-                marginBottom: '24px',
-              }}
+            <a
+              href="http://localhost:3004"
+              target="_blank"
+              rel="noreferrer"
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm transition flex items-center gap-1"
             >
+              <span>Storefront</span>
+              <span>&rarr;</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-2 border-t border-slate-800/60 pt-2 pb-2 overflow-x-auto scrollbar-none">
+          {[
+            { id: 'services', label: '🖥️ Services Registry', count: services.length },
+            { id: 'users', label: '👥 Users & Roles', count: users.length },
+            { id: 'products', label: '📦 Product Catalog', count: products.length },
+            { id: 'orders', label: '🛒 Orders & Sagas', count: orders.length },
+            { id: 'persistence', label: '💾 Persistence Topology' },
+            { id: 'config', label: '⚙️ Configuration Matrix' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                  activeTab === tab.id ? 'bg-indigo-900/80 text-indigo-200' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        {/* ========================================================================= */}
+        {/* TAB 1: SERVICES REGISTRY */}
+        {/* ========================================================================= */}
+        {activeTab === 'services' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+              <div>
+                <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Live Perimeter & Microservices Registry
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">Real-time health probe aggregator across all active Fastify & Next.js service listeners</p>
+              </div>
+              <span className="text-xs text-slate-500">Last scanned: {lastUpdated}</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {services.map((svc) => (
                 <div
                   key={svc.id}
-                  style={{
-                    backgroundColor: '#1e293b',
-                    border: svc.status === 'HEALTHY' ? '1px solid #059669' : '1px solid #475569',
-                    borderRadius: '8px',
-                    padding: '18px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                  }}
+                  onClick={() => setSelectedService(svc)}
+                  className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-indigo-500/50 rounded-2xl p-5 shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                    <div>
-                      <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#f8fafc' }}>
-                        {svc.name}
-                      </h3>
-                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                        Port <strong>{svc.port}</strong> · {svc.type.toUpperCase()}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-3 h-3 rounded-full ${svc.status === 'HEALTHY' ? 'bg-emerald-400' : svc.status === 'DEGRADED' ? 'bg-amber-400' : 'bg-rose-500'}`} />
+                        <h3 className="font-bold text-base text-white group-hover:text-indigo-400 transition">
+                          {svc.name}
+                        </h3>
+                      </div>
+                      <span className="text-xs font-mono font-bold bg-slate-900/90 text-indigo-300 px-2 py-0.5 rounded border border-slate-700">
+                        :{svc.port}
                       </span>
                     </div>
-                    <span
-                      style={{
-                        padding: '3px 8px',
-                        borderRadius: '9999px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        backgroundColor: svc.status === 'HEALTHY' ? '#064e3b' : '#7f1d1d',
-                        color: svc.status === 'HEALTHY' ? '#34d399' : '#fca5a5',
-                      }}
-                    >
-                      {svc.status}
-                    </span>
-                  </div>
 
-                  <p style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '16px', minHeight: '36px' }}>
-                    {svc.role}
-                  </p>
+                    <p className="text-xs text-slate-400 mt-2.5 line-clamp-2">{svc.role}</p>
 
-                  <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '6px', fontSize: '12px', marginBottom: '14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ color: '#94a3b8' }}>Health Endpoint:</span>
-                      <a href={svc.healthUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8' }}>
-                        {svc.healthUrl}
-                      </a>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#94a3b8' }}>Response Latency:</span>
-                      <span style={{ color: svc.status === 'HEALTHY' ? '#34d399' : '#f87171' }}>
-                        {svc.status === 'HEALTHY' ? `${svc.latencyMs} ms` : 'N/A'}
+                    <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-medium">Status</span>
+                      <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                        svc.status === 'HEALTHY'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      }`}>
+                        {svc.status} {svc.statusCode > 0 ? `(${svc.statusCode})` : ''}
                       </span>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-medium">Response Latency</span>
+                      <span className="font-mono text-slate-300 font-semibold">{svc.latencyMs} ms</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => setSelectedService(svc)}
-                      style={{
-                        flex: 1,
-                        padding: '6px 12px',
-                        backgroundColor: '#334155',
-                        color: '#f8fafc',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        fontWeight: '500',
-                      }}
-                    >
-                      🔍 Inspect Details
-                    </button>
+                  <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs">
                     <a
-                      href={svc.url}
+                      href={svc.healthUrl}
                       target="_blank"
                       rel="noreferrer"
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: '#0284c7',
-                        color: '#ffffff',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        textAlign: 'center',
-                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-indigo-400 hover:text-indigo-300 font-semibold"
                     >
-                      Open &rarr;
+                      Endpoint &rarr;
                     </a>
+                    <span className="text-slate-500 group-hover:text-slate-300 transition">Inspect Payload 🔍</span>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+        )}
 
-            {/* Modal / Inspector for selected service */}
-            {selectedService && (
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  border: '1px solid #38bdf8',
-                  borderRadius: '8px',
-                  padding: '20px',
-                  marginTop: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#38bdf8' }}>
-                    Inspector: {selectedService.name} (Port {selectedService.port})
-                  </h3>
-                  <button
-                    onClick={() => setSelectedService(null)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#94a3b8',
-                      fontSize: '16px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    ✖ Close
-                  </button>
-                </div>
-                <pre
-                  style={{
-                    backgroundColor: '#0f172a',
-                    padding: '14px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    color: '#34d399',
-                    overflowX: 'auto',
-                    margin: 0,
-                  }}
+        {/* ========================================================================= */}
+        {/* TAB 2: USERS MANAGEMENT */}
+        {/* ========================================================================= */}
+        {activeTab === 'users' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Search user name or email..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-white rounded-xl px-3 py-2 outline-none focus:border-indigo-500 w-64"
+                />
+                <select
+                  value={userRoleFilter}
+                  onChange={(e) => setUserRoleFilter(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-xl px-3 py-2 outline-none focus:border-indigo-500"
                 >
-                  {JSON.stringify(selectedService, null, 2)}
-                </pre>
+                  <option value="ALL">All Roles</option>
+                  <option value="ADMIN">Admin</option>
+                  <option value="CUSTOMER">Customer</option>
+                  <option value="VENDOR">Vendor</option>
+                </select>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Tab Content: Persistence */}
-        {activeTab === 'persistence' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
-            {/* Relational Database */}
-            <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#38bdf8' }}>
-                  🗄️ Relational Persistence
-                </h3>
-                <span style={{ fontSize: '12px', backgroundColor: '#0369a1', padding: '2px 8px', borderRadius: '4px' }}>
-                  User & Order Services
-                </span>
-              </div>
-              <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>Active Driver</td>
-                    <td style={{ padding: '8px 0', fontWeight: '600', color: '#34d399' }}>
-                      {config?.persistence?.relational?.driver?.toUpperCase()}
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>ORM Engine</td>
-                    <td style={{ padding: '8px 0', fontWeight: '600' }}>Prisma ORM 5.22</td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>PostgreSQL Target</td>
-                    <td style={{ padding: '8px 0' }}>
-                      {config?.persistence?.relational?.postgresHost}:{config?.persistence?.relational?.postgresPort} / {config?.persistence?.relational?.postgresDatabase}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>SQLite Fallback Path</td>
-                    <td style={{ padding: '8px 0', color: '#cbd5e1' }}>
-                      {config?.persistence?.relational?.sqlitePath}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <button
+                onClick={() => {
+                  setEditingUser(null);
+                  setIsUserModalOpen(true);
+                }}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5"
+              >
+                <span>+ Add New User</span>
+              </button>
             </div>
 
-            {/* Document Database */}
-            <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#34d399' }}>
-                  📄 Document & Catalog Storage
-                </h3>
-                <span style={{ fontSize: '12px', backgroundColor: '#065f46', padding: '2px 8px', borderRadius: '4px' }}>
-                  Product Service & Sessions
-                </span>
-              </div>
-              <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>Active Driver</td>
-                    <td style={{ padding: '8px 0', fontWeight: '600', color: '#34d399' }}>
-                      {config?.persistence?.document?.driver?.toUpperCase()}
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>MongoDB URI</td>
-                    <td style={{ padding: '8px 0' }}>{config?.persistence?.document?.mongodbUri}</td>
-                  </tr>
+            {/* Users Table */}
+            <div className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-900/90 text-slate-400 uppercase font-bold border-b border-slate-700">
                   <tr>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>NeDB Embedded Path</td>
-                    <td style={{ padding: '8px 0', color: '#cbd5e1' }}>{config?.persistence?.document?.nedbDataPath}</td>
+                    <th className="p-4">User</th>
+                    <th className="p-4">Role</th>
+                    <th className="p-4">Shipping City</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 text-right">Actions</th>
                   </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Key-Value & Queue */}
-            <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#c084fc' }}>
-                  ⚡ Key-Value Cache & Task Queues
-                </h3>
-                <span style={{ fontSize: '12px', backgroundColor: '#581c87', padding: '2px 8px', borderRadius: '4px' }}>
-                  BullMQ & Cross-Service Cache
-                </span>
-              </div>
-              <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>Active Driver</td>
-                    <td style={{ padding: '8px 0', fontWeight: '600', color: '#34d399' }}>
-                      {config?.persistence?.keyValue?.driver?.toUpperCase()}
-                    </td>
-                  </tr>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>Redis Host & Port</td>
-                    <td style={{ padding: '8px 0' }}>
-                      {config?.persistence?.keyValue?.redisHost}:{config?.persistence?.keyValue?.redisPort} (DB {config?.persistence?.keyValue?.redisDb})
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: '8px 0', color: '#94a3b8' }}>RocksDB Storage Path</td>
-                    <td style={{ padding: '8px 0', color: '#cbd5e1' }}>{config?.persistence?.keyValue?.rocksdbDataPath}</td>
-                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/60 font-medium">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-500">No users found matching query.</td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-slate-800 transition">
+                        <td className="p-4 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-slate-700 to-indigo-900 flex items-center justify-center text-white font-bold">
+                            {user.firstName[0]}{user.lastName[0]}
+                          </div>
+                          <div>
+                            <span className="font-bold text-white block">{user.firstName} {user.lastName}</span>
+                            <span className="text-slate-400 text-[11px]">{user.email}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                            user.role === 'ADMIN'
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                              : user.role === 'VENDOR'
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                          }`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="p-4 text-slate-300">
+                          {user.addresses[0]?.city || 'N/A'}, {user.addresses[0]?.state || 'N/A'}
+                        </td>
+                        <td className="p-4">
+                          <button
+                            onClick={() => handleToggleUserStatus(user)}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition ${
+                              user.isActive
+                                ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+                                : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30'
+                            }`}
+                          >
+                            {user.isActive ? '● Active' : '○ Suspended'}
+                          </button>
+                        </td>
+                        <td className="p-4 text-right space-x-2">
+                          <button
+                            onClick={() => setSelectedUser(user)}
+                            className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1 rounded-lg"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingUser(user);
+                              setIsUserModalOpen(true);
+                            }}
+                            className="text-xs bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 px-2.5 py-1 rounded-lg"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="text-xs bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 px-2.5 py-1 rounded-lg"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* Tab Content: Configuration */}
-        {activeTab === 'config' && (
-          <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '20px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#38bdf8' }}>
-              System Configuration Parameters
-            </h3>
-            <pre
-              style={{
-                backgroundColor: '#0f172a',
-                padding: '16px',
-                borderRadius: '6px',
-                fontSize: '13px',
-                color: '#e2e8f0',
-                overflowX: 'auto',
-                margin: 0,
-              }}
-            >
-              {JSON.stringify(config, null, 2)}
+        {/* ========================================================================= */}
+        {/* TAB 3: PRODUCT CATALOG */}
+        {/* ========================================================================= */}
+        {activeTab === 'products' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Search products by title or SKU..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-white rounded-xl px-3 py-2 outline-none focus:border-indigo-500 w-64"
+                />
+                <select
+                  value={productCategoryFilter}
+                  onChange={(e) => setProductCategoryFilter(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-xl px-3 py-2 outline-none focus:border-indigo-500"
+                >
+                  <option value="ALL">All Categories</option>
+                  <option value="Audio & Headphones">Audio & Headphones</option>
+                  <option value="Computers & Laptops">Computers & Laptops</option>
+                  <option value="Smartphones & Watches">Smartphones & Watches</option>
+                  <option value="Gaming & VR">Gaming & VR</option>
+                </select>
+              </div>
+
+              <button
+                onClick={() => {
+                  setEditingProduct(null);
+                  setIsProductModalOpen(true);
+                }}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5"
+              >
+                <span>+ Add New Product</span>
+              </button>
+            </div>
+
+            {/* Products Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredProducts.map((p) => (
+                <div
+                  key={p.id}
+                  className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between"
+                >
+                  <div className="relative h-44 bg-slate-950">
+                    <img
+                      src={p.images[0]?.url}
+                      alt={p.title}
+                      className="w-full h-full object-cover opacity-90 hover:opacity-100 transition"
+                    />
+                    <span className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {p.category.name}
+                    </span>
+                    <span className={`absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      p.stock > 20 ? 'bg-emerald-500/90 text-white' : 'bg-rose-500/90 text-white'
+                    }`}>
+                      {p.stock} in stock
+                    </span>
+                  </div>
+
+                  <div className="p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start gap-2">
+                        <h4 className="font-bold text-sm text-white line-clamp-1">{p.title}</h4>
+                        <span className="text-xs font-mono font-bold text-amber-400">${p.price.toFixed(2)}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-400 block mt-0.5">{p.sku}</span>
+                      <p className="text-xs text-slate-400 mt-2 line-clamp-2">{p.description}</p>
+                    </div>
+
+                    <div className="pt-4 mt-3 border-t border-slate-700/60 flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-xs text-amber-400">
+                        <span>★</span>
+                        <span className="font-bold">{p.ratings.average}</span>
+                        <span className="text-slate-500">({p.ratings.count})</span>
+                      </div>
+
+                      <div className="space-x-2">
+                        <button
+                          onClick={() => {
+                            setEditingProduct(p);
+                            setIsProductModalOpen(true);
+                          }}
+                          className="text-xs bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white px-2.5 py-1 rounded-lg transition"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(p.id)}
+                          className="text-xs bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white px-2.5 py-1 rounded-lg transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4: ORDERS & SAGAS */}
+        {/* ========================================================================= */}
+        {activeTab === 'orders' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Search order #, customer..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-white rounded-xl px-3 py-2 outline-none focus:border-indigo-500 w-64"
+                />
+                <select
+                  value={orderStatusFilter}
+                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-xl px-3 py-2 outline-none focus:border-indigo-500"
+                >
+                  <option value="ALL">All Order States</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="PROCESSING">Processing</option>
+                  <option value="SHIPPED">Shipped</option>
+                  <option value="DELIVERED">Delivered</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+
+              <div className="text-xs text-slate-400">
+                Total Orders: <b className="text-white">{orders.length}</b> · Revenue: <b className="text-emerald-400">${orders.reduce((a, b) => a + b.totalAmount, 0).toFixed(2)}</b>
+              </div>
+            </div>
+
+            {/* Orders Table */}
+            <div className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-900/90 text-slate-400 uppercase font-bold border-b border-slate-700">
+                  <tr>
+                    <th className="p-4">Order #</th>
+                    <th className="p-4">Customer</th>
+                    <th className="p-4">Items</th>
+                    <th className="p-4">Total</th>
+                    <th className="p-4">Payment</th>
+                    <th className="p-4">Status Transition</th>
+                    <th className="p-4 text-right">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/60 font-medium">
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-500">No orders found matching filter.</td>
+                    </tr>
+                  ) : (
+                    filteredOrders.map((ord) => (
+                      <tr key={ord.id} className="hover:bg-slate-800 transition">
+                        <td className="p-4 font-mono font-bold text-indigo-400">
+                          {ord.orderNumber}
+                        </td>
+                        <td className="p-4">
+                          <span className="font-bold text-white block">{ord.customerName}</span>
+                          <span className="text-slate-400 text-[11px]">{ord.customerEmail}</span>
+                        </td>
+                        <td className="p-4">
+                          <span className="bg-slate-900 px-2 py-0.5 rounded text-[11px] font-bold text-slate-300">
+                            {ord.items.reduce((a, b) => a + b.quantity, 0)} items
+                          </span>
+                        </td>
+                        <td className="p-4 font-bold text-emerald-400">
+                          ${ord.totalAmount.toFixed(2)}
+                        </td>
+                        <td className="p-4">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
+                            {ord.paymentMethod} ({ord.paymentStatus})
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <select
+                            value={ord.status}
+                            onChange={(e) => handleUpdateOrderStatus(ord.id, e.target.value)}
+                            className="bg-slate-900 border border-slate-700 text-xs font-bold rounded-lg px-2 py-1 outline-none text-indigo-300 focus:border-indigo-500"
+                          >
+                            <option value="PENDING">PENDING</option>
+                            <option value="CONFIRMED">CONFIRMED</option>
+                            <option value="PROCESSING">PROCESSING</option>
+                            <option value="SHIPPED">SHIPPED</option>
+                            <option value="DELIVERED">DELIVERED</option>
+                            <option value="CANCELLED">CANCELLED</option>
+                          </select>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => setSelectedOrder(ord)}
+                            className="bg-indigo-600/40 hover:bg-indigo-600 text-indigo-200 hover:text-white text-xs px-3 py-1 rounded-lg transition font-semibold"
+                          >
+                            Inspect 👁️
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 5: PERSISTENCE TOPOLOGY */}
+        {/* ========================================================================= */}
+        {activeTab === 'persistence' && config && (
+          <div className="space-y-6">
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                Persistence & Storage Engine Topology
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Active relational, document, key-value and object storage drivers</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Relational */}
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 shadow-lg">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-bold text-sm text-white">Relational Database</h3>
+                  <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-bold uppercase">
+                    {config.persistence.relational.driver}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Driver</span>
+                    <span className="font-mono text-white">{config.persistence.relational.driver}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Active URL</span>
+                    <span className="font-mono text-slate-300 truncate max-w-[150px]">{config.persistence.relational.activeUrl}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Target Services</span>
+                    <span className="text-slate-300">ms-user, ms-order</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Document */}
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 shadow-lg">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-bold text-sm text-white">Document Store</h3>
+                  <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold uppercase">
+                    {config.persistence.document.driver}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Driver</span>
+                    <span className="font-mono text-white">{config.persistence.document.driver}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Data Path / URI</span>
+                    <span className="font-mono text-slate-300 truncate max-w-[150px]">{config.persistence.document.nedbDataPath || config.persistence.document.mongodbUri}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Target Services</span>
+                    <span className="text-slate-300">ms-product</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Key-Value */}
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 shadow-lg">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-bold text-sm text-white">KV Cache & Queue</h3>
+                  <span className="text-xs bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded font-bold uppercase">
+                    {config.persistence.keyValue.driver}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Driver</span>
+                    <span className="font-mono text-white">{config.persistence.keyValue.driver}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Host / Path</span>
+                    <span className="font-mono text-slate-300">{config.persistence.keyValue.redisHost || config.persistence.keyValue.rocksdbDataPath}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Broker</span>
+                    <span className="text-slate-300">BullMQ</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Object Storage */}
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5 shadow-lg">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-bold text-sm text-white">Object Storage</h3>
+                  <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-bold uppercase">
+                    {config.storage.provider}
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Endpoint</span>
+                    <span className="font-mono text-white">{config.storage.rustfs.endpoint}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Bucket</span>
+                    <span className="font-mono text-slate-300">{config.storage.rustfs.bucket}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Console</span>
+                    <a href={config.storage.rustfs.consoleEndpoint} target="_blank" rel="noreferrer" className="text-indigo-400 font-bold hover:underline">
+                      Port 9001 &rarr;
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 6: CONFIGURATION MATRIX */}
+        {/* ========================================================================= */}
+        {activeTab === 'config' && config && (
+          <div className="space-y-6">
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                System Runtime Configuration Matrix
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Centralized environment policies, ports, queue concurrency, and security parameters</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5">
+                <h3 className="font-bold text-sm text-indigo-300 mb-3">🌐 Network Ports</h3>
+                <div className="space-y-2 text-xs">
+                  {Object.entries(config.ports).map(([key, port]) => (
+                    <div key={key} className="flex justify-between">
+                      <span className="text-slate-400">{key}</span>
+                      <span className="font-mono font-bold text-white">:{port}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5">
+                <h3 className="font-bold text-sm text-purple-300 mb-3">🔐 Security & Auth</h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">JWT Expiry</span>
+                    <span className="font-mono text-white">{config.security.jwtExpiresIn}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Refresh Token Expiry</span>
+                    <span className="font-mono text-white">{config.security.jwtRefreshExpiresIn}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Bcrypt Salt Rounds</span>
+                    <span className="font-mono text-white">{config.security.bcryptSaltRounds}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-5">
+                <h3 className="font-bold text-sm text-emerald-300 mb-3">⚡ Task Queues & Workers</h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Broker</span>
+                    <span className="text-white">{config.queues.broker}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Worker Concurrency</span>
+                    <span className="font-mono text-white">{config.queues.concurrency}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Order Expiry</span>
+                    <span className="font-mono text-white">{config.queues.orderExpirationMinutes}m</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* ========================================================================= */}
+      {/* MODAL: SERVICE PAYLOAD INSPECTOR */}
+      {/* ========================================================================= */}
+      {selectedService && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <span>{selectedService.name}</span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-indigo-400">:{selectedService.port}</span>
+              </h3>
+              <button
+                onClick={() => setSelectedService(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+            <pre className="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-96 border border-slate-800">
+              {JSON.stringify(selectedService.details || { error: selectedService.error }, null, 2)}
             </pre>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ORDER DETAILS INSPECTOR */}
+      {/* ========================================================================= */}
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-4">
+              <div>
+                <h3 className="font-black text-lg text-white font-mono">{selectedOrder.orderNumber}</h3>
+                <span className="text-xs text-slate-400">{new Date(selectedOrder.createdAt).toLocaleString()}</span>
+              </div>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <div>
+                  <span className="text-slate-500 block mb-1">Customer</span>
+                  <span className="font-bold text-white block">{selectedOrder.customerName}</span>
+                  <span className="text-slate-400">{selectedOrder.customerEmail}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block mb-1">Shipping Destination</span>
+                  <span className="text-slate-300 block">{selectedOrder.shippingAddress.addressLine1}</span>
+                  <span className="text-slate-300 block">{selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.postalCode}</span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-slate-300 mb-2 uppercase text-[11px] tracking-wider">Line Items</h4>
+                <div className="space-y-2">
+                  {selectedOrder.items.map((item) => (
+                    <div key={item.sku} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <div className="flex items-center gap-3">
+                        {item.imageUrl && (
+                          <img src={item.imageUrl} alt={item.title} className="w-10 h-10 rounded-lg object-cover bg-slate-800" />
+                        )}
+                        <div>
+                          <span className="font-bold text-white block">{item.title}</span>
+                          <span className="text-slate-400 text-[11px] font-mono">{item.sku} × {item.quantity}</span>
+                        </div>
+                      </div>
+                      <span className="font-bold font-mono text-emerald-400">${item.totalPrice.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1.5 font-mono">
+                <div className="flex justify-between text-slate-400">
+                  <span>Subtotal</span>
+                  <span>${selectedOrder.subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Sales Tax</span>
+                  <span>${selectedOrder.taxAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Shipping</span>
+                  <span>${selectedOrder.shippingAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-white font-bold text-sm pt-2 border-t border-slate-800">
+                  <span>Total Amount</span>
+                  <span className="text-emerald-400">${selectedOrder.totalAmount.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {selectedOrder.receiptUrl && (
+                <div className="flex justify-between items-center bg-indigo-950/40 border border-indigo-500/30 p-3 rounded-xl">
+                  <span className="text-indigo-300">RustFS Invoice Archive:</span>
+                  <a href={selectedOrder.receiptUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-400 hover:underline">
+                    Download PDF &rarr;
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: USER DETAILS DRAWER */}
+      {/* ========================================================================= */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h3 className="font-bold text-base text-white">User Profile & Addresses</h3>
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-black text-lg">
+                  {selectedUser.firstName[0]}{selectedUser.lastName[0]}
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">{selectedUser.firstName} {selectedUser.lastName}</h4>
+                  <p className="text-slate-400">{selectedUser.email}</p>
+                </div>
+              </div>
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">User ID:</span>
+                  <span className="font-mono text-slate-300">{selectedUser.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Role:</span>
+                  <span className="font-bold text-purple-400">{selectedUser.role}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Email Status:</span>
+                  <span className="font-bold text-emerald-400">{selectedUser.isEmailVerified ? 'Verified ✓' : 'Pending'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Primary Address:</span>
+                  <span className="text-right text-slate-300">
+                    {selectedUser.addresses[0]?.addressLine1}, {selectedUser.addresses[0]?.city} {selectedUser.addresses[0]?.state}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ADD / EDIT USER FORM */}
+      {/* ========================================================================= */}
+      {isUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h3 className="font-bold text-base text-white">
+                {editingUser ? 'Edit User Account' : 'Create New User Account'}
+              </h3>
+              <button
+                onClick={() => setIsUserModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUser} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">First Name</label>
+                  <input
+                    name="firstName"
+                    defaultValue={editingUser?.firstName || ''}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Last Name</label>
+                  <input
+                    name="lastName"
+                    defaultValue={editingUser?.lastName || ''}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Email Address</label>
+                <input
+                  name="email"
+                  type="email"
+                  defaultValue={editingUser?.email || ''}
+                  required
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">Role</label>
+                  <select
+                    name="role"
+                    defaultValue={editingUser?.role || 'CUSTOMER'}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                  >
+                    <option value="CUSTOMER">CUSTOMER</option>
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="VENDOR">VENDOR</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    name="isActive"
+                    type="checkbox"
+                    defaultChecked={editingUser ? editingUser.isActive : true}
+                    id="isActive"
+                    className="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-700"
+                  />
+                  <label htmlFor="isActive" className="text-slate-300 font-semibold cursor-pointer">
+                    Active Account
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Street Address</label>
+                <input
+                  name="addressLine1"
+                  defaultValue={editingUser?.addresses[0]?.addressLine1 || '100 Silicon Way'}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">City</label>
+                  <input
+                    name="city"
+                    defaultValue={editingUser?.addresses[0]?.city || 'San Francisco'}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">State</label>
+                  <input
+                    name="state"
+                    defaultValue={editingUser?.addresses[0]?.state || 'CA'}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Postal Code</label>
+                  <input
+                    name="postalCode"
+                    defaultValue={editingUser?.addresses[0]?.postalCode || '94105'}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2 text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 rounded-xl shadow-lg transition mt-4"
+              >
+                {editingUser ? 'Save Changes' : 'Create User'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: ADD / EDIT PRODUCT FORM */}
+      {/* ========================================================================= */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h3 className="font-bold text-base text-white">
+                {editingProduct ? 'Edit Catalog Product' : 'Add New Product to Catalog'}
+              </h3>
+              <button
+                onClick={() => setIsProductModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProduct} className="space-y-3 text-xs">
+              <div>
+                <label className="text-slate-400 block mb-1">Product Title</label>
+                <input
+                  name="title"
+                  defaultValue={editingProduct?.title || ''}
+                  required
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">SKU</label>
+                  <input
+                    name="sku"
+                    defaultValue={editingProduct?.sku || ''}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none font-mono focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Category</label>
+                  <select
+                    name="category"
+                    defaultValue={editingProduct?.category.name || 'Audio & Headphones'}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                  >
+                    <option value="Audio & Headphones">Audio & Headphones</option>
+                    <option value="Computers & Laptops">Computers & Laptops</option>
+                    <option value="Smartphones & Watches">Smartphones & Watches</option>
+                    <option value="Gaming & VR">Gaming & VR</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-slate-400 block mb-1">Price ($)</label>
+                  <input
+                    name="price"
+                    type="number"
+                    step="0.01"
+                    defaultValue={editingProduct?.price || ''}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Compare Price ($)</label>
+                  <input
+                    name="compareAtPrice"
+                    type="number"
+                    step="0.01"
+                    defaultValue={editingProduct?.compareAtPrice || ''}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Stock Count</label>
+                  <input
+                    name="stock"
+                    type="number"
+                    defaultValue={editingProduct?.stock || 50}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">CDN Image URL</label>
+                <input
+                  name="imageUrl"
+                  defaultValue={editingProduct?.images[0]?.url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500 font-mono text-[11px]"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block mb-1">Description</label>
+                <textarea
+                  name="description"
+                  rows={3}
+                  defaultValue={editingProduct?.description || ''}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 rounded-xl shadow-lg transition mt-4"
+              >
+                {editingProduct ? 'Update Product' : 'Add to Catalog'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
