@@ -4,7 +4,8 @@ export default function Home() {
     { name: 'User Service', port: 3001, path: '/health', role: 'Auth, Profiles & JWT Issuance' },
     { name: 'Product Service', port: 3002, path: '/health', role: 'Catalog, Categories & Search' },
     { name: 'Order Service', port: 3003, path: '/health', role: 'Cart, Sagas & Checkout' },
-    { name: 'Frontend', port: 3004, path: '/', role: 'Next.js 14 SSR Web Client' },
+    { name: 'Customer Client', port: 3004, path: '/', role: 'Next.js 14 SSR Web Client' },
+    { name: 'Admin Cockpit', port: 3005, path: '/', role: 'Next.js 14 Service & Config Portal' },
   ];
 
   return (

@@ -48,8 +48,8 @@ const SERVICES: ServiceProbe[] = [
     role: 'Shopping Cart, Checkout Saga & Payment Processing',
   },
   {
-    id: 'frontend',
-    name: 'Frontend Web App',
+    id: 'client',
+    name: 'Customer Web Client',
     port: 3004,
     url: 'http://localhost:3004',
     healthUrl: 'http://localhost:3004',

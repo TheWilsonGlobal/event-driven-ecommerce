@@ -114,10 +114,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Frontend') {
+                stage('Client') {
                     steps {
                         script {
-                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/frontend:${BUILD_NUMBER}", "-f packages/frontend/Dockerfile .")
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/client:${BUILD_NUMBER}", "-f packages/client/Dockerfile .")
                         }
                     }
                 }

@@ -173,11 +173,11 @@ services:
       - ./packages/ms-order/src:/app/src
       - /app/node_modules
 
-  frontend:
+  client:
     build:
       context: .
-      dockerfile: packages/frontend/Dockerfile
-    container_name: ecommerce-frontend
+      dockerfile: packages/client/Dockerfile
+    container_name: ecommerce-client
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_URL: http://localhost:3000
@@ -188,8 +188,8 @@ services:
     networks:
       - ecommerce-network
     volumes:
-      - ./packages/frontend/src:/app/src
-      - ./packages/frontend/public:/app/public
+      - ./packages/client/src:/app/src
+      - ./packages/client/public:/app/public
       - /app/node_modules
 
   # Monitoring

@@ -19,7 +19,7 @@ This monorepo contains the following services:
 - **Messaging** (`packages/shared/messaging`) - BullMQ queues & workers over Redis 7
 
 ### Frontend & Control Plane
-- **Web App** (`packages/frontend` · Port 3004) - Next.js 14 SSR React application
+- **Web Client** (`packages/client` · Port 3004) - Next.js 14 SSR React customer application
 - **Admin Portal** (`packages/admin` · Port 3005) - Next.js 14 centralized service & config cockpit
 
 ## 🚀 Quick Start
@@ -61,7 +61,7 @@ pnpm run dev
 ## 📦 Available Scripts
 
 ### Root Level Scripts
-- `pnpm run dev` - Start all services concurrently in development mode (Gateway, Services, Frontend, Admin)
+- `pnpm run dev` - Start all services concurrently in development mode (Gateway, Services, Client, Admin)
 - `pnpm run build` - Build all workspace packages
 - `pnpm run db:generate` - Generate Prisma clients across all microservices
 - `pnpm run db:migrate` - Deploy database migrations across PostgreSQL services
@@ -75,7 +75,7 @@ pnpm run dev
 - `pnpm run dev:ms-user` - Start User Service (`@ecommerce/ms-user` · Port 3001)
 - `pnpm run dev:ms-product` - Start Product Service (`@ecommerce/ms-product` · Port 3002)
 - `pnpm run dev:ms-order` - Start Order Service (`@ecommerce/ms-order` · Port 3003)
-- `pnpm run dev:frontend` - Start Frontend (`@ecommerce/frontend` · Port 3004)
+- `pnpm run dev:client` - Start Customer Client (`@ecommerce/client` · Port 3004)
 - `pnpm run dev:admin` - Start Admin Cockpit (`@ecommerce/admin` · Port 3005)
 
 ## 🏃 Development Workflow
@@ -152,7 +152,7 @@ pnpm test
 pnpm run test:watch
 
 # Run tests with coverage
-pnpm --filter @ecommerce/frontend run test:coverage
+pnpm --filter @ecommerce/client run test:coverage
 ```
 
 ## 📝 License
