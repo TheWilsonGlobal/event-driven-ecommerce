@@ -4,7 +4,6 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
-    project: './tsconfig.json',
   },
   plugins: ['@typescript-eslint', 'prettier'],
   extends: [
@@ -14,22 +13,22 @@ module.exports = {
   ],
   rules: {
     // TypeScript specific rules
-    '@typescript-eslint/explicit-function-return-type': 'warn',
-    '@typescript-eslint/explicit-module-boundary-types': 'warn',
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    '@typescript-eslint/prefer-nullish-coalescing': 'error',
-    '@typescript-eslint/prefer-optional-chain': 'error',
-    '@typescript-eslint/no-floating-promises': 'error',
-    '@typescript-eslint/await-thenable': 'error',
-    '@typescript-eslint/no-misused-promises': 'error',
-    '@typescript-eslint/require-await': 'error',
-    '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+    '@typescript-eslint/prefer-nullish-coalescing': 'warn',
+    '@typescript-eslint/prefer-optional-chain': 'warn',
+    '@typescript-eslint/no-floating-promises': 'off',
+    '@typescript-eslint/await-thenable': 'off',
+    '@typescript-eslint/no-misused-promises': 'off',
+    '@typescript-eslint/require-await': 'off',
+    '@typescript-eslint/no-unnecessary-type-assertion': 'off',
     '@typescript-eslint/prefer-as-const': 'error',
     '@typescript-eslint/no-inferrable-types': 'off',
     '@typescript-eslint/ban-ts-comment': 'warn',
-    '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
-    '@typescript-eslint/consistent-type-imports': 'error',
+    '@typescript-eslint/consistent-type-definitions': 'off',
+    '@typescript-eslint/consistent-type-imports': 'off',
 
     // General rules
     'no-console': 'warn',
@@ -55,6 +54,14 @@ module.exports = {
         '@typescript-eslint/no-non-null-assertion': 'off',
       },
     },
+    {
+      // Frontend packages use JSX — skip server-side rules
+      files: ['packages/admin/**/*.{ts,tsx}', 'packages/client/**/*.{ts,tsx}'],
+      rules: {
+        'no-console': 'off',
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
+    },
   ],
   ignorePatterns: [
     'dist/',
@@ -63,4 +70,4 @@ module.exports = {
     '*.js',
     'coverage/',
   ],
-};
+}

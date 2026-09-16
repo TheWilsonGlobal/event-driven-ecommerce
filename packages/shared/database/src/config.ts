@@ -52,26 +52,26 @@ export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): Databa
   const mode: DatabaseMode = env.DB_MODE?.toLowerCase() === 'embedded' ? 'embedded' : 'server'
 
   const relationalDriver: RelationalDriver =
-    (env.RELATIONAL_DB_DRIVER?.toLowerCase() as RelationalDriver) ||
+    (env.RELATIONAL_DB_DRIVER?.toLowerCase() as RelationalDriver) ??
     (mode === 'embedded' ? 'sqlite' : 'postgres')
 
   const docDriver: DocumentDriver =
-    (env.DOCUMENT_DB_DRIVER?.toLowerCase() as DocumentDriver) ||
+    (env.DOCUMENT_DB_DRIVER?.toLowerCase() as DocumentDriver) ??
     (mode === 'embedded' ? 'nedb' : 'mongodb')
 
   const kvDriver: KeyValueDriver =
-    (env.KV_CACHE_DRIVER?.toLowerCase() as KeyValueDriver) ||
+    (env.KV_CACHE_DRIVER?.toLowerCase() as KeyValueDriver) ??
     (mode === 'embedded' ? 'rocksdb' : 'redis')
 
-  const pgHost = env.DB_HOST || 'localhost'
-  const pgPort = parseInt(env.DB_PORT || '5432', 10)
-  const pgUser = env.DB_USERNAME || 'postgres'
-  const pgPass = env.DB_PASSWORD || 'password'
-  const pgDb = env.DB_DATABASE || 'ecommerce'
+  const pgHost = env.DB_HOST ?? 'localhost'
+  const pgPort = parseInt(env.DB_PORT ?? '5432', 10)
+  const pgUser = env.DB_USERNAME ?? 'postgres'
+  const pgPass = env.DB_PASSWORD ?? 'password'
+  const pgDb = env.DB_DATABASE ?? 'ecommerce'
   const pgUrl =
-    env.DATABASE_URL || `postgresql://${pgUser}:${pgPass}@${pgHost}:${pgPort}/${pgDb}?schema=public`
+    env.DATABASE_URL ?? `postgresql://${pgUser}:${pgPass}@${pgHost}:${pgPort}/${pgDb}?schema=public`
 
-  const sqlitePath = env.SQLITE_DB_PATH || './data/ecommerce.db'
+  const sqlitePath = env.SQLITE_DB_PATH ?? './data/ecommerce.db'
   const sqliteUrl = `file:${sqlitePath}`
 
   return {
@@ -95,23 +95,23 @@ export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): Databa
     document: {
       driver: docDriver,
       mongodb: {
-        uri: env.MONGODB_URI || 'mongodb://localhost:27017/ecommerce_sessions',
+        uri: env.MONGODB_URI ?? 'mongodb://localhost:27017/ecommerce_sessions',
       },
       nedb: {
-        dataPath: env.NEDB_DATA_PATH || './data/nedb',
+        dataPath: env.NEDB_DATA_PATH ?? './data/nedb',
         inMemory: env.NEDB_IN_MEMORY === 'true',
       },
     },
     keyValue: {
       driver: kvDriver,
       redis: {
-        host: env.REDIS_HOST || 'localhost',
-        port: parseInt(env.REDIS_PORT || '6379', 10),
-        password: env.REDIS_PASSWORD || undefined,
-        db: parseInt(env.REDIS_DB || '0', 10),
+        host: env.REDIS_HOST ?? 'localhost',
+        port: parseInt(env.REDIS_PORT ?? '6379', 10),
+        password: env.REDIS_PASSWORD ?? undefined,
+        db: parseInt(env.REDIS_DB ?? '0', 10),
       },
       rocksdb: {
-        dataPath: env.ROCKSDB_DATA_PATH || './data/rocksdb',
+        dataPath: env.ROCKSDB_DATA_PATH ?? './data/rocksdb',
       },
       embedded: {
         inMemory: env.EMBEDDED_KV_IN_MEMORY !== 'false',
