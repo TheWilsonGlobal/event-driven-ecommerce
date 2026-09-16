@@ -1,4 +1,5 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
@@ -16,8 +17,14 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@ecommerce/shared-types": ["../../packages/shared/types/src"],
+      "@ecommerce/shared-utils": ["../../packages/shared/utils/src"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/shared/types" },
+    { "path": "../../packages/shared/utils" }
+  ]
 }

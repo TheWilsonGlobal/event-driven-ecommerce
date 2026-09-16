@@ -1,4 +1,5 @@
 import type { OrderRecord } from '../types'
+import { StatusBadge } from '../components/ui'
 
 interface Props {
   order: OrderRecord | null
@@ -7,106 +8,169 @@ interface Props {
 
 export default function OrderModal({ order, onClose }: Props) {
   if (!order) return null
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-4">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
           <div>
-            <h3 className="font-black text-lg text-white font-mono">{order.orderNumber}</h3>
-            <span className="text-xs text-slate-400">
-              {new Date(order.createdAt).toLocaleString()}
-            </span>
+            <h3 className="mono">{order.orderNumber}</h3>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+              Placed: {new Date(order.createdAt).toLocaleString()}
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center"
-          >
+          <button className="modal-close" onClick={onClose}>
             ✕
           </button>
         </div>
 
-        <div className="space-y-4 text-xs">
-          <div className="grid grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
-            <div>
-              <span className="text-slate-500 block mb-1">Customer</span>
-              <span className="font-bold text-white block">{order.customerName}</span>
-              <span className="text-slate-400">{order.customerEmail}</span>
+        <div className="modal-body">
+          <div className="panel" style={{ padding: 12 }}>
+            <div className="panel-row">
+              <span className="k">Customer</span>
+              <span className="v">
+                {order.customerName} ({order.customerEmail})
+              </span>
             </div>
-            <div>
-              <span className="text-slate-500 block mb-1">Shipping Destination</span>
-              <span className="text-slate-300 block">{order.shippingAddress.addressLine1}</span>
-              <span className="text-slate-300 block">
-                {order.shippingAddress.city}, {order.shippingAddress.state}{' '}
-                {order.shippingAddress.postalCode}
+            <div className="panel-row">
+              <span className="k">Order Status</span>
+              <span className="v">
+                <StatusBadge status={order.status} />
+              </span>
+            </div>
+            <div className="panel-row">
+              <span className="k">Payment Method</span>
+              <span className="v">
+                {order.paymentMethod} ({order.paymentStatus})
+              </span>
+            </div>
+            <div className="panel-row">
+              <span className="k">Shipping Address</span>
+              <span className="v" style={{ fontSize: 11 }}>
+                {order.shippingAddress.addressLine1}, {order.shippingAddress.city},{' '}
+                {order.shippingAddress.state} {order.shippingAddress.postalCode}
               </span>
             </div>
           </div>
 
           <div>
-            <h4 className="font-bold text-slate-300 mb-2 uppercase text-[11px] tracking-wider">
-              Line Items
-            </h4>
-            <div className="space-y-2">
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                color: 'var(--text-dim)',
+                marginBottom: 8,
+              }}
+            >
+              Ordered Items ({order.items.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {order.items.map((item) => (
                 <div
                   key={item.sku}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 6,
+                  }}
                 >
-                  <div className="flex items-center gap-3">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {item.imageUrl && (
                       <img
                         src={item.imageUrl}
-                        alt={item.title}
-                        className="w-10 h-10 rounded-lg object-cover bg-slate-800"
+                        alt=""
+                        style={{ width: 36, height: 36, borderRadius: 4, objectFit: 'cover' }}
                       />
                     )}
                     <div>
-                      <span className="font-bold text-white block">{item.title}</span>
-                      <span className="text-slate-400 text-[11px] font-mono">
+                      <div style={{ fontWeight: 600, fontSize: 12 }}>{item.title}</div>
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--text-faint)' }}>
                         {item.sku} × {item.quantity}
-                      </span>
+                      </div>
                     </div>
                   </div>
-                  <span className="font-bold font-mono text-emerald-400">
+                  <div
+                    className="mono"
+                    style={{ fontWeight: 700, color: 'var(--green-light)', fontSize: 13 }}
+                  >
                     ${item.totalPrice.toFixed(2)}
-                  </span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1.5 font-mono">
-            <div className="flex justify-between text-slate-400">
-              <span>Subtotal</span>
-              <span>${order.subtotal.toFixed(2)}</span>
+          <div className="panel" style={{ padding: 12 }}>
+            <div className="panel-row">
+              <span className="k">Subtotal</span>
+              <span className="v mono">${order.subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-slate-400">
-              <span>Sales Tax</span>
-              <span>${order.taxAmount.toFixed(2)}</span>
+            <div className="panel-row">
+              <span className="k">Tax</span>
+              <span className="v mono">${order.taxAmount.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-slate-400">
-              <span>Shipping</span>
-              <span>${order.shippingAmount.toFixed(2)}</span>
+            <div className="panel-row">
+              <span className="k">Shipping</span>
+              <span className="v mono">${order.shippingAmount.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-white font-bold text-sm pt-2 border-t border-slate-800">
-              <span>Total Amount</span>
-              <span className="text-emerald-400">${order.totalAmount.toFixed(2)}</span>
+            <div
+              className="panel-row"
+              style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}
+            >
+              <span className="k" style={{ fontWeight: 700, color: 'var(--text-bright)' }}>
+                Total
+              </span>
+              <span
+                className="v mono"
+                style={{ fontSize: 15, color: 'var(--green-light)', fontWeight: 800 }}
+              >
+                ${order.totalAmount.toFixed(2)}
+              </span>
             </div>
           </div>
 
           {order.receiptUrl && (
-            <div className="flex justify-between items-center bg-indigo-950/40 border border-indigo-500/30 p-3 rounded-xl">
-              <span className="text-indigo-300">RustFS Invoice Archive:</span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--blue-bg)',
+                border: '1px solid var(--blue-border)',
+                padding: '8px 14px',
+                borderRadius: 6,
+                fontSize: 12,
+              }}
+            >
+              <span style={{ color: 'var(--blue-light)', fontWeight: 600 }}>
+                RustFS Object Invoice Archive:
+              </span>
               <a
                 href={order.receiptUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs font-bold text-indigo-400 hover:underline"
+                style={{
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  fontSize: 11,
+                }}
               >
-                Download PDF &rarr;
+                Download PDF Receipt &rarr;
               </a>
             </div>
           )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+            <button className="btn btn-ghost" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

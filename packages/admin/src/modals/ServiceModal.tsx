@@ -7,26 +7,51 @@ interface Props {
 
 export default function ServiceModal({ service, onClose }: Props) {
   if (!service) return null
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
-          <h3 className="font-bold text-base text-white flex items-center gap-2">
-            <span>{service.name}</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-indigo-400">
-              :{service.port}
-            </span>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>
+            {service.name} <span className="chip chip-blue mono">:{service.port}</span>
           </h3>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center"
-          >
+          <button className="modal-close" onClick={onClose}>
             ✕
           </button>
         </div>
-        <pre className="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto max-h-96 border border-slate-800">
-          {JSON.stringify(service.details || { status: 'healthy', port: service.port }, null, 2)}
-        </pre>
+        <div className="modal-body">
+          <div className="form-group">
+            <label>Service Role & Ingress</label>
+            <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>{service.role}</div>
+          </div>
+          <div className="form-group">
+            <label>Raw Health Response Payload</label>
+            <pre
+              style={{
+                background: 'var(--bg)',
+                padding: '12px 16px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: 'var(--green-light)',
+                overflowX: 'auto',
+                maxHeight: 280,
+              }}
+            >
+              {JSON.stringify(
+                service.details ?? { status: service.status, port: service.port },
+                null,
+                2
+              )}
+            </pre>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>
+              Close Inspector
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

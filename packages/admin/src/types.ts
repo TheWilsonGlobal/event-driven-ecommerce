@@ -1,4 +1,7 @@
-﻿export interface ServiceItem {
+export type Tab =
+  'dashboard' | 'services' | 'products' | 'orders' | 'users' | 'persistence' | 'config'
+
+export interface ServiceItem {
   id: string
   name: string
   port: number
@@ -9,7 +12,7 @@
   status: 'HEALTHY' | 'DEGRADED' | 'OFFLINE'
   statusCode: number
   latencyMs: number
-  details?: any
+  details?: Record<string, unknown>
   error?: string
   lastChecked: string
 }
@@ -100,4 +103,12 @@ export interface OrderRecord {
   createdAt: string
   updatedAt: string
   receiptUrl?: string
+}
+
+export interface RustfsHealth {
+  healthy: boolean | null
+  latencyMs: number
+  endpoint: string
+  bucket: string
+  lastChecked: string
 }

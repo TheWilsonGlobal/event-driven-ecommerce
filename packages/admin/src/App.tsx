@@ -1,78 +1,203 @@
-import { useState } from 'react'
-import type { ServiceItem } from './types'
-import { INITIAL_SERVICES } from './data/seed'
-import { useHealthMonitoring } from './hooks/useHealthMonitoring'
-import { useAdminData } from './hooks/useAdminData'
+import { useAdminApp } from './hooks/useAdminApp'
+import { useEcommerceData } from './hooks/useEcommerceData'
+import type { Tab } from './types'
 
-// Components & Tabs
-import AdminHeader from './components/AdminHeader'
-import ServicesTab from './tabs/ServicesTab'
-import UsersTab from './tabs/UsersTab'
-import ProductsTab from './tabs/ProductsTab'
-import OrdersTab from './tabs/OrdersTab'
-import PersistenceTab from './tabs/PersistenceTab'
-import ConfigTab from './tabs/ConfigTab'
+// Icons
+import {
+  ChevronIcon,
+  DashboardIcon,
+  ServicesIcon,
+  ProductsIcon,
+  OrdersIcon,
+  UsersIcon,
+  PersistenceIcon,
+  ConfigIcon,
+  ExternalLinkIcon,
+} from './components/icons'
+
+// Screens
+import Dashboard from './screens/Dashboard'
+import ServicesTab from './screens/ServicesTab'
+import ProductsTab from './screens/ProductsTab'
+import OrdersTab from './screens/OrdersTab'
+import UsersTab from './screens/UsersTab'
+import PersistenceTab from './screens/PersistenceTab'
+import ConfigTab from './screens/ConfigTab'
 
 // Modals
 import ServiceModal from './modals/ServiceModal'
+import ProductModal from './modals/ProductModal'
 import OrderModal from './modals/OrderModal'
-import UserViewModal from './modals/UserViewModal'
-import UserFormModal from './modals/UserFormModal'
-import ProductFormModal from './modals/ProductFormModal'
+import UserModal from './modals/UserModal'
+
+type NavEntry = {
+  key: Tab
+  label: string
+  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  count?: number
+}
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<
-    'services' | 'users' | 'products' | 'orders' | 'persistence' | 'config'
-  >('services')
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES)
+  const app = useAdminApp()
+  const data = useEcommerceData(app.autoPolling, app.showToast)
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 3000)
-  }
+  const OPERATIONS: NavEntry[] = [
+    { key: 'dashboard', label: 'Dashboard', Icon: DashboardIcon },
+    { key: 'services', label: 'Services', Icon: ServicesIcon, count: data.services.length },
+  ]
 
-  // Health Monitoring
-  const { lastUpdated, autoRefresh, setAutoRefresh, rustfsHealth, pingRustFS, pingServices } =
-    useHealthMonitoring(services, setServices)
+  const CATALOG_SAGAS: NavEntry[] = [
+    { key: 'products', label: 'Products', Icon: ProductsIcon, count: data.products.length },
+    { key: 'orders', label: 'Orders & Sagas', Icon: OrdersIcon, count: data.orders.length },
+  ]
 
-  // Admin Data & Handlers
-  const data = useAdminData(showToast)
+  const ACCESS: NavEntry[] = [
+    { key: 'users', label: 'Users & Roles', Icon: UsersIcon, count: data.users.length },
+  ]
+
+  const SYSTEM: NavEntry[] = [
+    { key: 'persistence', label: 'Persistence', Icon: PersistenceIcon },
+    { key: 'config', label: 'Configuration', Icon: ConfigIcon },
+  ]
+
+  const renderNavItem = ({ key, label, Icon, count }: NavEntry) => (
+    <button
+      key={key}
+      className={`nav-item${app.tab === key ? ' active' : ''}`}
+      onClick={() => app.setTab(key)}
+      title={label}
+    >
+      <Icon />
+      <span className="nav-label">{label}</span>
+      {count !== undefined && <span className="nav-badge">{count}</span>}
+    </button>
+  )
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white px-4 py-3 rounded-lg shadow-xl flex items-center space-x-2 border border-indigo-400">
-          <span className="text-lg">✓</span>
-          <span className="font-medium text-sm">{toastMessage}</span>
+    <div className="layout">
+      {/* Toast */}
+      {app.toastMessage && (
+        <div className="toast">
+          <span>✓</span>
+          <span>{app.toastMessage}</span>
         </div>
       )}
 
-      {/* Header & Tabs */}
-      <AdminHeader
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        services={services}
-        usersCount={data.users.length}
-        productsCount={data.products.length}
-        ordersCount={data.orders.length}
-        autoRefresh={autoRefresh}
-        setAutoRefresh={setAutoRefresh}
-        onRefresh={pingServices}
-      />
+      {/* Sidebar */}
+      <aside className={`sidebar${app.collapsed ? ' collapsed' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-text">
+            <h1>
+              <span>Admin</span> Cockpit
+            </h1>
+            <div className="subtitle">Microservices v2.0</div>
+          </div>
+          <button
+            className="sidebar-toggle"
+            onClick={app.toggleSidebar}
+            title={app.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <ChevronIcon />
+          </button>
+        </div>
+
+        <nav className="sidebar-nav">
+          <div className="nav-section">Operations</div>
+          {OPERATIONS.map(renderNavItem)}
+
+          <div className="nav-section">Catalog & Sagas</div>
+          {CATALOG_SAGAS.map(renderNavItem)}
+
+          <div className="nav-section">Access & Roles</div>
+          {ACCESS.map(renderNavItem)}
+
+          <div className="nav-section">System & Storage</div>
+          {SYSTEM.map(renderNavItem)}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="refresh-row">
+            <div className={`refresh-dot${app.autoPolling ? '' : ' paused'}`} />
+            <span>{app.autoPolling ? 'Auto-probe: 5s' : 'Paused'}</span>
+          </div>
+          <div className="sidebar-actions">
+            <button className="btn btn-ghost btn-sidebar" onClick={app.toggleAutoPolling}>
+              {app.autoPolling ? 'Pause' : 'Resume'}
+            </button>
+            <button className="btn btn-primary btn-sidebar" onClick={data.pingServices}>
+              Refresh
+            </button>
+          </div>
+          <div style={{ padding: '4px 6px 0' }}>
+            <a
+              href="http://localhost:3004"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-ghost btn-sidebar"
+              style={{ width: '100%', textDecoration: 'none', gap: 6 }}
+            >
+              <ExternalLinkIcon style={{ width: 14, height: 14 }} />
+              <span>Storefront (:3004)</span>
+            </a>
+          </div>
+        </div>
+      </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'services' && (
-          <ServicesTab
-            services={services}
-            lastUpdated={lastUpdated}
-            onSelectService={data.setSelectedService}
+      <main className={`main-content${app.collapsed ? ' sidebar-collapsed' : ''}`}>
+        {app.tab === 'dashboard' && (
+          <Dashboard
+            services={data.services}
+            orders={data.orders}
+            productsCount={data.products.length}
+            usersCount={data.users.length}
+            rustfsHealth={data.rustfsHealth}
+            onNavigate={app.setTab}
+            onSelectOrder={data.setSelectedOrder}
           />
         )}
 
-        {activeTab === 'users' && (
+        {app.tab === 'services' && (
+          <ServicesTab
+            services={data.services}
+            lastScanned={data.lastScanned}
+            onSelectService={data.setSelectedService}
+            onRefresh={data.pingServices}
+          />
+        )}
+
+        {app.tab === 'products' && (
+          <ProductsTab
+            filteredProducts={data.filteredProducts}
+            productSearch={data.productSearch}
+            onProductSearch={data.setProductSearch}
+            productCategoryFilter={data.productCategoryFilter}
+            onCategoryFilter={data.setProductCategoryFilter}
+            onEditProduct={(p) => {
+              data.setEditingProduct(p)
+              data.setIsProductModalOpen(true)
+            }}
+            onDeleteProduct={data.handleDeleteProduct}
+            onAddProduct={() => {
+              data.setEditingProduct(null)
+              data.setIsProductModalOpen(true)
+            }}
+          />
+        )}
+
+        {app.tab === 'orders' && (
+          <OrdersTab
+            filteredOrders={data.filteredOrders}
+            orderSearch={data.orderSearch}
+            onOrderSearch={data.setOrderSearch}
+            orderStatusFilter={data.orderStatusFilter}
+            onStatusFilter={data.setOrderStatusFilter}
+            onSelectOrder={data.setSelectedOrder}
+            onUpdateStatus={data.handleUpdateOrderStatus}
+          />
+        )}
+
+        {app.tab === 'users' && (
           <UsersTab
             filteredUsers={data.filteredUsers}
             userSearch={data.userSearch}
@@ -93,64 +218,30 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'products' && (
-          <ProductsTab
-            filteredProducts={data.filteredProducts}
-            productSearch={data.productSearch}
-            onProductSearch={data.setProductSearch}
-            productCategoryFilter={data.productCategoryFilter}
-            onCategoryFilter={data.setProductCategoryFilter}
-            onEditProduct={(p) => {
-              data.setEditingProduct(p)
-              data.setIsProductModalOpen(true)
-            }}
-            onDeleteProduct={data.handleDeleteProduct}
-            onAddProduct={() => {
-              data.setEditingProduct(null)
-              data.setIsProductModalOpen(true)
-            }}
-          />
+        {app.tab === 'persistence' && (
+          <PersistenceTab rustfsHealth={data.rustfsHealth} onPingRustFS={data.pingRustFS} />
         )}
 
-        {activeTab === 'orders' && (
-          <OrdersTab
-            filteredOrders={data.filteredOrders}
-            orders={data.orders}
-            orderSearch={data.orderSearch}
-            onOrderSearch={data.setOrderSearch}
-            orderStatusFilter={data.orderStatusFilter}
-            onStatusFilter={data.setOrderStatusFilter}
-            onSelectOrder={data.setSelectedOrder}
-            onUpdateStatus={data.handleUpdateOrderStatus}
-          />
-        )}
-
-        {activeTab === 'persistence' && (
-          <PersistenceTab rustfsHealth={rustfsHealth} onPingRustFS={pingRustFS} />
-        )}
-
-        {activeTab === 'config' && <ConfigTab />}
+        {app.tab === 'config' && <ConfigTab />}
       </main>
 
       {/* Modals */}
       <ServiceModal service={data.selectedService} onClose={() => data.setSelectedService(null)} />
 
-      <OrderModal order={data.selectedOrder} onClose={() => data.setSelectedOrder(null)} />
-
-      <UserViewModal user={data.selectedUser} onClose={() => data.setSelectedUser(null)} />
-
-      <UserFormModal
-        isOpen={data.isUserModalOpen}
-        editingUser={data.editingUser}
-        onClose={() => data.setIsUserModalOpen(false)}
-        onSave={data.handleSaveUser}
-      />
-
-      <ProductFormModal
+      <ProductModal
         isOpen={data.isProductModalOpen}
         editingProduct={data.editingProduct}
         onClose={() => data.setIsProductModalOpen(false)}
         onSave={data.handleSaveProduct}
+      />
+
+      <OrderModal order={data.selectedOrder} onClose={() => data.setSelectedOrder(null)} />
+
+      <UserModal
+        isOpen={data.isUserModalOpen}
+        editingUser={data.editingUser}
+        onClose={() => data.setIsUserModalOpen(false)}
+        onSave={data.handleSaveUser}
       />
     </div>
   )
