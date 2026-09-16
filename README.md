@@ -6,30 +6,31 @@ A scalable, production-ready microservices e-commerce platform built with Node.j
 
 This monorepo contains the following services:
 
-### Backend Services
-- **API Gateway** (Port 3000) - Routes requests to appropriate services
-- **User Service** (Port 3001) - Authentication, authorization, and user management
-- **Product Service** (Port 3002) - Product catalog and inventory management
-- **Order Service** (Port 3003) - Order processing and payment handling
+### Backend Services (Fastify 4)
+- **API Gateway** (`packages/api-gateway` · Port 3000) - Reverse proxy, JWT verification, rate limiting
+- **User Service** (`packages/ms-user` · Port 3001) - Authentication, authorization, and user management
+- **Product Service** (`packages/ms-product` · Port 3002) - Product catalog, Elasticsearch search, and inventory
+- **Order Service** (`packages/ms-order` · Port 3003) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal
 
 ### Shared Libraries
-- **Types** - Common TypeScript type definitions
-- **Utils** - Shared utility functions
-- **Database** - Database models and configurations
-- **Messaging** - Event bus and message queue utilities
+- **Types** (`packages/shared/types`) - Common TypeScript type definitions & DTOs
+- **Utils** (`packages/shared/utils`) - Shared utility functions & response wrappers
+- **Database** (`packages/shared/database`) - TypeORM, Mongoose & Redis clients
+- **Messaging** (`packages/shared/messaging`) - BullMQ queues & workers over Redis 7
 
 ### Frontend
-- **Web App** - Next.js React application
+- **Web App** (`packages/frontend` · Port 3004) - Next.js 14 SSR React application
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- pnpm 8+ (`npm install -g pnpm` or `corepack enable`)
+- pnpm 10+ (`corepack enable` or `npm install -g pnpm`)
 - Docker & Docker Compose
-- PostgreSQL
-- Redis
-- MongoDB
+- PostgreSQL 15
+- Redis 7
+- MongoDB 7
+- Elasticsearch 8.11
 
 ### Installation
 
@@ -58,19 +59,19 @@ pnpm run dev
 ## 📦 Available Scripts
 
 ### Root Level Scripts
-- `pnpm run dev` - Start all services in development mode
-- `pnpm run build` - Build all packages
+- `pnpm run dev` - Start all services concurrently in development mode
+- `pnpm run build` - Build all workspace packages
 - `pnpm run test` - Run all tests across workspace
 - `pnpm run lint` - Lint all packages
-- `pnpm run docker:up` - Start services with Docker Compose
+- `pnpm run docker:up` - Start 11 container services with Docker Compose
 - `pnpm run docker:down` - Stop Docker Compose services
 
 ### Service-Specific Scripts
 - `pnpm run dev:api-gateway` - Start API Gateway only
-- `pnpm run dev:user-service` - Start User Service only
-- `pnpm run dev:product-service` - Start Product Service only
-- `pnpm run dev:order-service` - Start Order Service only
-- `pnpm run dev:frontend` - Start Frontend only
+- `pnpm run dev:ms-user` - Start User Service (`@ecommerce/ms-user`) only
+- `pnpm run dev:ms-product` - Start Product Service (`@ecommerce/ms-product`) only
+- `pnpm run dev:ms-order` - Start Order Service (`@ecommerce/ms-order`) only
+- `pnpm run dev:frontend` - Start Frontend (`@ecommerce/frontend`) only
 
 ## 🏃 Development Workflow
 
@@ -84,10 +85,10 @@ pnpm run dev
 ### Database Migrations
 ```bash
 # Run migrations
-pnpm --filter @ecommerce/user-service run migrate
+pnpm --filter @ecommerce/ms-user run migrate
 
 # Generate new migration
-pnpm --filter @ecommerce/user-service run migrate:generate -- MigrationName
+pnpm --filter @ecommerce/ms-user run migrate:generate -- MigrationName
 ```
 
 ## 📊 Monitoring & Observability

@@ -40,21 +40,6 @@ services:
     networks:
       - ecommerce-network
 
-  # Message Queue
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: ecommerce-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - ecommerce-network
-
   # Search Engine
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
@@ -107,7 +92,7 @@ services:
   user-service:
     build:
       context: .
-      dockerfile: packages/user-service/Dockerfile
+      dockerfile: packages/ms-user/Dockerfile
     container_name: ecommerce-user-service
     environment:
       NODE_ENV: development
@@ -130,13 +115,13 @@ services:
     networks:
       - ecommerce-network
     volumes:
-      - ./packages/user-service/src:/app/src
+      - ./packages/ms-user/src:/app/src
       - /app/node_modules
 
   product-service:
     build:
       context: .
-      dockerfile: packages/product-service/Dockerfile
+      dockerfile: packages/ms-product/Dockerfile
     container_name: ecommerce-product-service
     environment:
       NODE_ENV: development
@@ -158,13 +143,13 @@ services:
     networks:
       - ecommerce-network
     volumes:
-      - ./packages/product-service/src:/app/src
+      - ./packages/ms-product/src:/app/src
       - /app/node_modules
 
   order-service:
     build:
       context: .
-      dockerfile: packages/order-service/Dockerfile
+      dockerfile: packages/ms-order/Dockerfile
     container_name: ecommerce-order-service
     environment:
       NODE_ENV: development
@@ -176,19 +161,16 @@ services:
       DB_DATABASE: ecommerce
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
       STRIPE_SECRET_KEY: sk_test_your-stripe-secret-key
     ports:
       - "3003:3003"
     depends_on:
       - postgres
       - redis
-      - rabbitmq
     networks:
       - ecommerce-network
     volumes:
-      - ./packages/order-service/src:/app/src
+      - ./packages/ms-order/src:/app/src
       - /app/node_modules
 
   frontend:
@@ -237,7 +219,6 @@ volumes:
   postgres_data:
   mongodb_data:
   redis_data:
-  rabbitmq_data:
   elasticsearch_data:
   grafana_data:
 

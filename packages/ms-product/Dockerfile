@@ -10,17 +10,17 @@ WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/shared ./packages/shared
-COPY packages/product-service/package.json ./packages/product-service/
+COPY packages/ms-product/package.json ./packages/ms-product/
 
-RUN pnpm --filter @ecommerce/product-service... install --frozen-lockfile
+RUN pnpm --filter @ecommerce/ms-product... install --frozen-lockfile
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app ./
-COPY packages/product-service ./packages/product-service
+COPY packages/ms-product ./packages/ms-product
 
-RUN pnpm --filter @ecommerce/product-service run build
+RUN pnpm --filter @ecommerce/ms-product run build
 
 # Production image
 FROM base AS runner
@@ -31,8 +31,8 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
 
-COPY --from=builder /app/packages/product-service/dist ./dist
-COPY --from=builder /app/packages/product-service/package.json ./package.json
+COPY --from=builder /app/packages/ms-product/dist ./dist
+COPY --from=builder /app/packages/ms-product/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
 
 USER nodejs

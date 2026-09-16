@@ -35,9 +35,9 @@
       "@ecommerce/shared-database": ["packages/shared/database/src"],
       "@ecommerce/shared-messaging": ["packages/shared/messaging/src"],
       "@ecommerce/api-gateway": ["packages/api-gateway/src"],
-      "@ecommerce/user-service": ["packages/user-service/src"],
-      "@ecommerce/product-service": ["packages/product-service/src"],
-      "@ecommerce/order-service": ["packages/order-service/src"],
+      "@ecommerce/ms-user": ["packages/ms-user/src"],
+      "@ecommerce/ms-product": ["packages/ms-product/src"],
+      "@ecommerce/ms-order": ["packages/ms-order/src"],
       "@ecommerce/frontend": ["packages/frontend/src"]
     }
   },
@@ -58,9 +58,9 @@
     { "path": "./packages/shared/database" },
     { "path": "./packages/shared/messaging" },
     { "path": "./packages/api-gateway" },
-    { "path": "./packages/user-service" },
-    { "path": "./packages/product-service" },
-    { "path": "./packages/order-service" },
+    { "path": "./packages/ms-user" },
+    { "path": "./packages/ms-product" },
+    { "path": "./packages/ms-order" },
     { "path": "./packages/frontend" }
   ]
 }

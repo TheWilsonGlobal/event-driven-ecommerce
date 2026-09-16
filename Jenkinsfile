@@ -96,21 +96,21 @@ pipeline {
                 stage('User Service') {
                     steps {
                         script {
-                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/user-service:${BUILD_NUMBER}", "-f packages/user-service/Dockerfile .")
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/user-service:${BUILD_NUMBER}", "-f packages/ms-user/Dockerfile .")
                         }
                     }
                 }
                 stage('Product Service') {
                     steps {
                         script {
-                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/product-service:${BUILD_NUMBER}", "-f packages/product-service/Dockerfile .")
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/product-service:${BUILD_NUMBER}", "-f packages/ms-product/Dockerfile .")
                         }
                     }
                 }
                 stage('Order Service') {
                     steps {
                         script {
-                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/order-service:${BUILD_NUMBER}", "-f packages/order-service/Dockerfile .")
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/order-service:${BUILD_NUMBER}", "-f packages/ms-order/Dockerfile .")
                         }
                     }
                 }
