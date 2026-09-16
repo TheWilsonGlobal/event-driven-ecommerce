@@ -43,6 +43,17 @@ export async function GET() {
         embeddedInMemory: dbConfig.keyValue.embedded.inMemory,
       },
     },
+    storage: {
+      provider: process.env.STORAGE_PROVIDER || 'rustfs',
+      rustfs: {
+        endpoint: process.env.RUSTFS_ENDPOINT || 'http://localhost:9000',
+        consoleEndpoint: process.env.RUSTFS_CONSOLE_ENDPOINT || 'http://localhost:9001',
+        bucket: process.env.RUSTFS_BUCKET || 'ecommerce-uploads',
+        region: process.env.RUSTFS_REGION || 'us-east-1',
+      },
+      s3Bucket: process.env.AWS_S3_BUCKET || 'ecommerce-uploads',
+      localUploadPath: process.env.UPLOAD_PATH || './uploads',
+    },
     queues: {
       broker: 'BullMQ over Redis 7',
       concurrency: parseInt(process.env.BULLMQ_CONCURRENCY || '10', 10),

@@ -56,6 +56,22 @@ services:
     networks:
       - ecommerce-network
 
+  # Distributed Object Storage (RustFS / S3 Compatible)
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: ecommerce-rustfs
+    environment:
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfspassword
+      - RUSTFS_DEFAULT_BUCKET=ecommerce-uploads
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs_data:/data
+    networks:
+      - ecommerce-network
+
   # Application Services
   api-gateway:
     build:
@@ -221,6 +237,7 @@ volumes:
   redis_data:
   elasticsearch_data:
   grafana_data:
+  rustfs_data:
 
 networks:
   ecommerce-network:
