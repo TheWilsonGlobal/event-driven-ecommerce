@@ -4,6 +4,8 @@ import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import httpProxy from '@fastify/http-proxy'
+import swagger from '@fastify/swagger'
+import swaggerUi from '@fastify/swagger-ui'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 
@@ -39,18 +41,77 @@ async function bootstrap() {
     timeWindow: '1 minute',
   })
 
-  server.get('/health', async () => {
-    return {
-      status: 'ok',
-      service: 'api-gateway',
-      timestamp: new Date().toISOString(),
-      routes: {
-        users: USER_SERVICE_URL,
-        products: PRODUCT_SERVICE_URL,
-        orders: ORDER_SERVICE_URL,
+  await server.register(swagger, {
+    openapi: {
+      openapi: '3.0.0',
+      info: {
+        title: 'API Gateway',
+        description:
+          'Reverse proxy entry point for the e-commerce microservices. ' +
+          'Routes under /api/v1/* are forwarded to ms-user, ms-product, and ms-order ' +
+          'and are NOT listed individually here (see note below) — browse each upstream ' +
+          "service's own /api-docs for the full contract of the routes it exposes.",
+        version: '1.0.0',
       },
-    }
+      servers: [{ url: `http://localhost:${PORT}` }],
+      tags: [{ name: 'health', description: 'Gateway health and status' }],
+    },
   })
+
+  await server.register(swaggerUi, {
+    routePrefix: '/api-docs',
+    uiConfig: { docExpansion: 'list', deepLinking: true },
+  })
+
+  // NOTE on proxy routes: /api/v1/auth, /api/v1/users, /api/v1/products,
+  // /api/v1/categories, /api/v1/orders, /api/v1/cart, and /api/v1/payments are
+  // forwarded upstream via @fastify/http-proxy (registered below). They are not
+  // declared as local Fastify routes (server.get/post/etc.), so @fastify/swagger
+  // cannot introspect a schema for them — there is no local route object to
+  // attach one to, and fabricating a schema here would describe a contract this
+  // service does not itself implement or validate. Each upstream service
+  // (ms-user, ms-product, ms-order) registers its own swagger/swagger-ui and is
+  // the source of truth for its routes' request/response schemas.
+
+  server.get(
+    '/health',
+    {
+      schema: {
+        tags: ['health'],
+        description: 'Gateway liveness/status check, including configured upstream URLs.',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              service: { type: 'string' },
+              timestamp: { type: 'string', format: 'date-time' },
+              routes: {
+                type: 'object',
+                properties: {
+                  users: { type: 'string' },
+                  products: { type: 'string' },
+                  orders: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      return {
+        status: 'ok',
+        service: 'api-gateway',
+        timestamp: new Date().toISOString(),
+        routes: {
+          users: USER_SERVICE_URL,
+          products: PRODUCT_SERVICE_URL,
+          orders: ORDER_SERVICE_URL,
+        },
+      }
+    },
+  )
 
   // Proxy user and auth routes
   await server.register(httpProxy, {

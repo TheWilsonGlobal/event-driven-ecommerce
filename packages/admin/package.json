@@ -1,5 +1,5 @@
 {
-  "name": "@ecommerce/admin-new",
+  "name": "@ecommerce/admin",
   "version": "1.0.0",
   "description": "Modern Admin Control Center for Microservices E-Commerce with Dark Design System",
   "private": true,

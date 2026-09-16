@@ -1,5 +1,5 @@
 {
-  "name": "@ecommerce/admin",
+  "name": "@ecommerce/admin-classic",
   "version": "1.0.0",
   "description": "Admin dashboard showing all microservices status, architecture and configurations",
   "private": true,
