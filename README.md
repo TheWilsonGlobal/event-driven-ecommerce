@@ -117,8 +117,14 @@ pnpm run docker:build
 pnpm run docker:up
 ```
 
-### Kubernetes
-See `k8s/` directory for Kubernetes manifests.
+### Kubernetes (Kustomize) Deployment
+```bash
+# Deploy to Staging
+kubectl apply -k k8s/overlays/staging
+
+# Deploy to Production
+kubectl apply -k k8s/overlays/production
+```
 
 ## 📚 API Documentation
 

@@ -1,0 +1,22 @@
+﻿apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: staging
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+namePrefix: staging-
+
+images:
+  - name: microservices-ecommerce/api-gateway
+    newTag: staging
+  - name: microservices-ecommerce/ms-user
+    newTag: staging
+  - name: microservices-ecommerce/ms-product
+    newTag: staging
+  - name: microservices-ecommerce/ms-order
+    newTag: staging
+  - name: microservices-ecommerce/frontend
+    newTag: staging

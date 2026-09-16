@@ -133,15 +133,15 @@ pipeline {
                     withKubeConfig([credentialsId: 'kubeconfig']) {
                         sh """
                             kubectl set image deployment/api-gateway api-gateway=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/api-gateway:${BUILD_NUMBER} -n staging
-                            kubectl set image deployment/user-service user-service=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/user-service:${BUILD_NUMBER} -n staging
-                            kubectl set image deployment/product-service product-service=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/product-service:${BUILD_NUMBER} -n staging
-                            kubectl set image deployment/order-service order-service=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/order-service:${BUILD_NUMBER} -n staging
+                            kubectl set image deployment/ms-user ms-user=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-user:${BUILD_NUMBER} -n staging
+                            kubectl set image deployment/ms-product ms-product=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-product:${BUILD_NUMBER} -n staging
+                            kubectl set image deployment/ms-order ms-order=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-order:${BUILD_NUMBER} -n staging
                             kubectl set image deployment/frontend frontend=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/frontend:${BUILD_NUMBER} -n staging
 
                             kubectl rollout status deployment/api-gateway -n staging
-                            kubectl rollout status deployment/user-service -n staging
-                            kubectl rollout status deployment/product-service -n staging
-                            kubectl rollout status deployment/order-service -n staging
+                            kubectl rollout status deployment/ms-user -n staging
+                            kubectl rollout status deployment/ms-product -n staging
+                            kubectl rollout status deployment/ms-order -n staging
                             kubectl rollout status deployment/frontend -n staging
                         """
                     }
@@ -161,15 +161,15 @@ pipeline {
                     withKubeConfig([credentialsId: 'kubeconfig']) {
                         sh """
                             kubectl set image deployment/api-gateway api-gateway=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/api-gateway:${BUILD_NUMBER} -n production
-                            kubectl set image deployment/user-service user-service=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/user-service:${BUILD_NUMBER} -n production
-                            kubectl set image deployment/product-service product-service=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/product-service:${BUILD_NUMBER} -n production
-                            kubectl set image deployment/order-service order-service=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/order-service:${BUILD_NUMBER} -n production
+                            kubectl set image deployment/ms-user ms-user=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-user:${BUILD_NUMBER} -n production
+                            kubectl set image deployment/ms-product ms-product=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-product:${BUILD_NUMBER} -n production
+                            kubectl set image deployment/ms-order ms-order=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-order:${BUILD_NUMBER} -n production
                             kubectl set image deployment/frontend frontend=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/frontend:${BUILD_NUMBER} -n production
 
                             kubectl rollout status deployment/api-gateway -n production
-                            kubectl rollout status deployment/user-service -n production
-                            kubectl rollout status deployment/product-service -n production
-                            kubectl rollout status deployment/order-service -n production
+                            kubectl rollout status deployment/ms-user -n production
+                            kubectl rollout status deployment/ms-product -n production
+                            kubectl rollout status deployment/ms-order -n production
                             kubectl rollout status deployment/frontend -n production
                         """
                     }

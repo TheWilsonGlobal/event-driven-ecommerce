@@ -1,0 +1,25 @@
+﻿apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-config
+data:
+  NODE_ENV: "production"
+  PORT_GATEWAY: "3000"
+  PORT_USER: "3001"
+  PORT_PRODUCT: "3002"
+  PORT_ORDER: "3003"
+  PORT_FRONTEND: "3000"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_USERNAME: "postgres"
+  DB_DATABASE: "ecommerce"
+  MONGODB_URI: "mongodb://admin:password@mongodb:27017/ecommerce?authSource=admin"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  BULLMQ_CONCURRENCY: "5"
+  BULLMQ_PREFIX: "ecommerce"
+  ELASTICSEARCH_HOST: "http://elasticsearch:9200"
+  USER_SERVICE_URL: "http://ms-user:3001"
+  PRODUCT_SERVICE_URL: "http://ms-product:3002"
+  ORDER_SERVICE_URL: "http://ms-order:3003"
+  NEXT_PUBLIC_API_URL: "http://api.ecommerce.local"
