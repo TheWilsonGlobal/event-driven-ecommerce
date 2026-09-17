@@ -62,4 +62,6 @@ export interface LogFile {
   modified: string
   created: string
   level: 'info' | 'warn' | 'error'
+  /** Sample content to hand out on download — there is no real log backend behind this mock admin. */
+  preview: string
 }

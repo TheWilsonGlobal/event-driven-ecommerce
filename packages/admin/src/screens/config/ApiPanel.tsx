@@ -18,7 +18,13 @@ function orderMethods(counts: Record<string, number>): [string, number][] {
   })
 }
 
-export default function ApiPanel({ data, openSignal }: { data: ApiEndpointData | null; openSignal?: OpenSignal }) {
+export default function ApiPanel({
+  data,
+  openSignal,
+}: {
+  data: ApiEndpointData | null
+  openSignal?: OpenSignal
+}) {
   const [filter, setFilter] = useState('')
 
   const groups = useMemo(() => {
@@ -30,7 +36,9 @@ export default function ApiPanel({ data, openSignal }: { data: ApiEndpointData |
         ...g,
         endpoints: g.name.toLowerCase().includes(q)
           ? g.endpoints
-          : g.endpoints.filter((e) => e.path.toLowerCase().includes(q) || e.method.toLowerCase().includes(q))
+          : g.endpoints.filter(
+              (e) => e.path.toLowerCase().includes(q) || e.method.toLowerCase().includes(q)
+            ),
       }))
       .filter((g) => g.endpoints.length > 0)
   }, [data, filter])
@@ -64,8 +72,8 @@ export default function ApiPanel({ data, openSignal }: { data: ApiEndpointData |
 
       {undocumented > 0 && (
         <div className="warn-banner">
-          {undocumented} of {data.summary.endpointCount} routes are gateway-proxied passthroughs, documented in each
-          upstream service's own Swagger UI rather than the gateway's.
+          {undocumented} of {data.summary.endpointCount} routes are gateway-proxied passthroughs,
+          documented in each upstream service's own Swagger UI rather than the gateway's.
         </div>
       )}
 
@@ -124,7 +132,12 @@ export default function ApiPanel({ data, openSignal }: { data: ApiEndpointData |
                 <div className="config-row">
                   <span className="k">Swagger / OpenAPI docs</span>
                   <span className="config-control">
-                    <a className="btn btn-ghost btn-sm" href={group.docsUrl} target="_blank" rel="noreferrer">
+                    <a
+                      className="btn btn-ghost btn-sm"
+                      href={group.docsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       Open /api-docs <ExternalLinkIcon style={{ width: 12, height: 12 }} />
                     </a>
                   </span>

@@ -14,7 +14,13 @@ function sortColumns(columns: SchemaColumn[]): SchemaColumn[] {
   return [...columns].sort((a, b) => rank(a) - rank(b))
 }
 
-export default function SchemaPanel({ schema, openSignal }: { schema: SchemaData | null; openSignal?: OpenSignal }) {
+export default function SchemaPanel({
+  schema,
+  openSignal,
+}: {
+  schema: SchemaData | null
+  openSignal?: OpenSignal
+}) {
   const [filter, setFilter] = useState('')
 
   const tables = useMemo(() => {

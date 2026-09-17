@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { LogFile } from './configTypes'
 import { EmptyState } from '../../components/ui'
-import { FileIcon } from '../../components/icons'
+import { DownloadIcon, FileIcon } from '../../components/icons'
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -13,13 +13,28 @@ function fmtTime(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
+/** This admin has no real log backend — the download hands out the file's mock preview content. */
+function download(file: LogFile) {
+  const blob = new Blob([file.preview], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = file.filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export default function SystemLogsPanel({ files }: { files: LogFile[] }) {
   const [filter, setFilter] = useState('')
 
   const rows = useMemo(() => {
     const q = filter.trim().toLowerCase()
     if (!q) return files
-    return files.filter((f) => f.filename.toLowerCase().includes(q) || f.service.toLowerCase().includes(q))
+    return files.filter(
+      (f) => f.filename.toLowerCase().includes(q) || f.service.toLowerCase().includes(q)
+    )
   }, [files, filter])
 
   return (
@@ -54,13 +69,17 @@ export default function SystemLogsPanel({ files }: { files: LogFile[] }) {
                 <th>Size</th>
                 <th>Last Modified</th>
                 <th>Created</th>
+                <th className="cell-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((f) => (
                 <tr key={f.filename}>
                   <td>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} title={f.filename}>
+                    <span
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      title={f.filename}
+                    >
                       <FileIcon style={{ width: 14, height: 14 }} />
                       <span className="mono">{f.filename}</span>
                     </span>
@@ -78,6 +97,11 @@ export default function SystemLogsPanel({ files }: { files: LogFile[] }) {
                   <td className="mono cell-muted">{fmtSize(f.size)}</td>
                   <td className="cell-muted">{fmtTime(f.modified)}</td>
                   <td className="cell-muted">{fmtTime(f.created)}</td>
+                  <td className="cell-right">
+                    <button className="btn btn-ghost btn-sm" onClick={() => download(f)}>
+                      <DownloadIcon style={{ width: 12, height: 12 }} /> Download
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

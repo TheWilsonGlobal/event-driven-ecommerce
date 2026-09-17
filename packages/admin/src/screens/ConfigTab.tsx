@@ -22,17 +22,6 @@ export default function ConfigTab() {
 
   return (
     <>
-      <div className="page-header">
-        <div>
-          <div className="page-title">
-            System Runtime Configuration <span className="tag">Matrix</span>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
-            Centralized environment policies, ports, queue concurrency, and security parameters.
-          </div>
-        </div>
-      </div>
-
       <div className="toolbar">
         <div className="toolbar-left">
           <div className="config-tabs">
@@ -41,7 +30,7 @@ export default function ConfigTab() {
                 ['general', 'General'],
                 ['schema', 'DB Schema'],
                 ['api', 'API Endpoints'],
-                ['logs', 'System Logs']
+                ['logs', 'System Logs'],
               ] as [ConfigSubTab, string][]
             ).map(([key, label]) => {
               const count =

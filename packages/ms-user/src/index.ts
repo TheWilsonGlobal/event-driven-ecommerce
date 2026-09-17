@@ -85,7 +85,7 @@ async function bootstrap() {
           driver: dbConfig.relational.driver,
         },
       }
-    },
+    }
   )
 
   server.get(
@@ -114,7 +114,7 @@ async function bootstrap() {
         page: 1,
         limit: 10,
       }
-    },
+    }
   )
 
   server.post(
@@ -155,7 +155,7 @@ async function bootstrap() {
           email: body.email || 'user@example.com',
         },
       }
-    },
+    }
   )
 
   server.post(
@@ -198,7 +198,7 @@ async function bootstrap() {
           role: 'CUSTOMER',
         },
       }
-    },
+    }
   )
 
   try {

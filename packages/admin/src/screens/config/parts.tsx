@@ -48,7 +48,8 @@ export function ConfigCard({
       appliedNonce.current = openSignal.nonce
       setOpen(openSignal.open)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `open` is deliberately not a dependency: including it would re-run this
+    // effect on every manual toggle and re-apply the already-consumed signal.
   }, [openSignal])
 
   return (
@@ -73,7 +74,11 @@ export function ConfigCard({
 export function ReadOnlyRow({ label, value }: { label: string; value: unknown }) {
   const isBool = typeof value === 'boolean'
   const text =
-    value === null || value === undefined ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value)
+    value === null || value === undefined
+      ? '—'
+      : typeof value === 'object'
+        ? JSON.stringify(value)
+        : String(value)
   return (
     <div className="config-row">
       <span className="k">{label}</span>

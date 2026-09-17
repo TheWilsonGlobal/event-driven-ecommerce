@@ -135,11 +135,15 @@
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
-  padding: 4px 0;
+  padding: 4px 8px;
+  margin: 0 -8px;
   border-bottom: 1px solid rgba(51, 65, 85, 0.4);
 }
 .panel-row:last-child {
   border-bottom: none;
+}
+.panel-row:nth-child(even) {
+  background: var(--row-even);
 }
 .panel-row .k {
   color: var(--text-dim);
@@ -259,6 +263,9 @@ tbody tr:nth-child(even) td {
 }
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.cell-right {
+  text-align: right;
 }
 
 /* ── Status Badges & Chips ────────────────────────────────────────────── */
@@ -410,10 +417,10 @@ tbody tr:nth-child(even) td {
   border-top: 1px solid var(--border);
 }
 .config-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(180px, 320px) 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   padding: 6px 10px;
   margin: 0 -10px;
   font-size: 12px;
@@ -431,8 +438,14 @@ tbody tr:nth-child(even) td {
 .config-row .v {
   font-weight: 600;
   color: var(--text-bright);
-  text-align: right;
-  margin-left: auto;
+  text-align: left;
+  justify-self: start;
+}
+.config-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
 }
 .config-row .v.bool-true {
   color: var(--green-light);

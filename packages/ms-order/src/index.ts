@@ -87,7 +87,7 @@ async function bootstrap() {
           queue: dbConfig.keyValue.driver,
         },
       }
-    },
+    }
   )
 
   server.get(
@@ -116,7 +116,7 @@ async function bootstrap() {
         page: 1,
         limit: 10,
       }
-    },
+    }
   )
 
   server.get(
@@ -143,7 +143,7 @@ async function bootstrap() {
         subtotal: 0,
         total: 0,
       }
-    },
+    }
   )
 
   try {

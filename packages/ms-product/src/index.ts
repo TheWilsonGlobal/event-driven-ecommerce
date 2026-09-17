@@ -102,7 +102,7 @@ async function bootstrap() {
           driver: dbConfig.document.driver,
         },
       }
-    },
+    }
   )
 
   // ─── Storage Health ───────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ async function bootstrap() {
         bucket: process.env.RUSTFS_BUCKET || 'ecommerce-uploads',
         timestamp: new Date().toISOString(),
       }
-    },
+    }
   )
 
   // ─── Products ─────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ async function bootstrap() {
         page: 1,
         limit: 20,
       }
-    },
+    }
   )
 
   server.get(
@@ -217,7 +217,7 @@ async function bootstrap() {
           { id: '3', name: 'Books', slug: 'books' },
         ],
       }
-    },
+    }
   )
 
   // ─── Product Image Upload ─────────────────────────────────────────────────
@@ -293,7 +293,7 @@ async function bootstrap() {
         server.log.error(`[RustFS] Upload failed: ${message}`)
         return reply.status(500).send({ error: 'Storage upload failed', detail: message })
       }
-    },
+    }
   )
 
   // ─── Receipt Upload (Order Saga) ─────────────────────────────────────────
@@ -351,7 +351,7 @@ async function bootstrap() {
         const message = err instanceof Error ? err.message : 'Unknown error'
         return reply.status(500).send({ error: 'Receipt upload failed', detail: message })
       }
-    },
+    }
   )
 
   try {

@@ -110,7 +110,7 @@ async function bootstrap() {
           orders: ORDER_SERVICE_URL,
         },
       }
-    },
+    }
   )
 
   // Proxy user and auth routes
