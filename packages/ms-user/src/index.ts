@@ -7,7 +7,7 @@ import swaggerUi from '@fastify/swagger-ui'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 import * as bcrypt from 'bcryptjs'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '../node_modules/.prisma-ms-user/client'
 import { loadDatabaseConfig, SEED_USERS } from '@ecommerce/shared-database'
 
 // Load ms-user's own .env first (takes precedence: dotenv does not

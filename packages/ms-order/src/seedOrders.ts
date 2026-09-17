@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient } from '../node_modules/.prisma-ms-order/client'
 import { SEED_ORDERS } from '@ecommerce/shared-database'
 
 // Maps our external "payment status" vocabulary (used by SEED_ORDERS and the

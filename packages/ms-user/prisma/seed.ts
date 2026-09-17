@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '../node_modules/.prisma-ms-user/client'
 import { SEED_USERS } from '@ecommerce/shared-database'
 
 const prisma = new PrismaClient()

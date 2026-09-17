@@ -229,9 +229,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
       }
       await fetchUsers()
     } catch (err) {
-      showToast(
-        `Failed to save user: ${err instanceof Error ? err.message : 'Unknown error'}`
-      )
+      showToast(`Failed to save user: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
@@ -246,9 +244,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
       showToast('User deleted')
       await fetchUsers()
     } catch (err) {
-      showToast(
-        `Failed to delete user: ${err instanceof Error ? err.message : 'Unknown error'}`
-      )
+      showToast(`Failed to delete user: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
@@ -345,9 +341,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
       }
       await fetchProducts()
     } catch (err) {
-      showToast(
-        `Failed to save product: ${err instanceof Error ? err.message : 'Unknown error'}`
-      )
+      showToast(`Failed to save product: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 
@@ -364,9 +358,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
       showToast('Product deleted')
       await fetchProducts()
     } catch (err) {
-      showToast(
-        `Failed to delete product: ${err instanceof Error ? err.message : 'Unknown error'}`
-      )
+      showToast(`Failed to delete product: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }
   }
 

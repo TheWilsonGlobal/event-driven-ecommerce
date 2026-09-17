@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '../node_modules/.prisma-ms-order/client'
 import { seedOrdersIfEmpty } from '../src/seedOrders'
 
 const prisma = new PrismaClient()
