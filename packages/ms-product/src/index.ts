@@ -271,7 +271,9 @@ async function bootstrap() {
   )
 
   // ─── Products ─────────────────────────────────────────────────────────────
-  server.get<{ Querystring: { page?: string; limit?: string; category?: string; search?: string } }>(
+  server.get<{
+    Querystring: { page?: string; limit?: string; category?: string; search?: string }
+  }>(
     '/api/v1/products',
     {
       schema: {

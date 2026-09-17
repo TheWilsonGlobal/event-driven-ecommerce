@@ -12,9 +12,7 @@ const prisma = new PrismaClient()
 export async function seedUsers(): Promise<{ inserted: number; skipped: boolean }> {
   const existingCount = await prisma.user.count()
   if (existingCount > 0) {
-    console.log(
-      `[ms-user seed] Skipping seed: ${existingCount} user(s) already present.`
-    )
+    console.log(`[ms-user seed] Skipping seed: ${existingCount} user(s) already present.`)
     return { inserted: 0, skipped: true }
   }
 

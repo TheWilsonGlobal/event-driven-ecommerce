@@ -36,10 +36,7 @@ const server: FastifyInstance = fastify({
 // Placeholder dev password hash used for users created ad hoc via the admin
 // "Add User" flow, where no real credential is collected yet. Same approach
 // as the shared SEED_USERS records (bcrypt hash of "Password123!").
-const PLACEHOLDER_PASSWORD_HASH = bcrypt.hashSync(
-  `placeholder-${Date.now()}-${Math.random()}`,
-  10
-)
+const PLACEHOLDER_PASSWORD_HASH = bcrypt.hashSync(`placeholder-${Date.now()}-${Math.random()}`, 10)
 
 /**
  * Self-seeds the users table from the shared SEED_USERS source of truth if
