@@ -1,6 +1,7 @@
 import IORedis from 'ioredis'
 import type { RedisOptions } from 'ioredis'
 import { loadDatabaseConfig } from '@ecommerce/shared-database'
+import { describeError } from './describeError'
 
 /**
  * Redis connection management for ms-order's BullMQ queues.
@@ -15,14 +16,25 @@ import { loadDatabaseConfig } from '@ecommerce/shared-database'
  *     'error' handler attached before it can emit.
  *  3. A down Redis must make the introspection endpoints fail FAST, not hang.
  *     `enableOfflineQueue: false` makes commands reject immediately rather
- *     than buffering until a reconnect that may never come, and the bounded
- *     `retryStrategy` stops the reconnect loop from becoming a storm.
+ *     than buffering until a reconnect that may never come.
+ *  4. The service must SELF-HEAL when Redis comes back, without a restart.
+ *     The `retryStrategy` therefore backs off to a ceiling but never gives up.
  */
 
 const dbConfig = loadDatabaseConfig(process.env)
 
-/** Max reconnect attempts before ioredis gives up on a dead Redis. */
-const MAX_RECONNECT_ATTEMPTS = 10
+/**
+ * Ceiling on the reconnect backoff.
+ *
+ * The retry strategy deliberately never gives up (never returns null). An
+ * earlier version capped the attempts, which meant that after ~10 failures
+ * ioredis stopped reconnecting permanently — so once Redis came back, the
+ * queue endpoints stayed at 503 until ms-order was manually restarted. Needing
+ * a restart to recover from a Redis blip is worse than a noisy log. Instead we
+ * retry indefinitely with the interval backing off to this ceiling, which
+ * avoids a reconnection storm while still self-healing.
+ */
+const MAX_RECONNECT_DELAY_MS = 5000
 
 /** Command timeout — keeps the 503 path fast when Redis is unreachable. */
 const COMMAND_TIMEOUT_MS = 2000
@@ -50,13 +62,10 @@ function baseOptions(): RedisOptions {
     enableOfflineQueue: false,
     connectTimeout: COMMAND_TIMEOUT_MS,
     commandTimeout: COMMAND_TIMEOUT_MS,
-    // Bounded reconnection: back off, then stop retrying so a dead Redis does
-    // not produce an endless reconnect storm in the logs.
+    // Backs off to a ceiling but never gives up, so the service self-heals
+    // when Redis returns. See MAX_RECONNECT_DELAY_MS.
     retryStrategy(times: number) {
-      if (times > MAX_RECONNECT_ATTEMPTS) {
-        return null
-      }
-      return Math.min(times * 200, 3000)
+      return Math.min(times * 200, MAX_RECONNECT_DELAY_MS)
     },
     lazyConnect: false,
   }
@@ -129,13 +138,14 @@ export function createRedisConnection(role: RedisRole, label: string): IORedis {
 const seenErrorMessages = new Set<string>()
 
 function logConnectionErrorOnce(label: string, err: Error): void {
-  const key = `${label}:${err.message}`
+  const description = describeError(err)
+  const key = `${label}:${description}`
   if (seenErrorMessages.has(key)) {
     return
   }
   seenErrorMessages.add(key)
   // eslint-disable-next-line no-console
-  console.warn(`[Order Service] Redis connection "${label}" error: ${err.message}`)
+  console.warn(`[Order Service] Redis connection "${label}" error: ${description}`)
 }
 
 /**

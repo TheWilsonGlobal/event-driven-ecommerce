@@ -12,9 +12,8 @@ export default function TaskQueuesTab() {
           <div style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 2 }}>
             Async job queues backing order expiration, payment retries, notifications and saga
             compensation — driven by BullMQ over Redis (see Persistence &rarr; Overview &rarr; Task
-            Queues).
-            Queue definitions (description, concurrency, retry policy) live in Persistence &rarr;
-            Task Queues.
+            Queues). Queue definitions (description, concurrency, retry policy) live in Persistence
+            &rarr; Task Queues.
           </div>
         </div>
         <div className="header-actions">

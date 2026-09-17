@@ -25,6 +25,7 @@ import {
   getLastRedisError,
   isConnectionUsable,
 } from './redisConnection'
+import { describeError } from './describeError'
 import {
   makeExpireOrderProcessor,
   makeRetryCaptureProcessor,
@@ -184,7 +185,7 @@ export class QueueManager {
       // when Redis is down.
       worker.on('error', (err) => {
         // eslint-disable-next-line no-console
-        console.warn(`[Order Service] Worker "${def.name}" error: ${err.message}`)
+        console.warn(`[Order Service] Worker "${def.name}" error: ${describeError(err)}`)
       })
 
       worker.on('failed', (job, err) => {
@@ -259,11 +260,7 @@ export class QueueManager {
       return await fn()
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn(
-        `[Order Service] Failed to enqueue ${label}: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      )
+      console.warn(`[Order Service] Failed to enqueue ${label}: ${describeError(err)}`)
       return null
     }
   }
@@ -368,11 +365,15 @@ export class QueueManager {
     }
     if (!isConnectionUsable(this.producerConnection)) {
       const last = getLastRedisError()
+      // Classify via the last connection error where we have one, so the
+      // reason code is specific (redis_connection_refused) rather than the
+      // generic redis_unavailable.
+      if (last) {
+        return toRedisUnavailable(last)
+      }
       return new RedisUnavailableError(
         'redis_unavailable',
-        last
-          ? `Redis is unreachable: ${last.message}`
-          : `Redis is unreachable (connection status: ${this.producerConnection.status})`
+        `Redis is unreachable (connection status: ${this.producerConnection.status})`
       )
     }
     try {
@@ -459,7 +460,7 @@ export function toRedisUnavailable(err: unknown): RedisUnavailableError {
   if (err instanceof RedisUnavailableError) {
     return err
   }
-  const message = err instanceof Error ? err.message : String(err)
+  const message = describeError(err)
 
   // ioredis surfaces a dead server in a few distinct ways; give each a
   // machine-readable reason so the admin can distinguish them.

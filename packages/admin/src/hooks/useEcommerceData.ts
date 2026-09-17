@@ -84,6 +84,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
   const [users, setUsers] = useState<UserRecord[]>([])
   const [products, setProducts] = useState<ProductRecord[]>([])
   const [orders, setOrders] = useState<OrderRecord[]>([])
+  const [objectCount, setObjectCount] = useState<number>(0)
 
   const [usersLoading, setUsersLoading] = useState<boolean>(true)
   const [productsLoading, setProductsLoading] = useState<boolean>(true)
@@ -166,12 +167,24 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
     }
   }, [])
 
+  const fetchObjectCount = useCallback(async () => {
+    try {
+      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setObjectCount(Array.isArray(data.objects) ? data.objects.length : 0)
+    } catch {
+      setObjectCount(0)
+    }
+  }, [])
+
   useEffect(() => {
     // Independent fetches: one backend being down must not block the others.
     void fetchUsers()
     void fetchProducts()
     void fetchOrders()
-  }, [fetchUsers, fetchProducts, fetchOrders])
+    void fetchObjectCount()
+  }, [fetchUsers, fetchProducts, fetchOrders, fetchObjectCount])
 
   // User Handlers
   const handleSaveUser = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -425,6 +438,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
     users,
     products,
     orders,
+    objectCount,
     usersLoading,
     productsLoading,
     ordersLoading,

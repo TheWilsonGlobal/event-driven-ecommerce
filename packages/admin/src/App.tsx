@@ -25,6 +25,7 @@ import TaskQueuesTab from './screens/TaskQueuesTab'
 import StorageTab from './screens/StorageTab'
 import PersistenceTab from './screens/PersistenceTab'
 import ConfigTab from './screens/ConfigTab'
+import { QUEUE_DATA } from './screens/queues/queueSeed'
 
 // Modals
 import ServiceModal from './modals/ServiceModal'
@@ -56,8 +57,13 @@ export default function App() {
 
   const PERSISTENCE: NavEntry[] = [
     { key: 'persistence', label: 'Persistence', Icon: PersistenceIcon },
-    { key: 'task-queues', label: 'Task Queues', Icon: QueueIcon },
-    { key: 'storage', label: 'Storage (RustFS)', Icon: StorageIcon },
+    {
+      key: 'task-queues',
+      label: 'Task Queues',
+      Icon: QueueIcon,
+      count: QUEUE_DATA.summary.totalJobs,
+    },
+    { key: 'storage', label: 'Storage (RustFS)', Icon: StorageIcon, count: data.objectCount },
   ]
 
   const SYSTEM: NavEntry[] = [{ key: 'config', label: 'Configuration', Icon: ConfigIcon }]
@@ -219,7 +225,12 @@ export default function App() {
         {app.tab === 'storage' && <StorageTab />}
 
         {app.tab === 'persistence' && (
-          <PersistenceTab rustfsHealth={data.rustfsHealth} onPingRustFS={data.pingRustFS} />
+          <PersistenceTab
+            rustfsHealth={data.rustfsHealth}
+            onPingRustFS={data.pingRustFS}
+            users={data.users}
+            orders={data.orders}
+          />
         )}
 
         {app.tab === 'config' && (

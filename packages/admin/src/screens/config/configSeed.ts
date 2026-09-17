@@ -14,7 +14,7 @@ export const SCHEMA_DATA: SchemaData = {
       name: 'users',
       service: 'ms-user',
       driver: 'PostgreSQL / SQLite',
-      rowCount: 128,
+      rowCount: null,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
         { name: 'email', type: 'varchar(255)', nullable: false, isUnique: true },
@@ -34,7 +34,7 @@ export const SCHEMA_DATA: SchemaData = {
       name: 'addresses',
       service: 'ms-user',
       driver: 'PostgreSQL / SQLite',
-      rowCount: 205,
+      rowCount: null,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
         { name: 'user_id', type: 'uuid', nullable: false, references: 'users.id' },
@@ -54,7 +54,7 @@ export const SCHEMA_DATA: SchemaData = {
       name: 'refresh_tokens',
       service: 'ms-user',
       driver: 'PostgreSQL / SQLite',
-      rowCount: 342,
+      rowCount: null,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
         { name: 'user_id', type: 'uuid', nullable: false, references: 'users.id' },
@@ -69,7 +69,7 @@ export const SCHEMA_DATA: SchemaData = {
       name: 'orders',
       service: 'ms-order',
       driver: 'PostgreSQL / SQLite',
-      rowCount: 67,
+      rowCount: null,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
         { name: 'order_number', type: 'varchar(50)', nullable: false, isUnique: true },
@@ -96,7 +96,7 @@ export const SCHEMA_DATA: SchemaData = {
       name: 'order_items',
       service: 'ms-order',
       driver: 'PostgreSQL / SQLite',
-      rowCount: 183,
+      rowCount: null,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
         { name: 'order_id', type: 'uuid', nullable: false, references: 'orders.id' },
@@ -119,7 +119,7 @@ export const SCHEMA_DATA: SchemaData = {
       name: 'payments',
       service: 'ms-order',
       driver: 'PostgreSQL / SQLite',
-      rowCount: 67,
+      rowCount: null,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
         { name: 'order_id', type: 'uuid', nullable: false, references: 'orders.id' },
@@ -187,6 +187,43 @@ SCHEMA_DATA.summary = {
   columnCount: SCHEMA_DATA.tables.reduce((sum, t) => sum + t.columns.length, 0),
   indexCount: SCHEMA_DATA.tables.reduce((sum, t) => sum + t.indexes.length, 0),
   totalRows: SCHEMA_DATA.tables.reduce((sum, t) => sum + (t.rowCount ?? 0), 0),
+}
+
+/**
+ * Overlays real row counts (read from the live services this admin app
+ * already polls) onto the static schema snapshot. Tables with no
+ * corresponding live per-row data fetched by this admin (refresh_tokens,
+ * categories) keep rowCount: null and render "n/a", same as before — this
+ * only replaces numbers that were previously hand-typed placeholders.
+ */
+export function withLiveRowCounts(counts: {
+  users: number
+  addresses: number
+  orders: number
+  orderItems: number
+  payments: number
+}): SchemaData {
+  const rowCountByTable: Record<string, number> = {
+    users: counts.users,
+    addresses: counts.addresses,
+    orders: counts.orders,
+    order_items: counts.orderItems,
+    payments: counts.payments,
+  }
+
+  const tables = SCHEMA_DATA.tables.map((t) =>
+    t.name in rowCountByTable ? { ...t, rowCount: rowCountByTable[t.name] } : t
+  )
+
+  return {
+    tables,
+    summary: {
+      tableCount: tables.length,
+      columnCount: tables.reduce((sum, t) => sum + t.columns.length, 0),
+      indexCount: tables.reduce((sum, t) => sum + t.indexes.length, 0),
+      totalRows: tables.reduce((sum, t) => sum + (t.rowCount ?? 0), 0),
+    },
+  }
 }
 
 export const API_ENDPOINT_DATA: ApiEndpointData = {

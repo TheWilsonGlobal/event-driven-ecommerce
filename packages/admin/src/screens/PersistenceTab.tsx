@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import type { RustfsHealth } from '../types'
+import { useMemo, useState } from 'react'
+import type { RustfsHealth, UserRecord, OrderRecord } from '../types'
 import { type OpenSignal } from './config/parts'
 import PersistencePanel from './config/PersistencePanel'
 import TaskQueuesPanel from './config/TaskQueuesPanel'
 import CachePanel, { CACHE_NAMESPACE_COUNT } from './config/CachePanel'
 import SchemaPanel from './config/SchemaPanel'
-import { SCHEMA_DATA } from './config/configSeed'
+import { withLiveRowCounts } from './config/configSeed'
 import { QUEUE_DATA } from './queues/queueSeed'
 
 type PersistenceSubTab = 'overview' | 'queues' | 'cache' | 'schema'
@@ -13,9 +13,13 @@ type PersistenceSubTab = 'overview' | 'queues' | 'cache' | 'schema'
 export default function PersistenceTab({
   rustfsHealth,
   onPingRustFS,
+  users,
+  orders,
 }: {
   rustfsHealth: RustfsHealth
   onPingRustFS: () => void
+  users: UserRecord[]
+  orders: OrderRecord[]
 }) {
   const [tab, setTab] = useState<PersistenceSubTab>('overview')
 
@@ -23,6 +27,18 @@ export default function PersistenceTab({
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
 
   const hasCards = tab !== 'queues' && tab !== 'cache'
+
+  const schemaData = useMemo(
+    () =>
+      withLiveRowCounts({
+        users: users.length,
+        addresses: users.reduce((sum, u) => sum + u.addresses.length, 0),
+        orders: orders.length,
+        orderItems: orders.reduce((sum, o) => sum + o.items.length, 0),
+        payments: orders.filter((o) => Boolean(o.transactionId)).length,
+      }),
+    [users, orders]
+  )
 
   return (
     <>
@@ -39,7 +55,7 @@ export default function PersistenceTab({
             ).map(([key, label]) => {
               const count =
                 key === 'schema'
-                  ? SCHEMA_DATA.summary.tableCount
+                  ? schemaData.summary.tableCount
                   : key === 'queues'
                     ? QUEUE_DATA.summary.queueCount
                     : key === 'cache'
@@ -84,7 +100,7 @@ export default function PersistenceTab({
       )}
       {tab === 'queues' && <TaskQueuesPanel data={QUEUE_DATA} />}
       {tab === 'cache' && <CachePanel />}
-      {tab === 'schema' && <SchemaPanel schema={SCHEMA_DATA} openSignal={openSignal} />}
+      {tab === 'schema' && <SchemaPanel schema={schemaData} openSignal={openSignal} />}
     </>
   )
 }
