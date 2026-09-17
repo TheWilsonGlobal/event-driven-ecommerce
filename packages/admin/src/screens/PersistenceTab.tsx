@@ -5,28 +5,31 @@ import PersistencePanel from './config/PersistencePanel'
 import TaskQueuesPanel from './config/TaskQueuesPanel'
 import CachePanel, { CACHE_NAMESPACE_COUNT } from './config/CachePanel'
 import SchemaPanel from './config/SchemaPanel'
+import StoragePanel from './config/StoragePanel'
 import { withLiveRowCounts } from './config/configSeed'
 import { QUEUE_DATA } from './queues/queueSeed'
 
-type PersistenceSubTab = 'overview' | 'queues' | 'cache' | 'schema'
+type PersistenceSubTab = 'overview' | 'queues' | 'cache' | 'schema' | 'storage'
 
 export default function PersistenceTab({
   rustfsHealth,
   onPingRustFS,
   users,
   orders,
+  objectCount,
 }: {
   rustfsHealth: RustfsHealth
   onPingRustFS: () => void
   users: UserRecord[]
   orders: OrderRecord[]
+  objectCount: number
 }) {
   const [tab, setTab] = useState<PersistenceSubTab>('overview')
 
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
 
-  const hasCards = tab !== 'queues' && tab !== 'cache'
+  const hasCards = tab !== 'queues' && tab !== 'cache' && tab !== 'storage'
 
   const schemaData = useMemo(
     () =>
@@ -51,6 +54,7 @@ export default function PersistenceTab({
                 ['queues', 'Task Queues'],
                 ['cache', 'KV Cache'],
                 ['schema', 'DB Schema'],
+                ['storage', 'Storage'],
               ] as [PersistenceSubTab, string][]
             ).map(([key, label]) => {
               const count =
@@ -60,7 +64,9 @@ export default function PersistenceTab({
                     ? QUEUE_DATA.summary.queueCount
                     : key === 'cache'
                       ? CACHE_NAMESPACE_COUNT
-                      : undefined
+                      : key === 'storage'
+                        ? objectCount
+                        : undefined
               return (
                 <button
                   key={key}
