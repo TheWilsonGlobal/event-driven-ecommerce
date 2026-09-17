@@ -5,6 +5,7 @@ import {
   HeadBucketCommand,
   GetObjectCommand,
   CreateBucketCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
@@ -63,15 +64,26 @@ export function loadStorageConfig(env: NodeJS.ProcessEnv = process.env): Storage
   }
 }
 
+export interface StorageObjectSummary {
+  key: string
+  sizeBytes: number
+  lastModified: string
+}
+
 export interface ObjectStorageClient {
   uploadObject(
     key: string,
     buffer: Buffer,
     contentType?: string
   ): Promise<{ url: string; key: string }>
-  getSignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>
+  getSignedDownloadUrl(
+    key: string,
+    expiresInSeconds?: number,
+    downloadFilename?: string
+  ): Promise<string>
   getObjectUrl(key: string): string
   deleteObject(key: string): Promise<boolean>
+  listObjects(prefix?: string): Promise<StorageObjectSummary[]>
   ensureBucket(): Promise<void>
   healthCheck(): Promise<{ healthy: boolean; latencyMs: number; endpoint: string }>
 }
@@ -134,9 +146,23 @@ export class RustFSStorageClient implements ObjectStorageClient {
     return { url, key }
   }
 
-  /** Generate a pre-signed GET URL valid for the given number of seconds (default 1 hour). */
-  async getSignedDownloadUrl(key: string, expiresInSeconds = 3600): Promise<string> {
-    const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: key })
+  /**
+   * Generate a pre-signed GET URL valid for the given number of seconds (default 1 hour).
+   * Passing `downloadFilename` sets Content-Disposition so the browser saves the file
+   * directly (via the S3 ResponseContentDisposition override) instead of opening it inline.
+   */
+  async getSignedDownloadUrl(
+    key: string,
+    expiresInSeconds = 3600,
+    downloadFilename?: string
+  ): Promise<string> {
+    const cmd = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ResponseContentDisposition: downloadFilename
+        ? `attachment; filename="${downloadFilename}"`
+        : undefined,
+    })
     return getSignedUrl(this.s3, cmd, { expiresIn: expiresInSeconds })
   }
 
@@ -149,6 +175,18 @@ export class RustFSStorageClient implements ObjectStorageClient {
   async deleteObject(key: string): Promise<boolean> {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }))
     return true
+  }
+
+  /** List objects in the bucket, optionally filtered by key prefix. */
+  async listObjects(prefix?: string): Promise<StorageObjectSummary[]> {
+    const result = await this.s3.send(
+      new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix })
+    )
+    return (result.Contents ?? []).map((obj) => ({
+      key: obj.Key ?? '',
+      sizeBytes: obj.Size ?? 0,
+      lastModified: (obj.LastModified ?? new Date()).toISOString(),
+    }))
   }
 
   /**

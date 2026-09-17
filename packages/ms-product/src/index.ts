@@ -153,6 +153,70 @@ async function bootstrap() {
     }
   )
 
+  // GET /api/v1/storage/objects  → list objects currently in the bucket
+  server.get(
+    '/api/v1/storage/objects',
+    {
+      schema: {
+        tags: ['storage'],
+        description: 'List objects currently stored in the RustFS bucket.',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              bucket: { type: 'string' },
+              objects: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    key: { type: 'string' },
+                    sizeBytes: { type: 'number' },
+                    lastModified: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async () => {
+      const objects = await rustfs.listObjects()
+      return { bucket: process.env.RUSTFS_BUCKET || 'ecommerce-uploads', objects }
+    }
+  )
+
+  // GET /api/v1/storage/download?key=... → redirect to a pre-signed RustFS GET URL
+  server.get<{ Querystring: { key?: string } }>(
+    '/api/v1/storage/download',
+    {
+      schema: {
+        tags: ['storage'],
+        description: 'Redirect to a pre-signed download URL for the given object key.',
+        querystring: {
+          type: 'object',
+          properties: { key: { type: 'string' } },
+          required: ['key'],
+        },
+      },
+    },
+    async (req, reply) => {
+      const key = req.query.key
+      if (!key) {
+        return reply.status(400).send({ error: 'Object key is required' })
+      }
+      try {
+        const filename = key.split('/').pop() ?? key
+        const url = await rustfs.getSignedDownloadUrl(key, 3600, filename)
+        return reply.redirect(url)
+      } catch (err) {
+        server.log.warn(`[RustFS] Could not sign download URL for ${key}: ${err}`)
+        return reply.status(404).send({ error: 'Object not found' })
+      }
+    }
+  )
+
   // ─── Products ─────────────────────────────────────────────────────────────
   server.get(
     '/api/v1/products',

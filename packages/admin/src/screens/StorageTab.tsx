@@ -1,90 +1,46 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { RustfsHealth } from '../types'
 import { StatCard, EmptyState } from '../components/ui'
 import { DownloadIcon } from '../components/icons'
 
 // RustFS is a real S3-compatible object store (docker-compose `rustfs`
-// service, bind-mounted at ./data/rustfs) and `rustfsHealth` above is a
-// genuine live probe against ms-product's /storage/health endpoint. The
-// bucket/object listing below is mock data shaped like a real
-// `ListObjectsV2` response — this admin has no live S3 SDK wired in (see
-// PersistenceTab.tsx's Object Storage card for the same real-probe +
-// mock-detail pattern).
+// service, bind-mounted at ./data/rustfs). `rustfsHealth` is a genuine live
+// probe against ms-product's /storage/health endpoint, and the object list
+// below is fetched live from ms-product's /storage/objects (a real
+// ListObjectsV2 call against the bucket) — download uses a pre-signed
+// RustFS GET URL via /storage/download, so both listing and download move
+// real bytes, not mock data.
+
+const PRODUCT_SERVICE_URL = 'http://localhost:3002'
 
 interface StorageObject {
   key: string
-  sizeKb: number
-  contentType: string
-  uploadedAt: string
+  sizeBytes: number
+  lastModified: string
 }
 
-const OBJECTS: StorageObject[] = [
-  {
-    key: 'products/aura-pro-headphones-01.jpg',
-    sizeKb: 214,
-    contentType: 'image/jpeg',
-    uploadedAt: '2026-09-12T09:14:00Z',
-  },
-  {
-    key: 'products/aura-pro-headphones-02.jpg',
-    sizeKb: 198,
-    contentType: 'image/jpeg',
-    uploadedAt: '2026-09-12T09:14:03Z',
-  },
-  {
-    key: 'products/nimbus-laptop-stand.png',
-    sizeKb: 342,
-    contentType: 'image/png',
-    uploadedAt: '2026-09-13T11:02:41Z',
-  },
-  {
-    key: 'products/pulse-smartwatch-series3.webp',
-    sizeKb: 176,
-    contentType: 'image/webp',
-    uploadedAt: '2026-09-14T15:47:12Z',
-  },
-  {
-    key: 'products/vr-flux-headset.jpg',
-    sizeKb: 288,
-    contentType: 'image/jpeg',
-    uploadedAt: '2026-09-15T08:23:55Z',
-  },
-  {
-    key: 'products/quantum-mechanical-keyboard.jpg',
-    sizeKb: 251,
-    contentType: 'image/jpeg',
-    uploadedAt: '2026-09-16T13:09:27Z',
-  },
-  {
-    key: 'uploads/tmp/8f2c1a90-receipt-preview.png',
-    sizeKb: 64,
-    contentType: 'image/png',
-    uploadedAt: '2026-09-17T07:41:18Z',
-  },
-]
-
-interface BucketSummary {
-  name: string
-  region: string
-  objectCount: number
-  totalSizeMb: number
-  createdAt: string
-  purpose: string
+function guessContentType(key: string): string {
+  const ext = key.split('.').pop()?.toLowerCase()
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'png':
+      return 'image/png'
+    case 'webp':
+      return 'image/webp'
+    case 'gif':
+      return 'image/gif'
+    case 'pdf':
+      return 'application/pdf'
+    default:
+      return 'application/octet-stream'
+  }
 }
 
-const BUCKETS: BucketSummary[] = [
-  {
-    name: 'ecommerce-uploads',
-    region: 'us-east-1',
-    objectCount: OBJECTS.length,
-    totalSizeMb: Math.round((OBJECTS.reduce((s, o) => s + o.sizeKb, 0) / 1024) * 100) / 100,
-    createdAt: '2026-08-21T00:00:00Z',
-    purpose: 'Product image uploads from the Catalog admin (ms-product /upload endpoint)',
-  },
-]
-
-function formatBytes(kb: number): string {
-  if (kb < 1024) return `${kb} KB`
+function formatBytes(bytes: number): string {
+  const kb = bytes / 1024
+  if (kb < 1024) return `${kb.toFixed(0)} KB`
   return `${(kb / 1024).toFixed(2)} MB`
 }
 
@@ -92,25 +48,9 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
-/** This admin has no live S3 GetObject wired in — the download hands out
- *  a text stub describing the object's metadata instead of real bytes. */
-function download(obj: StorageObject) {
-  const body = [
-    `Object Key: ${obj.key}`,
-    `Content-Type: ${obj.contentType}`,
-    `Size: ${obj.sizeKb} KB`,
-    `Uploaded: ${obj.uploadedAt}`,
-    `Bucket: ecommerce-uploads`,
-  ].join('\n')
-  const blob = new Blob([body], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = obj.key.split('/').pop() ?? obj.key
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+function download(key: string) {
+  const url = `${PRODUCT_SERVICE_URL}/api/v1/storage/download?key=${encodeURIComponent(key)}`
+  window.location.href = url
 }
 
 export default function StorageTab({
@@ -121,9 +61,33 @@ export default function StorageTab({
   onPingRustFS: () => void
 }) {
   const [filter, setFilter] = useState('')
+  const [allObjects, setAllObjects] = useState<StorageObject[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+
+  const loadObjects = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setAllObjects(data.objects ?? [])
+      setLoadError(false)
+    } catch {
+      setLoadError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadObjects()
+  }, [loadObjects])
 
   const q = filter.trim().toLowerCase()
-  const objects = q ? OBJECTS.filter((o) => o.key.toLowerCase().includes(q)) : OBJECTS
+  const objects = q ? allObjects.filter((o) => o.key.toLowerCase().includes(q)) : allObjects
+  const totalSizeMb =
+    Math.round((allObjects.reduce((s, o) => s + o.sizeBytes, 0) / 1024 / 1024) * 100) / 100
 
   return (
     <>
@@ -137,7 +101,13 @@ export default function StorageTab({
           </div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-primary" onClick={onPingRustFS}>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              onPingRustFS()
+              loadObjects()
+            }}
+          >
             Probe RustFS ↻
           </button>
         </div>
@@ -219,18 +189,14 @@ export default function StorageTab({
           </h3>
           <div className="panel-row" style={{ marginBottom: 8 }}>
             <span className="cell-muted" style={{ fontSize: 11 }}>
-              {BUCKETS[0].purpose}
+              Product image uploads from the Catalog admin (ms-product /upload endpoint)
             </span>
           </div>
           <div className="stats-grid" style={{ marginBottom: 0 }}>
-            <StatCard label="Objects" value={BUCKETS[0].objectCount} tone="blue" />
-            <StatCard label="Total Size" value={`${BUCKETS[0].totalSizeMb} MB`} tone="purple" />
-            <StatCard label="Region" value={BUCKETS[0].region} tone="green" />
-            <StatCard
-              label="Created"
-              value={formatDate(BUCKETS[0].createdAt).split(',')[0]}
-              tone="yellow"
-            />
+            <StatCard label="Objects" value={allObjects.length} tone="blue" />
+            <StatCard label="Total Size" value={`${totalSizeMb} MB`} tone="purple" />
+            <StatCard label="Region" value="us-east-1" tone="green" />
+            <StatCard label="Listing" value={loadError ? 'Failed' : 'Live'} tone="yellow" />
           </div>
         </div>
       </div>
@@ -249,8 +215,18 @@ export default function StorageTab({
         </div>
       </div>
 
-      {objects.length === 0 ? (
-        <EmptyState message={`No objects match "${filter}"`} />
+      {loading ? (
+        <EmptyState message="Loading objects from RustFS…" />
+      ) : loadError ? (
+        <EmptyState message="Could not reach ms-product to list objects. Is it running?" />
+      ) : objects.length === 0 ? (
+        <EmptyState
+          message={
+            q
+              ? `No objects match "${filter}"`
+              : 'Bucket is empty — upload a product image to see it here.'
+          }
+        />
       ) : (
         <div className="table-wrapper">
           <table>
@@ -267,11 +243,11 @@ export default function StorageTab({
               {objects.map((o) => (
                 <tr key={o.key}>
                   <td className="mono">{o.key}</td>
-                  <td className="mono cell-muted">{o.contentType}</td>
-                  <td className="mono cell-right">{formatBytes(o.sizeKb)}</td>
-                  <td className="cell-muted">{formatDate(o.uploadedAt)}</td>
+                  <td className="mono cell-muted">{guessContentType(o.key)}</td>
+                  <td className="mono cell-right">{formatBytes(o.sizeBytes)}</td>
+                  <td className="cell-muted">{formatDate(o.lastModified)}</td>
                   <td className="cell-right">
-                    <button className="btn btn-ghost btn-sm" onClick={() => download(o)}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => download(o.key)}>
                       <DownloadIcon style={{ width: 12, height: 12 }} /> Download
                     </button>
                   </td>
