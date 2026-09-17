@@ -1,13 +1,24 @@
 import { useState } from 'react'
+import type { ServiceItem } from '../types'
 import { ConfigCard, ReadOnlyRow, type OpenSignal } from './config/parts'
-import SchemaPanel from './config/SchemaPanel'
 import ApiPanel from './config/ApiPanel'
 import SystemLogsPanel from './config/SystemLogsPanel'
-import { SCHEMA_DATA, API_ENDPOINT_DATA, LOG_FILES } from './config/configSeed'
+import ServicesPanel from './config/ServicesPanel'
+import { API_ENDPOINT_DATA, LOG_FILES } from './config/configSeed'
 
-type ConfigSubTab = 'general' | 'schema' | 'api' | 'logs'
+type ConfigSubTab = 'general' | 'services' | 'api' | 'logs'
 
-export default function ConfigTab() {
+export default function ConfigTab({
+  services,
+  lastScanned,
+  onSelectService,
+  onRefreshServices,
+}: {
+  services: ServiceItem[]
+  lastScanned: string
+  onSelectService: (svc: ServiceItem) => void
+  onRefreshServices: () => void
+}) {
   const [tab, setTab] = useState<ConfigSubTab>('general')
 
   // Broadcast to every ConfigCard on the active tab. The nonce is what the
@@ -16,9 +27,9 @@ export default function ConfigTab() {
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
 
-  // The logs tab owns a plain table, not collapsible cards, so the
-  // expand/collapse pair would be inert there.
-  const hasCards = tab !== 'logs'
+  // The logs and services tabs own a plain table, not collapsible cards, so
+  // the expand/collapse pair would be inert there.
+  const hasCards = tab !== 'logs' && tab !== 'services'
 
   return (
     <>
@@ -28,14 +39,14 @@ export default function ConfigTab() {
             {(
               [
                 ['general', 'General'],
-                ['schema', 'DB Schema'],
+                ['services', 'Services'],
                 ['api', 'API Endpoints'],
                 ['logs', 'System Logs'],
               ] as [ConfigSubTab, string][]
             ).map(([key, label]) => {
               const count =
-                key === 'schema'
-                  ? SCHEMA_DATA.summary.tableCount
+                key === 'services'
+                  ? services.length
                   : key === 'api'
                     ? API_ENDPOINT_DATA.summary.endpointCount
                     : key === 'logs'
@@ -140,7 +151,14 @@ export default function ConfigTab() {
         </>
       )}
 
-      {tab === 'schema' && <SchemaPanel schema={SCHEMA_DATA} openSignal={openSignal} />}
+      {tab === 'services' && (
+        <ServicesPanel
+          services={services}
+          lastScanned={lastScanned}
+          onSelectService={onSelectService}
+          onRefresh={onRefreshServices}
+        />
+      )}
       {tab === 'api' && <ApiPanel data={API_ENDPOINT_DATA} openSignal={openSignal} />}
       {tab === 'logs' && <SystemLogsPanel files={LOG_FILES} />}
     </>

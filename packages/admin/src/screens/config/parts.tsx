@@ -86,3 +86,32 @@ export function ReadOnlyRow({ label, value }: { label: string; value: unknown })
     </div>
   )
 }
+
+/**
+ * Several short label/value pairs packed onto one row instead of one row
+ * each — for compact facts like Driver/Image/DB Index that don't need a
+ * full-width row of their own.
+ */
+export function MultiFieldRow({ fields }: { fields: { label: string; value: ReactNode }[] }) {
+  return (
+    <div className="config-row">
+      <span />
+      <span
+        className="v"
+        style={{ display: 'flex', gap: 24, justifyContent: 'flex-end', flexWrap: 'wrap' }}
+      >
+        {fields.map((f) => (
+          <span key={f.label} style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
+            <span
+              className="k"
+              style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}
+            >
+              {f.label}
+            </span>
+            <span className="mono">{f.value}</span>
+          </span>
+        ))}
+      </span>
+    </div>
+  )
+}

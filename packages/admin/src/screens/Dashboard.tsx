@@ -67,7 +67,7 @@ export default function Dashboard({
         <div className="panel">
           <h3>
             <span>Microservices Perimeter</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('services')}>
+            <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('config')}>
               View All &rarr;
             </button>
           </h3>

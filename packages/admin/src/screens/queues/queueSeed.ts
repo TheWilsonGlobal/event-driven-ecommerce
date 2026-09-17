@@ -6,8 +6,8 @@
 // actually constructed yet. There are no real queue names to mirror, so these
 // follow the order-expiration / saga-retry domain language already used in
 // ConfigTab.tsx's "Order Expiration Timeout" and "Saga Max Retries" cards, and
-// the "KV Cache & Queues" panel in PersistenceTab.tsx (BullMQ over Redis,
-// 10 worker concurrency).
+// the "KV Cache & Queues" panel in config/PersistencePanel.tsx (BullMQ over
+// Redis, 10 worker concurrency).
 
 import type { QueueData, QueueInfo } from './queueTypes'
 

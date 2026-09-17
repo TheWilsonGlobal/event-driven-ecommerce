@@ -1,12 +1,9 @@
-import { useState } from 'react'
-import { StatCard } from '../components/ui'
-
-// Static snapshot shaped like a real `INFO` command response + key-namespace
-// breakdown. This admin has no live ioredis connection (see PersistenceTab.tsx
-// and ConfigTab.tsx's KV Cache / Async Task Queues cards) — the values below
-// are realistic mock numbers consistent with the docker-compose `redis`
-// service (redis:7-alpine, port 6379) and the BullMQ queues on the Task
-// Queues tab.
+// Static snapshot shaped like a real key-namespace breakdown. This admin has
+// no live ioredis connection — connection details and live INFO-style stats
+// now live in Configuration -> Persistence's "KV Cache & Queues" card; this
+// screen keeps only the namespace inventory. The values below are realistic
+// mock numbers consistent with the docker-compose `redis` service
+// (redis:7-alpine, port 6379) and the BullMQ queues on the Task Queues tab.
 
 interface RedisNamespace {
   prefix: string
@@ -52,31 +49,9 @@ const NAMESPACES: RedisNamespace[] = [
   },
 ]
 
-interface RedisStats {
-  usedMemoryMb: number
-  peakMemoryMb: number
-  connectedClients: number
-  opsPerSec: number
-  uptimeHours: number
-  totalKeys: number
-  hitRate: number
-}
-
-function randomStats(): RedisStats {
-  return {
-    usedMemoryMb: Math.round((38 + Math.random() * 6) * 10) / 10,
-    peakMemoryMb: Math.round((52 + Math.random() * 4) * 10) / 10,
-    connectedClients: 6 + Math.floor(Math.random() * 4),
-    opsPerSec: 180 + Math.floor(Math.random() * 90),
-    uptimeHours: 71,
-    totalKeys: NAMESPACES.reduce((sum, n) => sum + n.approxKeyCount, 0),
-    hitRate: Math.round((91 + Math.random() * 5) * 10) / 10,
-  }
-}
+const TOTAL_KEYS = NAMESPACES.reduce((sum, n) => sum + n.approxKeyCount, 0)
 
 export default function RedisCacheTab() {
-  const [stats, setStats] = useState<RedisStats>(randomStats)
-
   return (
     <>
       <div className="page-header">
@@ -85,61 +60,8 @@ export default function RedisCacheTab() {
             Cache <span className="tag">Redis</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
-            Redis 7 instance backing BullMQ queues and cache-aside product reads.
-          </div>
-        </div>
-        <div className="header-actions">
-          <button className="btn btn-primary" onClick={() => setStats(randomStats())}>
-            Probe Redis ↻
-          </button>
-        </div>
-      </div>
-
-      <div
-        className="panel-grid"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}
-      >
-        {/* Connection Info */}
-        <div className="panel">
-          <h3>
-            <span>Connection</span>
-            <span className="chip chip-green">✓ Connected</span>
-          </h3>
-          <div className="panel-row">
-            <span className="k">Driver</span>
-            <span className="v mono">ioredis (BullMQ client)</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Host</span>
-            <span className="v mono">localhost</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Port</span>
-            <span className="v mono">6379</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Image</span>
-            <span className="v mono">redis:7-alpine</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">DB Index</span>
-            <span className="v mono">0</span>
-          </div>
-        </div>
-
-        {/* INFO-style stats */}
-        <div className="panel" style={{ gridColumn: 'span 2' }}>
-          <h3>
-            <span>Server Info</span>
-            <span className="chip chip-purple">INFO</span>
-          </h3>
-          <div className="stats-grid" style={{ marginBottom: 0 }}>
-            <StatCard label="Used Memory" value={`${stats.usedMemoryMb} MB`} tone="blue" />
-            <StatCard label="Peak Memory" value={`${stats.peakMemoryMb} MB`} tone="purple" />
-            <StatCard label="Connected Clients" value={stats.connectedClients} tone="green" />
-            <StatCard label="Ops / sec" value={stats.opsPerSec} tone="yellow" />
-            <StatCard label="Uptime" value={`${stats.uptimeHours}h`} tone="blue" />
-            <StatCard label="Keyspace Hit Rate" value={`${stats.hitRate}%`} tone="green" />
+            Redis 7 instance backing BullMQ queues and cache-aside product reads. Connection and
+            server stats live in Configuration &rarr; Persistence.
           </div>
         </div>
       </div>
@@ -173,7 +95,7 @@ export default function RedisCacheTab() {
                 className="mono cell-right"
                 style={{ fontWeight: 700, color: 'var(--text-bright)' }}
               >
-                {stats.totalKeys.toLocaleString()}
+                {TOTAL_KEYS.toLocaleString()}
               </td>
             </tr>
           </tbody>

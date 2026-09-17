@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { RustfsHealth } from '../types'
-import { StatCard, EmptyState } from '../components/ui'
+import { EmptyState } from '../components/ui'
 import { DownloadIcon } from '../components/icons'
 
 // RustFS is a real S3-compatible object store (docker-compose `rustfs`
-// service, bind-mounted at ./data/rustfs). `rustfsHealth` is a genuine live
-// probe against ms-product's /storage/health endpoint, and the object list
-// below is fetched live from ms-product's /storage/objects (a real
-// ListObjectsV2 call against the bucket) — download uses a pre-signed
-// RustFS GET URL via /storage/download, so both listing and download move
-// real bytes, not mock data.
+// service, bind-mounted at ./data/rustfs). The object list below is fetched
+// live from ms-product's /storage/objects (a real ListObjectsV2 call against
+// the bucket) — download uses a pre-signed RustFS GET URL via
+// /storage/download, so both listing and download move real bytes, not mock
+// data. Connection health, bind-mount info and bucket summary now live in
+// Configuration -> Persistence's "Object Storage (S3-API)" card.
 
 const PRODUCT_SERVICE_URL = 'http://localhost:3002'
 
@@ -53,13 +52,7 @@ function download(key: string) {
   window.location.href = url
 }
 
-export default function StorageTab({
-  rustfsHealth,
-  onPingRustFS,
-}: {
-  rustfsHealth: RustfsHealth
-  onPingRustFS: () => void
-}) {
+export default function StorageTab() {
   const [filter, setFilter] = useState('')
   const [allObjects, setAllObjects] = useState<StorageObject[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,8 +79,6 @@ export default function StorageTab({
 
   const q = filter.trim().toLowerCase()
   const objects = q ? allObjects.filter((o) => o.key.toLowerCase().includes(q)) : allObjects
-  const totalSizeMb =
-    Math.round((allObjects.reduce((s, o) => s + o.sizeBytes, 0) / 1024 / 1024) * 100) / 100
 
   return (
     <>
@@ -97,107 +88,14 @@ export default function StorageTab({
             Storage <span className="tag">RustFS</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
-            S3-compatible object storage backing product image uploads.
+            S3-compatible object storage backing product image uploads. Connection, bind-mount and
+            bucket summary live in Configuration &rarr; Persistence.
           </div>
         </div>
         <div className="header-actions">
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              onPingRustFS()
-              loadObjects()
-            }}
-          >
-            Probe RustFS ↻
+          <button className="btn btn-primary" onClick={loadObjects}>
+            Reload Objects ↻
           </button>
-        </div>
-      </div>
-
-      <div
-        className="panel-grid"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}
-      >
-        {/* Connection Info */}
-        <div
-          className="panel"
-          style={{ borderColor: rustfsHealth.healthy ? 'var(--green-border)' : 'var(--border)' }}
-        >
-          <h3>
-            <span>Connection</span>
-            <span className={`chip ${rustfsHealth.healthy ? 'chip-green' : 'chip-red'}`}>
-              {rustfsHealth.healthy === null
-                ? 'Probing…'
-                : rustfsHealth.healthy
-                  ? '✓ Online'
-                  : '✗ Offline'}
-            </span>
-          </h3>
-          <div className="panel-row">
-            <span className="k">Provider</span>
-            <span className="v mono">RustFS (S3-Compatible)</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Image</span>
-            <span className="v mono">rustfs/rustfs:latest</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">S3 API Port</span>
-            <span className="v mono">9000</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Console Port</span>
-            <span className="v mono">9001</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Latency</span>
-            <span
-              className="v mono"
-              style={{ color: rustfsHealth.healthy ? 'var(--green-light)' : 'var(--red-light)' }}
-            >
-              {rustfsHealth.latencyMs > 0 ? `${rustfsHealth.latencyMs} ms` : '—'}
-            </span>
-          </div>
-        </div>
-
-        {/* Bind mount info */}
-        <div className="panel">
-          <h3>
-            <span>Bind Mount</span>
-            <span className="chip chip-slate">Host Volume</span>
-          </h3>
-          <div className="panel-row">
-            <span className="k">Host Path</span>
-            <span className="v mono" style={{ fontSize: 10 }}>
-              ./data/rustfs
-            </span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Container Path</span>
-            <span className="v mono">/data</span>
-          </div>
-          <div className="panel-row">
-            <span className="k">Mount Type</span>
-            <span className="v mono">bind</span>
-          </div>
-        </div>
-
-        {/* Bucket summary */}
-        <div className="panel" style={{ gridColumn: 'span 2' }}>
-          <h3>
-            <span>Bucket</span>
-            <span className="chip chip-purple mono">{rustfsHealth.bucket}</span>
-          </h3>
-          <div className="panel-row" style={{ marginBottom: 8 }}>
-            <span className="cell-muted" style={{ fontSize: 11 }}>
-              Product image uploads from the Catalog admin (ms-product /upload endpoint)
-            </span>
-          </div>
-          <div className="stats-grid" style={{ marginBottom: 0 }}>
-            <StatCard label="Objects" value={allObjects.length} tone="blue" />
-            <StatCard label="Total Size" value={`${totalSizeMb} MB`} tone="purple" />
-            <StatCard label="Region" value="us-east-1" tone="green" />
-            <StatCard label="Listing" value={loadError ? 'Failed' : 'Live'} tone="yellow" />
-          </div>
         </div>
       </div>
 

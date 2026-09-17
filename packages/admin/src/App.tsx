@@ -6,28 +6,26 @@ import type { Tab } from './types'
 import {
   ChevronIcon,
   DashboardIcon,
-  ServicesIcon,
   ProductsIcon,
   OrdersIcon,
   UsersIcon,
-  PersistenceIcon,
   QueueIcon,
   CacheIcon,
   StorageIcon,
+  PersistenceIcon,
   ConfigIcon,
   ExternalLinkIcon,
 } from './components/icons'
 
 // Screens
 import Dashboard from './screens/Dashboard'
-import ServicesTab from './screens/ServicesTab'
 import ProductsTab from './screens/ProductsTab'
 import OrdersTab from './screens/OrdersTab'
 import UsersTab from './screens/UsersTab'
-import PersistenceTab from './screens/PersistenceTab'
 import TaskQueuesTab from './screens/TaskQueuesTab'
 import RedisCacheTab from './screens/RedisCacheTab'
 import StorageTab from './screens/StorageTab'
+import PersistenceTab from './screens/PersistenceTab'
 import ConfigTab from './screens/ConfigTab'
 
 // Modals
@@ -47,10 +45,7 @@ export default function App() {
   const app = useAdminApp()
   const data = useEcommerceData(app.autoPolling, app.showToast)
 
-  const OPERATIONS: NavEntry[] = [
-    { key: 'dashboard', label: 'Dashboard', Icon: DashboardIcon },
-    { key: 'services', label: 'Services', Icon: ServicesIcon, count: data.services.length },
-  ]
+  const OPERATIONS: NavEntry[] = [{ key: 'dashboard', label: 'Dashboard', Icon: DashboardIcon }]
 
   const CATALOG_SAGAS: NavEntry[] = [
     { key: 'products', label: 'Products', Icon: ProductsIcon, count: data.products.length },
@@ -61,13 +56,14 @@ export default function App() {
     { key: 'users', label: 'Users & Roles', Icon: UsersIcon, count: data.users.length },
   ]
 
-  const SYSTEM: NavEntry[] = [
+  const PERSISTENCE: NavEntry[] = [
     { key: 'persistence', label: 'Persistence', Icon: PersistenceIcon },
     { key: 'task-queues', label: 'Task Queues', Icon: QueueIcon },
     { key: 'redis-cache', label: 'Cache (Redis)', Icon: CacheIcon },
     { key: 'storage', label: 'Storage (RustFS)', Icon: StorageIcon },
-    { key: 'config', label: 'Configuration', Icon: ConfigIcon },
   ]
+
+  const SYSTEM: NavEntry[] = [{ key: 'config', label: 'Configuration', Icon: ConfigIcon }]
 
   const renderNavItem = ({ key, label, Icon, count }: NavEntry) => (
     <button
@@ -120,7 +116,10 @@ export default function App() {
           <div className="nav-section">Access & Roles</div>
           {ACCESS.map(renderNavItem)}
 
-          <div className="nav-section">System & Storage</div>
+          <div className="nav-section">Persistence</div>
+          {PERSISTENCE.map(renderNavItem)}
+
+          <div className="nav-section">System</div>
           {SYSTEM.map(renderNavItem)}
         </nav>
 
@@ -163,15 +162,6 @@ export default function App() {
             rustfsHealth={data.rustfsHealth}
             onNavigate={app.setTab}
             onSelectOrder={data.setSelectedOrder}
-          />
-        )}
-
-        {app.tab === 'services' && (
-          <ServicesTab
-            services={data.services}
-            lastScanned={data.lastScanned}
-            onSelectService={data.setSelectedService}
-            onRefresh={data.pingServices}
           />
         )}
 
@@ -227,19 +217,24 @@ export default function App() {
           />
         )}
 
-        {app.tab === 'persistence' && (
-          <PersistenceTab rustfsHealth={data.rustfsHealth} onPingRustFS={data.pingRustFS} />
-        )}
-
         {app.tab === 'task-queues' && <TaskQueuesTab />}
 
         {app.tab === 'redis-cache' && <RedisCacheTab />}
 
-        {app.tab === 'storage' && (
-          <StorageTab rustfsHealth={data.rustfsHealth} onPingRustFS={data.pingRustFS} />
+        {app.tab === 'storage' && <StorageTab />}
+
+        {app.tab === 'persistence' && (
+          <PersistenceTab rustfsHealth={data.rustfsHealth} onPingRustFS={data.pingRustFS} />
         )}
 
-        {app.tab === 'config' && <ConfigTab />}
+        {app.tab === 'config' && (
+          <ConfigTab
+            services={data.services}
+            lastScanned={data.lastScanned}
+            onSelectService={data.setSelectedService}
+            onRefreshServices={data.pingServices}
+          />
+        )}
       </main>
 
       {/* Modals */}

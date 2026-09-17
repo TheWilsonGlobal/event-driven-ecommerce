@@ -267,6 +267,9 @@ tbody tr:nth-child(even) td {
 .cell-right {
   text-align: right;
 }
+.cell-center {
+  text-align: center;
+}
 
 /* ── Status Badges & Chips ────────────────────────────────────────────── */
 .status {
