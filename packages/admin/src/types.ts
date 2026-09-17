@@ -4,7 +4,6 @@ export type Tab =
   | 'orders'
   | 'users'
   | 'task-queues'
-  | 'redis-cache'
   | 'storage'
   | 'persistence'
   | 'config'

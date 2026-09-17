@@ -3,11 +3,12 @@ import type { RustfsHealth } from '../types'
 import { type OpenSignal } from './config/parts'
 import PersistencePanel from './config/PersistencePanel'
 import TaskQueuesPanel from './config/TaskQueuesPanel'
+import CachePanel from './config/CachePanel'
 import SchemaPanel from './config/SchemaPanel'
 import { SCHEMA_DATA } from './config/configSeed'
 import { QUEUE_DATA } from './queues/queueSeed'
 
-type PersistenceSubTab = 'overview' | 'queues' | 'schema'
+type PersistenceSubTab = 'overview' | 'queues' | 'cache' | 'schema'
 
 export default function PersistenceTab({
   rustfsHealth,
@@ -21,7 +22,7 @@ export default function PersistenceTab({
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
 
-  const hasCards = tab !== 'queues'
+  const hasCards = tab !== 'queues' && tab !== 'cache'
 
   return (
     <>
@@ -32,6 +33,7 @@ export default function PersistenceTab({
               [
                 ['overview', 'Overview'],
                 ['queues', 'Task Queues'],
+                ['cache', 'Cache'],
                 ['schema', 'DB Schema'],
               ] as [PersistenceSubTab, string][]
             ).map(([key, label]) => {
@@ -79,6 +81,7 @@ export default function PersistenceTab({
         />
       )}
       {tab === 'queues' && <TaskQueuesPanel data={QUEUE_DATA} />}
+      {tab === 'cache' && <CachePanel />}
       {tab === 'schema' && <SchemaPanel schema={SCHEMA_DATA} openSignal={openSignal} />}
     </>
   )

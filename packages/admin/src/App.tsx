@@ -10,7 +10,6 @@ import {
   OrdersIcon,
   UsersIcon,
   QueueIcon,
-  CacheIcon,
   StorageIcon,
   PersistenceIcon,
   ConfigIcon,
@@ -23,7 +22,6 @@ import ProductsTab from './screens/ProductsTab'
 import OrdersTab from './screens/OrdersTab'
 import UsersTab from './screens/UsersTab'
 import TaskQueuesTab from './screens/TaskQueuesTab'
-import RedisCacheTab from './screens/RedisCacheTab'
 import StorageTab from './screens/StorageTab'
 import PersistenceTab from './screens/PersistenceTab'
 import ConfigTab from './screens/ConfigTab'
@@ -59,7 +57,6 @@ export default function App() {
   const PERSISTENCE: NavEntry[] = [
     { key: 'persistence', label: 'Persistence', Icon: PersistenceIcon },
     { key: 'task-queues', label: 'Task Queues', Icon: QueueIcon },
-    { key: 'redis-cache', label: 'Cache (Redis)', Icon: CacheIcon },
     { key: 'storage', label: 'Storage (RustFS)', Icon: StorageIcon },
   ]
 
@@ -218,8 +215,6 @@ export default function App() {
         )}
 
         {app.tab === 'task-queues' && <TaskQueuesTab />}
-
-        {app.tab === 'redis-cache' && <RedisCacheTab />}
 
         {app.tab === 'storage' && <StorageTab />}
 
