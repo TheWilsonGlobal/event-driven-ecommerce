@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { QueueManager, RedisUnavailableError, toRedisUnavailable } from './queueManager'
 import { getCacheNamespaceData } from './cacheNamespaces'
+import { getCacheKeyData, MAX_KEYS_RETURNED } from './cacheKeys'
 import { JOB_STATES } from './definitions'
 
 /**
@@ -49,6 +50,46 @@ const serviceUnavailableSchema = {
     timestamp: { type: 'string', format: 'date-time' },
   },
   required: ['error', 'reason', 'message', 'timestamp'],
+} as const
+
+const cacheKeysQuerystringSchema = {
+  type: 'object',
+  properties: {
+    pattern: {
+      type: 'string',
+      maxLength: 200,
+      default: '*',
+      description: 'Redis glob passed to SCAN MATCH (e.g. "bull:order-expiration:*").',
+    },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: MAX_KEYS_RETURNED,
+      default: MAX_KEYS_RETURNED,
+    },
+  },
+  additionalProperties: false,
+} as const
+
+const cacheKeySchema = {
+  type: 'object',
+  properties: {
+    key: { type: 'string' },
+    type: { type: 'string' },
+    ttlSeconds: {
+      type: 'number',
+      description: 'Seconds to expiry; -1 = no expiry, -2 = key absent.',
+    },
+    // MUST stay ['number', 'null']. Under a plain { type: 'number' } Fastify's
+    // serializer coerces null to 0, which renders in the admin as a measured
+    // "0 B" for a key whose size could not be read — a fabricated number, which
+    // is the exact defect these endpoints exist to eliminate.
+    sizeBytes: {
+      type: ['number', 'null'],
+      description: 'Approximate bytes (MEMORY USAGE, sampled). null = not measurable.',
+    },
+  },
+  required: ['key', 'type', 'ttlSeconds', 'sizeBytes'],
 } as const
 
 function sendUnavailable(reply: FastifyReply, err: RedisUnavailableError): FastifyReply {
@@ -184,6 +225,52 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
 
       try {
         return await getCacheNamespaceData(queueManager.scanClient)
+      } catch (err) {
+        return sendUnavailable(reply, toRedisUnavailable(err))
+      }
+    }
+  )
+
+  server.get(
+    '/api/v1/cache/keys',
+    {
+      schema: {
+        tags: ['cache'],
+        description:
+          'Individual Redis keys with type, TTL and approximate size, gathered with SCAN ' +
+          '(never KEYS) plus a pipelined TYPE/TTL/MEMORY USAGE per key. Sizes are sampled, ' +
+          'so `sizeApproximate` is true whenever any size was measured; `sizeBytes` is null ' +
+          'for a key whose size could not be read. Returns 503 when Redis is unreachable.',
+        querystring: cacheKeysQuerystringSchema,
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              keys: { type: 'array', items: cacheKeySchema },
+              totalKeys: { type: 'number' },
+              truncated: {
+                type: 'boolean',
+                description: 'True when more keys exist than were returned.',
+              },
+              sizeApproximate: { type: 'boolean' },
+              scannedAt: { type: 'string', format: 'date-time' },
+            },
+            required: ['keys', 'totalKeys', 'truncated', 'sizeApproximate', 'scannedAt'],
+          },
+          503: serviceUnavailableSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const unavailable = await queueManager.checkRedis()
+      if (unavailable) {
+        return sendUnavailable(reply, unavailable)
+      }
+
+      const { pattern, limit } = request.query as { pattern?: string; limit?: number }
+
+      try {
+        return await getCacheKeyData(queueManager.scanClient, { pattern, limit })
       } catch (err) {
         return sendUnavailable(reply, toRedisUnavailable(err))
       }

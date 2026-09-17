@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { QueueData } from '../screens/queues/queueTypes'
-import type { CacheData } from '../screens/config/cacheTypes'
+import type { CacheData, CacheKeysData } from '../screens/config/cacheTypes'
 import { ORDER_SERVICE_URL } from '../data/serviceUrls'
 
 // Live queue + KV-cache introspection, served by ms-order directly (the API
@@ -149,6 +149,11 @@ export function useQueueData(): LiveResource<QueueData> {
 /** GET /api/v1/cache/namespaces — live Redis key-namespace scan. */
 export function useCacheNamespaces(): LiveResource<CacheData> {
   return useLiveResource<CacheData>(`${ORDER_SERVICE_URL}/api/v1/cache/namespaces`)
+}
+
+/** GET /api/v1/cache/keys — live listing of individual Redis keys. */
+export function useCacheKeys(): LiveResource<CacheKeysData> {
+  return useLiveResource<CacheKeysData>(`${ORDER_SERVICE_URL}/api/v1/cache/keys`)
 }
 
 /** Short operator-facing label for the failure, used in banners. */

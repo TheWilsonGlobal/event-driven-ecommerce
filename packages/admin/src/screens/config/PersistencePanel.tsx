@@ -88,10 +88,17 @@ export default function PersistencePanel({
         title={
           <>
             <span>KV Cache</span>
-            <span className="chip chip-purple">Redis 7 / RocksDB</span>
+            <span className="chip chip-purple">Redis 7</span>
           </>
         }
       >
+        {/* KV_CACHE_DRIVER accepts "rocksdb"/"embedded" and .env documents a
+            ./data/rocksdb path, but no fallback is wired up: ms-order's queue
+            code (src/queues/redisConnection.ts) talks to ioredis directly and
+            never calls createKeyValueStore() from @ecommerce/shared-database.
+            That adapter is also an in-memory Map with no scan(), and BullMQ
+            needs real Redis (Lua, sorted sets, blocking ops) regardless — so
+            claiming a fallback here would misreport what the system can do. */}
         <ReadOnlyRow label="Active Driver" value="redis (KV_CACHE_DRIVER)" />
         <ReadOnlyRow label="Redis Host" value="localhost:6379" />
         <ReadOnlyRow label="Client" value="ioredis" />
@@ -99,7 +106,7 @@ export default function PersistencePanel({
           fields={[
             { label: 'Image', value: 'redis:7-alpine' },
             { label: 'DB Index', value: '0' },
-            { label: 'Fallback', value: 'rocksdb → ./data/rocksdb' },
+            { label: 'Fallback', value: 'none — Redis required' },
           ]}
         />
 

@@ -3,6 +3,8 @@ export type { QueueDataView, QueueInfoView, RecentJobView } from './queueManager
 export { registerQueueRoutes } from './routes'
 export { getCacheNamespaceData } from './cacheNamespaces'
 export type { CacheNamespaceData, CacheNamespaceView } from './cacheNamespaces'
+export { getCacheKeyData, MAX_KEYS_RETURNED } from './cacheKeys'
+export type { CacheKeysData, CacheKeyView, CacheKeyType } from './cacheKeys'
 export {
   QUEUE_DEFINITIONS,
   CACHE_NAMESPACES,

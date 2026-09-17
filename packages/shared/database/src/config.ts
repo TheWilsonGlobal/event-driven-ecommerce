@@ -43,9 +43,28 @@ export interface DatabaseConfiguration {
       dataPath: string
     }
     embedded: {
+      dataPath: string
       inMemory: boolean
     }
   }
+}
+
+const KEY_VALUE_DRIVERS: readonly KeyValueDriver[] = ['redis', 'rocksdb', 'embedded'] as const
+
+/**
+ * Narrows KV_CACHE_DRIVER to a real driver.
+ *
+ * A bare `as KeyValueDriver` cast would let KV_CACHE_DRIVER=garbage produce a
+ * value typed as a driver that is not one, which then silently takes whichever
+ * branch happens to be last. An unrecognised value falls back to the
+ * mode-derived default instead.
+ */
+function parseKeyValueDriver(raw: string | undefined, fallback: KeyValueDriver): KeyValueDriver {
+  const value = raw?.toLowerCase()
+  if (!value) return fallback
+  return (KEY_VALUE_DRIVERS as readonly string[]).includes(value)
+    ? (value as KeyValueDriver)
+    : fallback
 }
 
 export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): DatabaseConfiguration {
@@ -59,9 +78,10 @@ export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): Databa
     (env.DOCUMENT_DB_DRIVER?.toLowerCase() as DocumentDriver) ??
     (mode === 'embedded' ? 'nedb' : 'mongodb')
 
-  const kvDriver: KeyValueDriver =
-    (env.KV_CACHE_DRIVER?.toLowerCase() as KeyValueDriver) ??
-    (mode === 'embedded' ? 'rocksdb' : 'redis')
+  const kvDriver: KeyValueDriver = parseKeyValueDriver(
+    env.KV_CACHE_DRIVER,
+    mode === 'embedded' ? 'rocksdb' : 'redis'
+  )
 
   const pgHost = env.DB_HOST ?? 'localhost'
   const pgPort = parseInt(env.DB_PORT ?? '5432', 10)
@@ -114,7 +134,13 @@ export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): Databa
         dataPath: env.ROCKSDB_DATA_PATH ?? './data/rocksdb',
       },
       embedded: {
-        inMemory: env.EMBEDDED_KV_IN_MEMORY !== 'false',
+        // EMBEDDED_KV_DATA_PATH is the honest name; ROCKSDB_DATA_PATH is kept
+        // as a fallback because .env already documents it.
+        dataPath: env.EMBEDDED_KV_DATA_PATH ?? env.ROCKSDB_DATA_PATH ?? './data/rocksdb',
+        // Opt-in, matching document.nedb.inMemory. An absent variable means
+        // "persist", which is the safer default for a store that is meant to
+        // survive restarts.
+        inMemory: env.EMBEDDED_KV_IN_MEMORY === 'true',
       },
     },
   }
