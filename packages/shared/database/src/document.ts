@@ -1,5 +1,4 @@
 import * as path from 'path'
-import * as util from 'util'
 import type Nedb from 'nedb'
 import type { DatabaseConfiguration } from './config'
 
@@ -9,12 +8,18 @@ import type { DatabaseConfiguration } from './config'
 // monorepo runs on). Polyfill only the specific functions nedb needs, and
 // only if they're missing, BEFORE requiring nedb — this keeps the real
 // `nedb` package usable without patching its source or switching packages.
-// A plain `require()` (rather than `import`) is used deliberately here: an
-// ES `import` gets hoisted by TypeScript's CommonJS emit to the top of the
-// file (ahead of this polyfill), while `require()` executes exactly where it
-// appears in source order, which is what correctness here depends on.
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const nodeUtil = util as unknown as Record<string, unknown>
+//
+// Both `util` and `nedb` are loaded via plain `require()` here rather than
+// ES `import`, for two reasons: (1) TypeScript's CommonJS emit hoists all
+// `import`s to the top of the file, which would run the require *before*
+// this polyfill; and (2) `import * as util from 'util'` compiles to an
+// `__importStar` helper that copies the module's properties onto a new
+// object rather than returning the real singleton — mutating that copy is
+// invisible to nedb's own independent `require('util')` call. Only a direct
+// `require('util')` mutates the actual cached module object every caller
+// (including nedb) shares.
+/* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any */
+const nodeUtil = require('util') as Record<string, unknown>
 if (typeof nodeUtil.isArray !== 'function') {
   nodeUtil.isArray = (arg: unknown): boolean => Array.isArray(arg)
 }
@@ -24,10 +29,9 @@ if (typeof nodeUtil.isDate !== 'function') {
 if (typeof nodeUtil.isRegExp !== 'function') {
   nodeUtil.isRegExp = (arg: unknown): boolean => arg instanceof RegExp
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const Datastore = require('nedb') as typeof Nedb
+/* eslint-enable @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any */
 
 export interface DocumentStoreOptions {
   collection: string

@@ -17,10 +17,21 @@ import {
 } from '@ecommerce/shared-database'
 import type { ProductDoc, CategoryDoc } from './types'
 
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
+const REPO_ROOT = path.resolve(__dirname, '../../../')
+dotenv.config({ path: path.join(REPO_ROOT, '.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.PRODUCT_SERVICE_PORT || '3002', 10)
+
+// NEDB_DATA_PATH (e.g. "./data/db") is relative-by-convention to the repo
+// root — same as how the .env file itself is located above — not to
+// whatever directory the process happens to be launched from (pnpm/nodemon
+// run this with cwd = packages/ms-product, which would otherwise silently
+// nest the real data files under packages/ms-product/data/db instead of the
+// intended top-level data/db/).
+if (!path.isAbsolute(dbConfig.document.nedb.dataPath)) {
+  dbConfig.document.nedb.dataPath = path.resolve(REPO_ROOT, dbConfig.document.nedb.dataPath)
+}
 
 // Initialise the RustFS client (singleton per process)
 const rustfs = createRustFSClient(process.env)
@@ -280,7 +291,7 @@ async function bootstrap() {
           200: {
             type: 'object',
             properties: {
-              products: { type: 'array', items: { type: 'object' } },
+              products: { type: 'array', items: { type: 'object', additionalProperties: true } },
               total: { type: 'number' },
               page: { type: 'number' },
               limit: { type: 'number' },
@@ -327,7 +338,7 @@ async function bootstrap() {
           required: ['id'],
         },
         response: {
-          200: { type: 'object' },
+          200: { type: 'object', additionalProperties: true },
           404: { type: 'object', properties: { error: { type: 'string' } } },
         },
       },
@@ -347,9 +358,9 @@ async function bootstrap() {
       schema: {
         tags: ['products'],
         description: 'Create a new product.',
-        body: { type: 'object' },
+        body: { type: 'object', additionalProperties: true },
         response: {
-          201: { type: 'object' },
+          201: { type: 'object', additionalProperties: true },
         },
       },
     },
@@ -389,9 +400,9 @@ async function bootstrap() {
           properties: { id: { type: 'string' } },
           required: ['id'],
         },
-        body: { type: 'object' },
+        body: { type: 'object', additionalProperties: true },
         response: {
-          200: { type: 'object' },
+          200: { type: 'object', additionalProperties: true },
           404: { type: 'object', properties: { error: { type: 'string' } } },
         },
       },
@@ -446,10 +457,14 @@ async function bootstrap() {
                 type: 'array',
                 items: {
                   type: 'object',
+                  additionalProperties: true,
                   properties: {
                     id: { type: 'string' },
                     name: { type: 'string' },
                     slug: { type: 'string' },
+                    icon: { type: 'string' },
+                    description: { type: 'string' },
+                    productCount: { type: 'number' },
                   },
                 },
               },

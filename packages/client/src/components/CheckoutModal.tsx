@@ -1,12 +1,17 @@
 ﻿'use client'
 
 import React from 'react'
+import type { ShippingInfo } from '../lib/api'
 
 interface CheckoutModalProps {
   isOpen: boolean
   checkoutStep: 'shipping' | 'payment' | 'confirmed'
   finalTotal: number
   lastOrderId: string
+  shippingInfo: ShippingInfo
+  onShippingInfoChange: (field: keyof ShippingInfo, value: string) => void
+  isSubmitting: boolean
+  submitError: string
   onClose: () => void
   onContinueToPayment: () => void
   onBack: () => void
@@ -18,6 +23,10 @@ export default function CheckoutModal({
   checkoutStep,
   finalTotal,
   lastOrderId,
+  shippingInfo,
+  onShippingInfoChange,
+  isSubmitting,
+  submitError,
   onClose,
   onContinueToPayment,
   onBack,
@@ -56,7 +65,8 @@ export default function CheckoutModal({
               <label className="font-bold text-slate-700 block mb-1">Full Name</label>
               <input
                 type="text"
-                defaultValue="Alex Morgan"
+                value={shippingInfo.fullName}
+                onChange={(e) => onShippingInfoChange('fullName', e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium outline-none focus:border-indigo-500"
               />
             </div>
@@ -66,7 +76,8 @@ export default function CheckoutModal({
               </label>
               <input
                 type="email"
-                defaultValue="customer@ecommerce.com"
+                value={shippingInfo.email}
+                onChange={(e) => onShippingInfoChange('email', e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium outline-none focus:border-indigo-500"
               />
             </div>
@@ -74,7 +85,8 @@ export default function CheckoutModal({
               <label className="font-bold text-slate-700 block mb-1">Shipping Address</label>
               <input
                 type="text"
-                defaultValue="742 Evergreen Terrace"
+                value={shippingInfo.addressLine1}
+                onChange={(e) => onShippingInfoChange('addressLine1', e.target.value)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium outline-none focus:border-indigo-500"
               />
             </div>
@@ -83,7 +95,8 @@ export default function CheckoutModal({
                 <label className="font-bold text-slate-700 block mb-1">City</label>
                 <input
                   type="text"
-                  defaultValue="Springfield"
+                  value={shippingInfo.city}
+                  onChange={(e) => onShippingInfoChange('city', e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium outline-none focus:border-indigo-500"
                 />
               </div>
@@ -91,7 +104,8 @@ export default function CheckoutModal({
                 <label className="font-bold text-slate-700 block mb-1">State / Prov</label>
                 <input
                   type="text"
-                  defaultValue="OR"
+                  value={shippingInfo.state}
+                  onChange={(e) => onShippingInfoChange('state', e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium outline-none focus:border-indigo-500"
                 />
               </div>
@@ -99,7 +113,8 @@ export default function CheckoutModal({
                 <label className="font-bold text-slate-700 block mb-1">Postal Code</label>
                 <input
                   type="text"
-                  defaultValue="97477"
+                  value={shippingInfo.postalCode}
+                  onChange={(e) => onShippingInfoChange('postalCode', e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium outline-none focus:border-indigo-500"
                 />
               </div>
@@ -159,18 +174,26 @@ export default function CheckoutModal({
               <span className="font-bold text-slate-800">PayPal Express / Smart Buttons</span>
             </div>
 
+            {submitError && (
+              <p className="text-[11px] text-rose-600 font-semibold bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                {submitError}
+              </p>
+            )}
+
             <div className="flex gap-3 pt-2">
               <button
                 onClick={onBack}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-3 rounded-xl"
+                disabled={isSubmitting}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-5 py-3 rounded-xl disabled:opacity-50"
               >
                 &larr; Back
               </button>
               <button
                 onClick={onCompleteOrder}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3.5 rounded-xl shadow-lg shadow-emerald-100 transition"
+                disabled={isSubmitting}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm py-3.5 rounded-xl shadow-lg shadow-emerald-100 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Authorize &amp; Pay ${finalTotal.toFixed(2)}
+                {isSubmitting ? 'Processing...' : `Authorize & Pay $${finalTotal.toFixed(2)}`}
               </button>
             </div>
           </div>
@@ -184,8 +207,7 @@ export default function CheckoutModal({
             </div>
             <h3 className="text-xl font-black text-slate-900">Thank you for your purchase!</h3>
             <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-              Your order has been registered via <b>Order Service (Port 3003)</b> and receipt
-              archived to <b>RustFS Object Storage</b>.
+              Your order has been registered via <b>Order Service (Port 3003)</b>.
             </p>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-1.5 text-xs">
               <div className="flex justify-between">
@@ -194,7 +216,9 @@ export default function CheckoutModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Delivery To:</span>
-                <span className="font-semibold text-slate-800">Alex Morgan, Springfield OR</span>
+                <span className="font-semibold text-slate-800">
+                  {shippingInfo.fullName}, {shippingInfo.city} {shippingInfo.state}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Estimated Delivery:</span>

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "cat-1",
+    "name": "Audio & Headphones",
+    "slug": "audio-headphones",
+    "icon": "🎧",
+    "description": "High-fidelity wireless headphones, earbuds and studio monitors",
+    "productCount": 2
+  },
+  {
+    "id": "cat-2",
+    "name": "Computers & Laptops",
+    "slug": "computers-laptops",
+    "icon": "💻",
+    "description": "High-performance laptops, ultrabooks, and workstations",
+    "productCount": 4
+  },
+  {
+    "id": "cat-3",
+    "name": "Smartphones & Watches",
+    "slug": "smartphones-watches",
+    "icon": "⌚",
+    "description": "Next-gen flagship smartphones and fitness tracking smartwatches",
+    "productCount": 3
+  },
+  {
+    "id": "cat-4",
+    "name": "Gaming & VR",
+    "slug": "gaming-vr",
+    "icon": "🎮",
+    "description": "Console peripherals, mechanical keyboards, and immersive headsets",
+    "productCount": 3
+  }
+]

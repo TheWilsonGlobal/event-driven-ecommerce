@@ -193,3 +193,8 @@ workbox-*.js.map
 *.bak
 *.backup
 *.old
+
+# =================================
+# Local Planning Notes
+# =================================
+TODO.md

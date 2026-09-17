@@ -112,12 +112,14 @@ export default function PersistencePanel({
           </button>
         }
       >
+        <ReadOnlyRow label="Active Driver" value="redis (KV_CACHE_DRIVER)" />
         <ReadOnlyRow label="Redis Host" value="localhost:6379" />
-        <ReadOnlyRow label="Driver" value="ioredis" />
+        <ReadOnlyRow label="Client" value="ioredis" />
         <MultiFieldRow
           fields={[
             { label: 'Image', value: 'redis:7-alpine' },
             { label: 'DB Index', value: '0' },
+            { label: 'Fallback', value: 'rocksdb → ./data/rocksdb' },
           ]}
         />
 

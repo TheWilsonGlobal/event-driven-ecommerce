@@ -279,7 +279,7 @@ async function bootstrap() {
           required: ['id'],
         },
         response: {
-          200: { type: 'object' },
+          200: { type: 'object', additionalProperties: true },
           404: {
             type: 'object',
             properties: { error: { type: 'string' } },
@@ -337,7 +337,7 @@ async function bootstrap() {
           ],
         },
         response: {
-          201: { type: 'object' },
+          201: { type: 'object', additionalProperties: true },
           400: {
             type: 'object',
             properties: { error: { type: 'string' } },
@@ -457,7 +457,7 @@ async function bootstrap() {
           required: ['status'],
         },
         response: {
-          200: { type: 'object' },
+          200: { type: 'object', additionalProperties: true },
           400: {
             type: 'object',
             properties: { error: { type: 'string' } },

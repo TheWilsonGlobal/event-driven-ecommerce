@@ -10,6 +10,7 @@ import CartDrawer from '../components/CartDrawer'
 import QuickViewModal from '../components/QuickViewModal'
 import CheckoutModal from '../components/CheckoutModal'
 import StorefrontFooter from '../components/StorefrontFooter'
+import { createOrder, OrderApiError, type ShippingInfo } from '../lib/api'
 
 export default function ClientStorefront() {
   const [products] = useState<Product[]>(INITIAL_PRODUCTS)
@@ -32,6 +33,16 @@ export default function ClientStorefront() {
   const [checkoutStep, setCheckoutStep] = useState<'shipping' | 'payment' | 'confirmed'>('shipping')
   const [lastOrderId, setLastOrderId] = useState<string>('')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
+    fullName: 'Alex Morgan',
+    email: 'customer@ecommerce.com',
+    addressLine1: '742 Evergreen Terrace',
+    city: 'Springfield',
+    state: 'OR',
+    postalCode: '97477',
+  })
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false)
+  const [checkoutError, setCheckoutError] = useState<string>('')
 
   // Filtered & Sorted products
   const filteredProducts = useMemo(() => {
@@ -120,12 +131,36 @@ export default function ClientStorefront() {
     }
   }
 
-  const handleCompleteOrder = () => {
-    const orderNum = `ORD-${Math.floor(100000 + Math.random() * 900000)}`
-    setLastOrderId(orderNum)
-    setCheckoutStep('confirmed')
-    setCart([])
-    setAppliedDiscount(0)
+  const handleShippingInfoChange = (field: keyof ShippingInfo, value: string) => {
+    setShippingInfo((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleCompleteOrder = async () => {
+    setCheckoutError('')
+    setIsSubmittingOrder(true)
+    try {
+      const order = await createOrder(cart, shippingInfo, {
+        subtotal,
+        taxAmount: estimatedTax,
+        shippingAmount: shippingFee,
+        discountAmount,
+        totalAmount: finalTotal,
+        currency: 'USD',
+      })
+      setLastOrderId(order.orderNumber)
+      setCheckoutStep('confirmed')
+      setCart([])
+      setAppliedDiscount(0)
+    } catch (err) {
+      const message =
+        err instanceof OrderApiError
+          ? err.message
+          : 'Something went wrong placing your order. Please try again.'
+      setCheckoutError(message)
+      showToast(message)
+    } finally {
+      setIsSubmittingOrder(false)
+    }
   }
 
   return (
@@ -187,6 +222,7 @@ export default function ClientStorefront() {
           setIsCartOpen(false)
           setIsCheckoutOpen(true)
           setCheckoutStep('shipping')
+          setCheckoutError('')
         }}
       />
 
@@ -201,6 +237,10 @@ export default function ClientStorefront() {
         checkoutStep={checkoutStep}
         finalTotal={finalTotal}
         lastOrderId={lastOrderId}
+        shippingInfo={shippingInfo}
+        onShippingInfoChange={handleShippingInfoChange}
+        isSubmitting={isSubmittingOrder}
+        submitError={checkoutError}
         onClose={() => setIsCheckoutOpen(false)}
         onContinueToPayment={() => setCheckoutStep('payment')}
         onBack={() => setCheckoutStep('shipping')}

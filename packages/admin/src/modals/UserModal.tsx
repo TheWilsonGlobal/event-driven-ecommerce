@@ -4,7 +4,7 @@ interface Props {
   isOpen: boolean
   editingUser: UserRecord | null
   onClose: () => void
-  onSave: (e: React.FormEvent<HTMLFormElement>) => void
+  onSave: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>
 }
 
 export default function UserModal({ isOpen, editingUser, onClose, onSave }: Props) {

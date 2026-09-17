@@ -13,7 +13,7 @@ interface Props {
   isOpen: boolean
   editingProduct: ProductRecord | null
   onClose: () => void
-  onSave: (e: React.FormEvent<HTMLFormElement>) => void
+  onSave: (e: React.FormEvent<HTMLFormElement>) => void | Promise<void>
 }
 
 type ImageSource = 'url' | 'upload'
