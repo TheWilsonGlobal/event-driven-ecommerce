@@ -14,7 +14,6 @@
     "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
-    "@ecommerce/shared": "workspace:*",
     "@ecommerce/shared-types": "workspace:*",
     "@ecommerce/shared-utils": "workspace:*",
     "fastify": "^4.24.3",

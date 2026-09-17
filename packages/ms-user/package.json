@@ -18,7 +18,6 @@
     "db:seed": "prisma db seed"
   },
   "dependencies": {
-    "@ecommerce/shared": "workspace:*",
     "@ecommerce/shared-types": "workspace:*",
     "@ecommerce/shared-utils": "workspace:*",
     "@ecommerce/shared-database": "workspace:*",

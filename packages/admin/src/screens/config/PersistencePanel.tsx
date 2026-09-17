@@ -1,29 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RustfsHealth } from '../../types'
+import type { LiveResource } from '../../hooks/useQueueData'
+import type { QueueData } from '../queues/queueTypes'
 import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './parts'
-import { useQueueData } from '../../hooks/useQueueData'
 
 const PRODUCT_SERVICE_URL = 'http://localhost:3002'
-
-interface RedisStats {
-  usedMemoryMb: number
-  peakMemoryMb: number
-  connectedClients: number
-  opsPerSec: number
-  uptimeHours: number
-  hitRate: number
-}
-
-function randomRedisStats(): RedisStats {
-  return {
-    usedMemoryMb: Math.round((38 + Math.random() * 6) * 10) / 10,
-    peakMemoryMb: Math.round((52 + Math.random() * 4) * 10) / 10,
-    connectedClients: 6 + Math.floor(Math.random() * 4),
-    opsPerSec: 180 + Math.floor(Math.random() * 90),
-    uptimeHours: 71,
-    hitRate: Math.round((91 + Math.random() * 5) * 10) / 10,
-  }
-}
 
 interface StorageObject {
   sizeBytes: number
@@ -33,15 +14,14 @@ export default function PersistencePanel({
   rustfsHealth,
   openSignal,
   onPingRustFS,
+  queueData,
 }: {
   rustfsHealth: RustfsHealth
   openSignal?: OpenSignal
   onPingRustFS: () => void
+  /** Shared with the Task Queues sub-tab; this panel does not fetch its own. */
+  queueData: LiveResource<QueueData>
 }) {
-  const queueData = useQueueData()
-
-  const [redisStats, setRedisStats] = useState<RedisStats>(randomRedisStats)
-
   const [objectCount, setObjectCount] = useState(0)
   const [totalSizeMb, setTotalSizeMb] = useState(0)
   const [objectsLoadError, setObjectsLoadError] = useState(false)
@@ -111,17 +91,6 @@ export default function PersistencePanel({
             <span className="chip chip-purple">Redis 7 / RocksDB</span>
           </>
         }
-        metrics={
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={(e) => {
-              e.stopPropagation()
-              setRedisStats(randomRedisStats())
-            }}
-          >
-            Probe Redis ↻
-          </button>
-        }
       >
         <ReadOnlyRow label="Active Driver" value="redis (KV_CACHE_DRIVER)" />
         <ReadOnlyRow label="Redis Host" value="localhost:6379" />
@@ -134,42 +103,11 @@ export default function PersistencePanel({
           ]}
         />
 
-        <MultiFieldRow
-          fields={[
-            {
-              label: 'Used Memory',
-              value: (
-                <span style={{ color: 'var(--blue-light)' }}>{redisStats.usedMemoryMb} MB</span>
-              ),
-            },
-            {
-              label: 'Peak Memory',
-              value: <span style={{ color: 'var(--purple)' }}>{redisStats.peakMemoryMb} MB</span>,
-            },
-            {
-              label: 'Connected Clients',
-              value: (
-                <span style={{ color: 'var(--green-light)' }}>{redisStats.connectedClients}</span>
-              ),
-            },
-          ]}
-        />
-        <MultiFieldRow
-          fields={[
-            {
-              label: 'Ops / sec',
-              value: <span style={{ color: 'var(--amber-light)' }}>{redisStats.opsPerSec}</span>,
-            },
-            {
-              label: 'Uptime',
-              value: <span style={{ color: 'var(--blue-light)' }}>{redisStats.uptimeHours}h</span>,
-            },
-            {
-              label: 'Keyspace Hit Rate',
-              value: <span style={{ color: 'var(--green-light)' }}>{redisStats.hitRate}%</span>,
-            },
-          ]}
-        />
+        {/* Runtime INFO metrics (used memory, clients, ops/sec, hit rate) used
+            to be rendered here from a Math.random() generator, which reported a
+            healthy 41 MB and a 93% hit rate even with Redis stopped. ms-order
+            exposes no INFO-derived endpoint, so the honest rendering of absent
+            data is to show nothing. */}
       </ConfigCard>
 
       <ConfigCard

@@ -5,6 +5,14 @@ import { describeError, type FetchError } from '../../hooks/useQueueData'
 
 const NO_QUEUES: QueueInfo[] = []
 
+const STATE_CHIPS: { state: JobState; label: string; tone: string }[] = [
+  { state: 'waiting', label: 'Waiting', tone: 'chip-red' },
+  { state: 'active', label: 'Active', tone: 'chip-blue' },
+  { state: 'completed', label: 'Completed', tone: 'chip-green' },
+  { state: 'failed', label: 'Failed', tone: 'chip-amber' },
+  { state: 'delayed', label: 'Delayed', tone: 'chip-purple' },
+]
+
 function stateStatus(state: JobState): string {
   switch (state) {
     case 'completed':
@@ -44,8 +52,6 @@ export default function QueuesPanel({
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobState | null>(null)
 
-  // No fallback numbers: when there is no live payload the derived counts are
-  // genuinely zero and the table is replaced by an explicit banner below.
   const allQueues = data?.queues ?? NO_QUEUES
 
   const queues = useMemo(() => {
@@ -70,26 +76,33 @@ export default function QueuesPanel({
     [queues, statusFilter]
   )
 
+  // Null when there is no live payload. A reducer seeded with zeroes would
+  // render `Waiting 0 · Active 0 · …` beside the offline banner, which is
+  // pixel-identical to a healthy, genuinely-empty Redis — the exact
+  // fabricated-number defect these panels exist to avoid. No data, no number.
   const stateCounts = useMemo(
     () =>
-      allQueues.reduce(
-        (acc, q) => ({
-          waiting: acc.waiting + q.counts.waiting,
-          active: acc.active + q.counts.active,
-          completed: acc.completed + q.counts.completed,
-          failed: acc.failed + q.counts.failed,
-          delayed: acc.delayed + q.counts.delayed,
-        }),
-        { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 }
-      ),
-    [allQueues]
+      data
+        ? allQueues.reduce(
+            (acc, q) => ({
+              waiting: acc.waiting + q.counts.waiting,
+              active: acc.active + q.counts.active,
+              completed: acc.completed + q.counts.completed,
+              failed: acc.failed + q.counts.failed,
+              delayed: acc.delayed + q.counts.delayed,
+            }),
+            { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 }
+          )
+        : null,
+    [data, allQueues]
   )
-  const totalCount =
-    stateCounts.waiting +
-    stateCounts.active +
-    stateCounts.completed +
-    stateCounts.failed +
-    stateCounts.delayed
+  const totalCount = stateCounts
+    ? stateCounts.waiting +
+      stateCounts.active +
+      stateCounts.completed +
+      stateCounts.failed +
+      stateCounts.delayed
+    : null
 
   return (
     <>
@@ -104,47 +117,28 @@ export default function QueuesPanel({
         </div>
         <div className="toolbar-right">
           <span className="chip chip-slate">Queues {data ? data.summary.queueCount : '—'}</span>
-          <button
-            type="button"
-            className={`chip chip-red chip-btn${statusFilter === 'waiting' ? ' chip-btn-active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'waiting' ? null : 'waiting'))}
-          >
-            Waiting {stateCounts.waiting}
-          </button>
-          <button
-            type="button"
-            className={`chip chip-blue chip-btn${statusFilter === 'active' ? ' chip-btn-active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'active' ? null : 'active'))}
-          >
-            Active {stateCounts.active}
-          </button>
-          <button
-            type="button"
-            className={`chip chip-green chip-btn${statusFilter === 'completed' ? ' chip-btn-active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'completed' ? null : 'completed'))}
-          >
-            Completed {stateCounts.completed}
-          </button>
-          <button
-            type="button"
-            className={`chip ${stateCounts.failed > 0 ? 'chip-amber' : 'chip-slate'} chip-btn${statusFilter === 'failed' ? ' chip-btn-active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'failed' ? null : 'failed'))}
-          >
-            Failed {stateCounts.failed}
-          </button>
-          <button
-            type="button"
-            className={`chip chip-purple chip-btn${statusFilter === 'delayed' ? ' chip-btn-active' : ''}`}
-            onClick={() => setStatusFilter((prev) => (prev === 'delayed' ? null : 'delayed'))}
-          >
-            Delayed {stateCounts.delayed}
-          </button>
+          {STATE_CHIPS.map(({ state, label, tone }) => (
+            <button
+              key={state}
+              type="button"
+              className={`chip ${
+                state === 'failed' && stateCounts && stateCounts.failed === 0 ? 'chip-slate' : tone
+              } chip-btn${statusFilter === state ? ' chip-btn-active' : ''}`}
+              onClick={() => setStatusFilter((prev) => (prev === state ? null : state))}
+              disabled={!stateCounts}
+              aria-pressed={statusFilter === state}
+            >
+              {label} {stateCounts ? stateCounts[state] : '—'}
+            </button>
+          ))}
           <button
             type="button"
             className={`chip chip-slate chip-btn${statusFilter === null ? ' chip-btn-active' : ''}`}
             onClick={() => setStatusFilter(null)}
+            disabled={totalCount === null}
+            aria-pressed={statusFilter === null}
           >
-            Total {totalCount}
+            Total {totalCount ?? '—'}
           </button>
         </div>
       </div>

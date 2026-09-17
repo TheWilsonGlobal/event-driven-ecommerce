@@ -120,6 +120,7 @@ export default function PersistenceTab({
           rustfsHealth={rustfsHealth}
           openSignal={openSignal}
           onPingRustFS={onPingRustFS}
+          queueData={queues}
         />
       )}
       {tab === 'queues' && (

@@ -32,26 +32,32 @@ export default function TaskQueuesPanel({
     )
   }, [allQueues, filter])
 
+  // Null when there is no live payload — a zero-seeded reducer would print
+  // `Waiting 0 · Active 0 · …` above the offline banner, indistinguishable
+  // from a healthy but genuinely empty Redis. No data, no number.
   const stateCounts = useMemo(
     () =>
-      allQueues.reduce(
-        (acc, q) => ({
-          waiting: acc.waiting + q.counts.waiting,
-          active: acc.active + q.counts.active,
-          completed: acc.completed + q.counts.completed,
-          failed: acc.failed + q.counts.failed,
-          delayed: acc.delayed + q.counts.delayed,
-        }),
-        { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 }
-      ),
-    [allQueues]
+      data
+        ? allQueues.reduce(
+            (acc, q) => ({
+              waiting: acc.waiting + q.counts.waiting,
+              active: acc.active + q.counts.active,
+              completed: acc.completed + q.counts.completed,
+              failed: acc.failed + q.counts.failed,
+              delayed: acc.delayed + q.counts.delayed,
+            }),
+            { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 }
+          )
+        : null,
+    [data, allQueues]
   )
-  const totalCount =
-    stateCounts.waiting +
-    stateCounts.active +
-    stateCounts.completed +
-    stateCounts.failed +
-    stateCounts.delayed
+  const totalCount = stateCounts
+    ? stateCounts.waiting +
+      stateCounts.active +
+      stateCounts.completed +
+      stateCounts.failed +
+      stateCounts.delayed
+    : null
 
   return (
     <>
@@ -66,14 +72,16 @@ export default function TaskQueuesPanel({
         </div>
         <div className="toolbar-right">
           <span className="chip chip-slate">Queues {data ? data.summary.queueCount : '—'}</span>
-          <span className="chip chip-red">Waiting {stateCounts.waiting}</span>
-          <span className="chip chip-blue">Active {stateCounts.active}</span>
-          <span className="chip chip-green">Completed {stateCounts.completed}</span>
-          <span className={`chip ${stateCounts.failed > 0 ? 'chip-amber' : 'chip-slate'}`}>
-            Failed {stateCounts.failed}
+          <span className="chip chip-red">Waiting {stateCounts?.waiting ?? '—'}</span>
+          <span className="chip chip-blue">Active {stateCounts?.active ?? '—'}</span>
+          <span className="chip chip-green">Completed {stateCounts?.completed ?? '—'}</span>
+          <span
+            className={`chip ${stateCounts && stateCounts.failed > 0 ? 'chip-amber' : 'chip-slate'}`}
+          >
+            Failed {stateCounts?.failed ?? '—'}
           </span>
-          <span className="chip chip-purple">Delayed {stateCounts.delayed}</span>
-          <span className="chip chip-slate">Total {totalCount}</span>
+          <span className="chip chip-purple">Delayed {stateCounts?.delayed ?? '—'}</span>
+          <span className="chip chip-slate">Total {totalCount ?? '—'}</span>
         </div>
       </div>
 

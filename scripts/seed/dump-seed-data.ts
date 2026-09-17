@@ -1,14 +1,11 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { SEED_CATEGORIES, type SeedCategory } from './seedCategories'
-import { SEED_PRODUCTS, type SeedProduct } from './seedProducts'
-import { SEED_USERS, type SeedUser } from './seedUsers'
-import { SEED_ORDERS, type SeedOrder } from './seedOrders'
+import { SEED_CATEGORIES, SEED_PRODUCTS, SEED_USERS, SEED_ORDERS } from '@ecommerce/shared-database'
 
-export { SEED_CATEGORIES, SEED_PRODUCTS, SEED_USERS, SEED_ORDERS }
-export type { SeedCategory, SeedProduct, SeedUser, SeedOrder }
-
-export async function runSeed(outputDir: string = path.resolve(__dirname, '../../../../data')) {
+// Dumps the shared seed constants (the same data each service self-seeds
+// into its own real DB on boot) to JSON files under data/ for inspection —
+// nothing in the apps reads these files back at runtime.
+export async function runSeed(outputDir: string = path.resolve(__dirname, '../../data')) {
   console.log('🚀 [Seed] Initializing E-Commerce database seed process...')
 
   if (!fs.existsSync(outputDir)) {

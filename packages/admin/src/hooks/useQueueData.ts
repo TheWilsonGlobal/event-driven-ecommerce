@@ -23,6 +23,12 @@ export type UnavailableReason =
   | 'redis_unavailable'
   | 'redis_error'
   | 'queues_closed'
+  // Not currently emitted by ms-order: redisConnection.ts ignores
+  // dbConfig.keyValue.driver and always connects to Redis, so a non-Redis
+  // driver surfaces as `redis_connection_refused`. Kept because it is the
+  // contract's documented reason and costs nothing if the backend starts
+  // honouring the driver setting; unknown reasons fall through to the
+  // `| string` case in FetchError and degrade to the generic label.
   | 'kv_driver_not_redis'
 
 export interface FetchError {
