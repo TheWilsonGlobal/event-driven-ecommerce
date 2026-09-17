@@ -11,6 +11,8 @@ import {
   OrdersIcon,
   UsersIcon,
   PersistenceIcon,
+  QueueIcon,
+  CacheIcon,
   ConfigIcon,
   ExternalLinkIcon,
 } from './components/icons'
@@ -22,6 +24,8 @@ import ProductsTab from './screens/ProductsTab'
 import OrdersTab from './screens/OrdersTab'
 import UsersTab from './screens/UsersTab'
 import PersistenceTab from './screens/PersistenceTab'
+import TaskQueuesTab from './screens/TaskQueuesTab'
+import RedisCacheTab from './screens/RedisCacheTab'
 import ConfigTab from './screens/ConfigTab'
 
 // Modals
@@ -57,6 +61,8 @@ export default function App() {
 
   const SYSTEM: NavEntry[] = [
     { key: 'persistence', label: 'Persistence', Icon: PersistenceIcon },
+    { key: 'task-queues', label: 'Task Queues', Icon: QueueIcon },
+    { key: 'redis-cache', label: 'Cache (Redis)', Icon: CacheIcon },
     { key: 'config', label: 'Configuration', Icon: ConfigIcon },
   ]
 
@@ -221,6 +227,10 @@ export default function App() {
         {app.tab === 'persistence' && (
           <PersistenceTab rustfsHealth={data.rustfsHealth} onPingRustFS={data.pingRustFS} />
         )}
+
+        {app.tab === 'task-queues' && <TaskQueuesTab />}
+
+        {app.tab === 'redis-cache' && <RedisCacheTab />}
 
         {app.tab === 'config' && <ConfigTab />}
       </main>

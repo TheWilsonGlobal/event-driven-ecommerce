@@ -16,6 +16,8 @@ export interface SchemaIndex {
 export interface SchemaTable {
   name: string
   service: string
+  /** Dual-mode driver pair this table's store can run as, e.g. "PostgreSQL / SQLite". */
+  driver: string
   columns: SchemaColumn[]
   indexes: SchemaIndex[]
   rowCount: number | null

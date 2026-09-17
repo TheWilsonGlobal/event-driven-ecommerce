@@ -31,6 +31,7 @@ export default function SchemaPanel({
       (t) =>
         t.name.toLowerCase().includes(q) ||
         t.service.toLowerCase().includes(q) ||
+        t.driver.toLowerCase().includes(q) ||
         t.columns.some((c) => c.name.toLowerCase().includes(q))
     )
   }, [schema, filter])
@@ -66,6 +67,7 @@ export default function SchemaPanel({
             title={
               <>
                 <span className="chip chip-blue">{table.service}</span>
+                <span className="chip chip-slate">{table.driver}</span>
                 <span className="mono">{table.name}</span>
               </>
             }

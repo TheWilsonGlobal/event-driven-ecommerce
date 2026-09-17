@@ -95,7 +95,7 @@ export default function ApiPanel({
                 <>
                   <span className="mono">{group.name}</span>
                   <span className="chip chip-slate" style={{ marginLeft: 8 }}>
-                    :{group.port}
+                    {group.port}
                   </span>
                 </>
               }

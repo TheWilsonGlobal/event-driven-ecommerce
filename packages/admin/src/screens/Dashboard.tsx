@@ -78,7 +78,7 @@ export default function Dashboard({
                 {svc.name}
               </span>
               <span className="v mono">
-                :{svc.port} · <StatusBadge status={svc.status} />
+                {svc.port} · <StatusBadge status={svc.status} />
               </span>
             </div>
           ))}

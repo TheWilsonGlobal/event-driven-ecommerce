@@ -13,7 +13,7 @@ export default function ServiceModal({ service, onClose }: Props) {
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>
-            {service.name} <span className="chip chip-blue mono">:{service.port}</span>
+            {service.name} <span className="chip chip-blue mono">{service.port}</span>
           </h3>
           <button className="modal-close" onClick={onClose}>
             ✕

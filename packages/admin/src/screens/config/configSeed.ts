@@ -13,6 +13,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'users',
       service: 'ms-user',
+      driver: 'PostgreSQL / SQLite',
       rowCount: 128,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
@@ -32,6 +33,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'addresses',
       service: 'ms-user',
+      driver: 'PostgreSQL / SQLite',
       rowCount: 205,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
@@ -51,6 +53,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'refresh_tokens',
       service: 'ms-user',
+      driver: 'PostgreSQL / SQLite',
       rowCount: 342,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
@@ -65,6 +68,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'orders',
       service: 'ms-order',
+      driver: 'PostgreSQL / SQLite',
       rowCount: 67,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
@@ -91,6 +95,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'order_items',
       service: 'ms-order',
+      driver: 'PostgreSQL / SQLite',
       rowCount: 183,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
@@ -113,6 +118,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'payments',
       service: 'ms-order',
+      driver: 'PostgreSQL / SQLite',
       rowCount: 67,
       columns: [
         { name: 'id', type: 'uuid', nullable: false, isPrimaryKey: true, default: 'uuid()' },
@@ -132,6 +138,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'products (mock document store)',
       service: 'ms-product',
+      driver: 'MongoDB / NeDB',
       rowCount: null,
       columns: [
         { name: 'id', type: 'string', nullable: false, isPrimaryKey: true },
@@ -160,6 +167,7 @@ export const SCHEMA_DATA: SchemaData = {
     {
       name: 'categories (mock document store)',
       service: 'ms-product',
+      driver: 'MongoDB / NeDB',
       rowCount: null,
       columns: [
         { name: 'id', type: 'string', nullable: false, isPrimaryKey: true },

@@ -59,7 +59,7 @@ export default function ServicesTab({ services, lastScanned, onSelectService, on
                   {svc.name}
                 </span>
               </div>
-              <span className="chip chip-blue mono">:{svc.port}</span>
+              <span className="chip chip-blue mono">{svc.port}</span>
             </div>
 
             <div style={{ fontSize: 12, color: 'var(--text-dim)', minHeight: 36, lineHeight: 1.4 }}>

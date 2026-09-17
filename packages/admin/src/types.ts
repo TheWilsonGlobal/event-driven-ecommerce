@@ -1,5 +1,13 @@
 export type Tab =
-  'dashboard' | 'services' | 'products' | 'orders' | 'users' | 'persistence' | 'config'
+  | 'dashboard'
+  | 'services'
+  | 'products'
+  | 'orders'
+  | 'users'
+  | 'persistence'
+  | 'task-queues'
+  | 'redis-cache'
+  | 'config'
 
 export interface ServiceItem {
   id: string

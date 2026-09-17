@@ -144,6 +144,47 @@ export function ConfigIcon(props: React.SVGProps<SVGSVGElement>) {
   )
 }
 
+export function QueueIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <rect x="3" y="10" width="18" height="4" rx="1" />
+      <rect x="3" y="16" width="18" height="4" rx="1" />
+      <line x1="17" y1="6" x2="17.01" y2="6" />
+      <line x1="17" y1="12" x2="17.01" y2="12" />
+      <line x1="17" y1="18" x2="17.01" y2="18" />
+    </svg>
+  )
+}
+
+export function CacheIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+      <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
+      <path d="M12 8v3" />
+      <path d="M12 14v3" />
+    </svg>
+  )
+}
+
 export function ChevronRightIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
