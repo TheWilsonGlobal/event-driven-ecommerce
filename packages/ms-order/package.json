@@ -14,7 +14,11 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "prisma:generate": "prisma generate",
     "migrate": "prisma migrate deploy",
-    "migrate:dev": "prisma migrate dev"
+    "migrate:dev": "prisma migrate dev",
+    "db:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@ecommerce/shared": "workspace:*",

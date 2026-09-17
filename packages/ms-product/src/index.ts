@@ -8,7 +8,14 @@ import swaggerUi from '@fastify/swagger-ui'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 import * as crypto from 'crypto'
-import { loadDatabaseConfig, createRustFSClient } from '@ecommerce/shared-database'
+import {
+  loadDatabaseConfig,
+  createRustFSClient,
+  createDocumentStore,
+  SEED_PRODUCTS,
+  SEED_CATEGORIES,
+} from '@ecommerce/shared-database'
+import type { ProductDoc, CategoryDoc } from './types'
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
@@ -17,6 +24,11 @@ const PORT = parseInt(process.env.PRODUCT_SERVICE_PORT || '3002', 10)
 
 // Initialise the RustFS client (singleton per process)
 const rustfs = createRustFSClient(process.env)
+
+// Real NeDB-backed document stores — one physical file per collection under
+// the configured data path (e.g. data/db/products.db, data/db/categories.db).
+const productsStore = createDocumentStore<ProductDoc>('products', dbConfig)
+const categoriesStore = createDocumentStore<CategoryDoc>('categories', dbConfig)
 
 const server: FastifyInstance = fastify({
   logger: {
@@ -65,6 +77,36 @@ async function bootstrap() {
   rustfs.ensureBucket().catch((err) => {
     server.log.warn(`[RustFS] Could not ensure bucket on startup: ${err?.message}`)
   })
+
+  // ─── Self-seed (first run only) ───────────────────────────────────────────
+  // Populates the real NeDB-backed stores from the shared seed data the first
+  // time the service boots against an empty database. Safe to run on every
+  // boot — it's a no-op once data already exists, so seeded data persists
+  // across restarts instead of being re-inserted.
+  {
+    const existingProducts = await productsStore.find({})
+    let seededProducts = 0
+    if (existingProducts.length === 0) {
+      for (const product of SEED_PRODUCTS) {
+        await productsStore.insert(product as unknown as ProductDoc)
+        seededProducts++
+      }
+    }
+
+    const existingCategories = await categoriesStore.find({})
+    let seededCategories = 0
+    if (existingCategories.length === 0) {
+      for (const category of SEED_CATEGORIES) {
+        await categoriesStore.insert(category as unknown as CategoryDoc)
+        seededCategories++
+      }
+    }
+
+    server.log.info(
+      `[Seed] products: ${seededProducts > 0 ? `inserted ${seededProducts}` : `skipped (${existingProducts.length} already present)`}, ` +
+        `categories: ${seededCategories > 0 ? `inserted ${seededCategories}` : `skipped (${existingCategories.length} already present)`}`
+    )
+  }
 
   // ─── Health ───────────────────────────────────────────────────────────────
   server.get(
@@ -218,12 +260,22 @@ async function bootstrap() {
   )
 
   // ─── Products ─────────────────────────────────────────────────────────────
-  server.get(
+  server.get<{ Querystring: { page?: string; limit?: string; category?: string; search?: string } }>(
     '/api/v1/products',
     {
       schema: {
         tags: ['products'],
-        description: 'List products (paginated).',
+        description:
+          'List products (paginated). Supports ?page, ?limit, ?category (slug) and ?search (title/description).',
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'string' },
+            limit: { type: 'string' },
+            category: { type: 'string' },
+            search: { type: 'string' },
+          },
+        },
         response: {
           200: {
             type: 'object',
@@ -237,13 +289,146 @@ async function bootstrap() {
         },
       },
     },
-    async () => {
-      return {
-        products: [],
-        total: 0,
-        page: 1,
-        limit: 20,
+    async (req) => {
+      const page = Math.max(parseInt(req.query.page ?? '1', 10) || 1, 1)
+      const limit = Math.max(parseInt(req.query.limit ?? '20', 10) || 20, 1)
+      const categorySlug = req.query.category
+      const search = req.query.search?.toLowerCase().trim()
+
+      let all = await productsStore.find({})
+
+      if (categorySlug) {
+        all = all.filter((p) => p.category?.slug === categorySlug)
       }
+      if (search) {
+        all = all.filter(
+          (p) =>
+            p.title?.toLowerCase().includes(search) || p.description?.toLowerCase().includes(search)
+        )
+      }
+
+      const total = all.length
+      const start = (page - 1) * limit
+      const products = all.slice(start, start + limit)
+
+      return { products, total, page, limit }
+    }
+  )
+
+  server.get<{ Params: { id: string } }>(
+    '/api/v1/products/:id',
+    {
+      schema: {
+        tags: ['products'],
+        description: 'Fetch a single product by id.',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+        },
+        response: {
+          200: { type: 'object' },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const product = await productsStore.findOne({ id: req.params.id })
+      if (!product) {
+        return reply.status(404).send({ error: 'Product not found' })
+      }
+      return product
+    }
+  )
+
+  server.post<{ Body: Partial<ProductDoc> }>(
+    '/api/v1/products',
+    {
+      schema: {
+        tags: ['products'],
+        description: 'Create a new product.',
+        body: { type: 'object' },
+        response: {
+          201: { type: 'object' },
+        },
+      },
+    },
+    async (req, reply) => {
+      const body = req.body ?? {}
+      const id = (body.id as string | undefined) ?? `prod-${Date.now()}`
+      const doc: ProductDoc = {
+        id,
+        title: body.title ?? 'Untitled Product',
+        slug: body.slug ?? id,
+        sku: body.sku ?? id.toUpperCase(),
+        description: body.description ?? '',
+        price: body.price ?? 0,
+        compareAtPrice: body.compareAtPrice ?? body.price ?? 0,
+        currency: body.currency ?? 'USD',
+        stock: body.stock ?? 0,
+        isAvailable: body.isAvailable ?? true,
+        category: body.category ?? { id: '', name: '', slug: '' },
+        tags: body.tags ?? [],
+        images: body.images ?? [],
+        attributes: body.attributes ?? [],
+        ratings: body.ratings ?? { average: 0, count: 0 },
+      }
+      const created = await productsStore.insert(doc)
+      return reply.status(201).send(created)
+    }
+  )
+
+  server.patch<{ Params: { id: string }; Body: Partial<ProductDoc> }>(
+    '/api/v1/products/:id',
+    {
+      schema: {
+        tags: ['products'],
+        description: 'Update fields on an existing product.',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+        },
+        body: { type: 'object' },
+        response: {
+          200: { type: 'object' },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const numUpdated = await productsStore.update({ id: req.params.id }, req.body ?? {})
+      if (numUpdated === 0) {
+        return reply.status(404).send({ error: 'Product not found' })
+      }
+      const updated = await productsStore.findOne({ id: req.params.id })
+      return updated
+    }
+  )
+
+  server.delete<{ Params: { id: string } }>(
+    '/api/v1/products/:id',
+    {
+      schema: {
+        tags: ['products'],
+        description: 'Delete a product by id.',
+        params: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+        },
+        response: {
+          200: { type: 'object', properties: { success: { type: 'boolean' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const numRemoved = await productsStore.delete({ id: req.params.id })
+      if (numRemoved === 0) {
+        return reply.status(404).send({ error: 'Product not found' })
+      }
+      return { success: true }
     }
   )
 
@@ -274,13 +459,8 @@ async function bootstrap() {
       },
     },
     async () => {
-      return {
-        categories: [
-          { id: '1', name: 'Electronics', slug: 'electronics' },
-          { id: '2', name: 'Clothing', slug: 'clothing' },
-          { id: '3', name: 'Books', slug: 'books' },
-        ],
-      }
+      const categories = await categoriesStore.find({})
+      return { categories }
     }
   )
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RustfsHealth } from '../../types'
 import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './parts'
+import { QUEUE_DATA } from '../queues/queueSeed'
 
 const PRODUCT_SERVICE_URL = 'http://localhost:3002'
 
@@ -74,7 +75,28 @@ export default function PersistencePanel({
         openSignal={openSignal}
         title={
           <>
-            <span>KV Cache & Queues</span>
+            <span>Task Queues</span>
+            <span className="chip chip-purple">BullMQ</span>
+          </>
+        }
+      >
+        <ReadOnlyRow label="Queue Driver" value="BullMQ over Redis" />
+        <ReadOnlyRow label="Worker Concurrency" value="5–10 workers per queue" />
+        <ReadOnlyRow label="Registered Queues" value={`${QUEUE_DATA.summary.queueCount} queues`} />
+        <MultiFieldRow
+          fields={[
+            { label: 'Client', value: 'ioredis (BullMQ client)' },
+            { label: 'Backing Store', value: 'Redis 7 (DB 0)' },
+            { label: 'Retry Policy', value: 'per-queue backoff, 3–5 attempts' },
+          ]}
+        />
+      </ConfigCard>
+
+      <ConfigCard
+        openSignal={openSignal}
+        title={
+          <>
+            <span>KV Cache</span>
             <span className="chip chip-purple">Redis 7 / RocksDB</span>
           </>
         }
@@ -90,12 +112,10 @@ export default function PersistencePanel({
           </button>
         }
       >
-        <ReadOnlyRow label="Queue Driver" value="BullMQ over Redis" />
         <ReadOnlyRow label="Redis Host" value="localhost:6379" />
-        <ReadOnlyRow label="Worker Concurrency" value="10 workers" />
+        <ReadOnlyRow label="Driver" value="ioredis" />
         <MultiFieldRow
           fields={[
-            { label: 'Driver', value: 'ioredis (BullMQ client)' },
             { label: 'Image', value: 'redis:7-alpine' },
             { label: 'DB Index', value: '0' },
           ]}

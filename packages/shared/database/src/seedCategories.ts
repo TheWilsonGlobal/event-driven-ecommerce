@@ -14,7 +14,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     slug: 'audio-headphones',
     icon: '🎧',
     description: 'High-fidelity wireless headphones, earbuds and studio monitors',
-    productCount: 4,
+    productCount: 2,
   },
   {
     id: 'cat-2',
@@ -22,7 +22,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     slug: 'computers-laptops',
     icon: '💻',
     description: 'High-performance laptops, ultrabooks, and workstations',
-    productCount: 3,
+    productCount: 4,
   },
   {
     id: 'cat-3',
@@ -38,6 +38,6 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     slug: 'gaming-vr',
     icon: '🎮',
     description: 'Console peripherals, mechanical keyboards, and immersive headsets',
-    productCount: 2,
+    productCount: 3,
   },
 ]
