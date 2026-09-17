@@ -153,7 +153,7 @@ export default function Dashboard({
                   </td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{ord.customerName}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                       {ord.customerEmail}
                     </div>
                   </td>

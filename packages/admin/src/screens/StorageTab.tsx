@@ -87,7 +87,7 @@ export default function StorageTab() {
           <div className="page-title">
             Storage <span className="tag">RustFS</span>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 2 }}>
             S3-compatible object storage backing product image uploads. Connection, bind-mount and
             bucket summary live in Configuration &rarr; Persistence.
           </div>
@@ -161,7 +161,7 @@ export default function StorageTab() {
           href="http://localhost:9001"
           target="_blank"
           rel="noreferrer"
-          style={{ fontSize: 11, color: 'var(--blue-light)', fontWeight: 600 }}
+          style={{ fontSize: 12, color: 'var(--blue-light)', fontWeight: 600 }}
         >
           Open RustFS Console (Port 9001) &rarr;
         </a>

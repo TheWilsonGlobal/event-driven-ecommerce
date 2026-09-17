@@ -44,6 +44,8 @@ const NAMESPACES: RedisNamespace[] = [
 
 const TOTAL_KEYS = NAMESPACES.reduce((sum, n) => sum + n.approxKeyCount, 0)
 
+export const CACHE_NAMESPACE_COUNT = NAMESPACES.length
+
 export default function CachePanel() {
   return (
     <>

@@ -108,7 +108,7 @@ export default function UsersTab({
                           border: '1px solid var(--blue-border)',
                           color: 'var(--blue-light)',
                           fontWeight: 700,
-                          fontSize: 11,
+                          fontSize: 12,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -143,14 +143,14 @@ export default function UsersTab({
                     <span
                       className="mono"
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         color: u.isEmailVerified ? 'var(--green-light)' : 'var(--amber-light)',
                       }}
                     >
                       {u.isEmailVerified ? '✓ Verified' : 'Pending'}
                     </span>
                   </td>
-                  <td style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                  <td style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                     {u.addresses[0]?.city}, {u.addresses[0]?.state}
                   </td>
                   <td style={{ textAlign: 'right' }}>

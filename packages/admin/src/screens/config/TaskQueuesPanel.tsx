@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { QueueData } from '../queues/queueTypes'
 import { EmptyState } from '../../components/ui'
+import { WorkersIcon, RetryIcon, BackoffIcon, DelayIcon } from '../../components/icons'
 
 export default function TaskQueuesPanel({ data }: { data: QueueData }) {
   const [filter, setFilter] = useState('')
@@ -50,7 +51,7 @@ export default function TaskQueuesPanel({ data }: { data: QueueData }) {
         </div>
         <div className="toolbar-right">
           <span className="chip chip-slate">Queues {data.summary.queueCount}</span>
-          <span className="chip chip-slate">Waiting {stateCounts.waiting}</span>
+          <span className="chip chip-red">Waiting {stateCounts.waiting}</span>
           <span className="chip chip-blue">Active {stateCounts.active}</span>
           <span className="chip chip-green">Completed {stateCounts.completed}</span>
           <span className={`chip ${stateCounts.failed > 0 ? 'chip-amber' : 'chip-slate'}`}>
@@ -71,15 +72,33 @@ export default function TaskQueuesPanel({ data }: { data: QueueData }) {
                 <th>Service</th>
                 <th>Queue Name</th>
                 <th>Description</th>
-                <th className="cell-right">Worker Concurrency</th>
-                <th className="cell-right">Retry Attempts</th>
-                <th className="cell-center">Backoff</th>
-                <th className="cell-right">Base Delay</th>
-                <th className="cell-right">Waiting</th>
-                <th className="cell-right">Active</th>
-                <th className="cell-right">Completed</th>
-                <th className="cell-right">Failed</th>
-                <th className="cell-right">Delayed</th>
+                <th className="cell-right" title="Worker Concurrency">
+                  <WorkersIcon style={{ width: 14, height: 14 }} />
+                </th>
+                <th className="cell-right" title="Retry Attempts">
+                  <RetryIcon style={{ width: 14, height: 14 }} />
+                </th>
+                <th className="cell-center" title="Backoff">
+                  <BackoffIcon style={{ width: 14, height: 14 }} />
+                </th>
+                <th className="cell-right" title="Base Delay">
+                  <DelayIcon style={{ width: 14, height: 14 }} />
+                </th>
+                <th className="cell-right" style={{ color: 'var(--red-light)' }}>
+                  Waiting
+                </th>
+                <th className="cell-right" style={{ color: 'var(--blue-light)' }}>
+                  Active
+                </th>
+                <th className="cell-right" style={{ color: 'var(--green-light)' }}>
+                  Completed
+                </th>
+                <th className="cell-right" style={{ color: 'var(--amber-light)' }}>
+                  Failed
+                </th>
+                <th className="cell-right" style={{ color: 'var(--purple)' }}>
+                  Delayed
+                </th>
                 <th className="cell-right">Total</th>
               </tr>
             </thead>
@@ -118,9 +137,11 @@ export default function TaskQueuesPanel({ data }: { data: QueueData }) {
                       className="mono cell-right cell-muted"
                       title={`${queue.backoff.delayMs.toLocaleString()} ms base delay`}
                     >
-                      {queue.backoff.delayMs.toLocaleString()}ms
+                      {queue.backoff.delayMs.toLocaleString()}
                     </td>
-                    <td className="mono cell-right">{queue.counts.waiting}</td>
+                    <td className="mono cell-right" style={{ color: 'var(--red-light)' }}>
+                      {queue.counts.waiting}
+                    </td>
                     <td className="mono cell-right" style={{ color: 'var(--blue-light)' }}>
                       {queue.counts.active}
                     </td>
@@ -130,12 +151,12 @@ export default function TaskQueuesPanel({ data }: { data: QueueData }) {
                     <td
                       className="mono cell-right"
                       style={{
-                        color: queue.counts.failed > 0 ? 'var(--red-light)' : 'var(--text-faint)',
+                        color: queue.counts.failed > 0 ? 'var(--amber-light)' : 'var(--text-faint)',
                       }}
                     >
                       {queue.counts.failed}
                     </td>
-                    <td className="mono cell-right" style={{ color: 'var(--amber-light)' }}>
+                    <td className="mono cell-right" style={{ color: 'var(--purple)' }}>
                       {queue.counts.delayed}
                     </td>
                     <td className="mono cell-right" style={{ fontWeight: 700 }}>

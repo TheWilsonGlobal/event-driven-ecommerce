@@ -89,7 +89,7 @@ export default function ServicesPanel({
                   <td className="mono cell-right" style={{ color: 'var(--green-light)' }}>
                     {svc.latencyMs} ms
                   </td>
-                  <td className="mono cell-muted" style={{ fontSize: 10 }}>
+                  <td className="mono cell-muted" style={{ fontSize: 12 }}>
                     {svc.healthUrl}
                   </td>
                   <td className="cell-right">

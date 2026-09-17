@@ -272,13 +272,13 @@ export default function ProductModal({ isOpen, editingProduct, onClose, onSave }
                     />
 
                     {objectsLoading ? (
-                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                         Loading existing images…
                       </div>
                     ) : objectsError ? (
-                      <div style={{ fontSize: 11, color: 'var(--red-light)' }}>{objectsError}</div>
+                      <div style={{ fontSize: 12, color: 'var(--red-light)' }}>{objectsError}</div>
                     ) : filteredObjects.length === 0 ? (
-                      <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                         {existingObjects.length === 0
                           ? 'No images in the bucket yet — upload one above.'
                           : `No images match "${objectSearch}"`}
@@ -333,7 +333,7 @@ export default function ProductModal({ isOpen, editingProduct, onClose, onSave }
                 </>
               )}
               {uploadError && (
-                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--red-light)' }}>
+                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--red-light)' }}>
                   {uploadError}
                 </div>
               )}

@@ -108,7 +108,7 @@ export default function ProductsTab({
                   </td>
                   <td
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       color: 'var(--text-faint)',
                       maxWidth: 260,
                       overflow: 'hidden',

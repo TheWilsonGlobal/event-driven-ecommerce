@@ -143,34 +143,6 @@ export default function PersistencePanel({
         openSignal={openSignal}
         title={
           <>
-            <span>Relational Database</span>
-            <span className="chip chip-blue">PostgreSQL / SQLite</span>
-          </>
-        }
-      >
-        <ReadOnlyRow label="ORM Engine" value="Prisma 5.22.0" />
-        <ReadOnlyRow label="Connection URL" value="postgresql://***@localhost:5432" />
-        <ReadOnlyRow label="Target Services" value="ms-user, ms-order" />
-      </ConfigCard>
-
-      <ConfigCard
-        openSignal={openSignal}
-        title={
-          <>
-            <span>Document Database</span>
-            <span className="chip chip-green">NeDB / MongoDB</span>
-          </>
-        }
-      >
-        <ReadOnlyRow label="Storage Driver" value="Embedded NeDB" />
-        <ReadOnlyRow label="Local Data Path" value="./data/nedb" />
-        <ReadOnlyRow label="Target Services" value="ms-product" />
-      </ConfigCard>
-
-      <ConfigCard
-        openSignal={openSignal}
-        title={
-          <>
             <span>Object Storage (S3-API)</span>
             <span className={`chip ${rustfsHealth.healthy ? 'chip-green' : 'chip-red'}`}>
               {rustfsHealth.healthy === null
@@ -246,7 +218,7 @@ export default function PersistencePanel({
         />
 
         <div className="panel-row" style={{ marginTop: 6 }}>
-          <span className="cell-muted" style={{ fontSize: 11 }}>
+          <span className="cell-muted" style={{ fontSize: 12 }}>
             Product image uploads from the Catalog admin (ms-product /upload endpoint)
           </span>
         </div>
@@ -265,11 +237,39 @@ export default function PersistencePanel({
             href="http://localhost:9001"
             target="_blank"
             rel="noreferrer"
-            style={{ fontSize: 11, color: 'var(--blue-light)', fontWeight: 600 }}
+            style={{ fontSize: 12, color: 'var(--blue-light)', fontWeight: 600 }}
           >
             Open RustFS Console (Port 9001) &rarr;
           </a>
         </div>
+      </ConfigCard>
+
+      <ConfigCard
+        openSignal={openSignal}
+        title={
+          <>
+            <span>Relational Database</span>
+            <span className="chip chip-blue">PostgreSQL / SQLite</span>
+          </>
+        }
+      >
+        <ReadOnlyRow label="ORM Engine" value="Prisma 5.22.0" />
+        <ReadOnlyRow label="Connection URL" value="postgresql://***@localhost:5432" />
+        <ReadOnlyRow label="Target Services" value="ms-user, ms-order" />
+      </ConfigCard>
+
+      <ConfigCard
+        openSignal={openSignal}
+        title={
+          <>
+            <span>Document Database</span>
+            <span className="chip chip-green">NeDB / MongoDB</span>
+          </>
+        }
+      >
+        <ReadOnlyRow label="Storage Driver" value="Embedded NeDB" />
+        <ReadOnlyRow label="Local Data Path" value="./data/nedb" />
+        <ReadOnlyRow label="Target Services" value="ms-product" />
       </ConfigCard>
     </>
   )

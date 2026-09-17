@@ -9,12 +9,12 @@ function stateStatus(state: JobState): string {
     case 'active':
       return 'status-pending'
     case 'delayed':
-      return 'status-warning'
+      return 'status-delayed'
     case 'failed':
-      return 'status-failed'
+      return 'status-warning'
     case 'waiting':
     default:
-      return 'status-offline'
+      return 'status-waiting'
   }
 }
 
@@ -29,6 +29,7 @@ interface FlatJob extends RecentJob {
 
 export default function QueuesPanel({ data }: { data: QueueData }) {
   const [filter, setFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<JobState | null>(null)
 
   const queues = useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -47,9 +48,31 @@ export default function QueuesPanel({ data }: { data: QueueData }) {
         .flatMap((queue: QueueInfo) =>
           queue.recentJobs.map((job) => ({ ...job, service: queue.service, queue: queue.name }))
         )
+        .filter((job) => !statusFilter || job.status === statusFilter)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-    [queues]
+    [queues, statusFilter]
   )
+
+  const stateCounts = useMemo(
+    () =>
+      data.queues.reduce(
+        (acc, q) => ({
+          waiting: acc.waiting + q.counts.waiting,
+          active: acc.active + q.counts.active,
+          completed: acc.completed + q.counts.completed,
+          failed: acc.failed + q.counts.failed,
+          delayed: acc.delayed + q.counts.delayed,
+        }),
+        { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 }
+      ),
+    [data]
+  )
+  const totalCount =
+    stateCounts.waiting +
+    stateCounts.active +
+    stateCounts.completed +
+    stateCounts.failed +
+    stateCounts.delayed
 
   return (
     <>
@@ -64,11 +87,48 @@ export default function QueuesPanel({ data }: { data: QueueData }) {
         </div>
         <div className="toolbar-right">
           <span className="chip chip-slate">Queues {data.summary.queueCount}</span>
-          <span className="chip chip-blue">Total Jobs {data.summary.totalJobs}</span>
-          <span className="chip chip-purple">Active {data.summary.activeCount}</span>
-          <span className={`chip ${data.summary.failedCount > 0 ? 'chip-amber' : 'chip-slate'}`}>
-            Failed {data.summary.failedCount}
-          </span>
+          <button
+            type="button"
+            className={`chip chip-red chip-btn${statusFilter === 'waiting' ? ' chip-btn-active' : ''}`}
+            onClick={() => setStatusFilter((prev) => (prev === 'waiting' ? null : 'waiting'))}
+          >
+            Waiting {stateCounts.waiting}
+          </button>
+          <button
+            type="button"
+            className={`chip chip-blue chip-btn${statusFilter === 'active' ? ' chip-btn-active' : ''}`}
+            onClick={() => setStatusFilter((prev) => (prev === 'active' ? null : 'active'))}
+          >
+            Active {stateCounts.active}
+          </button>
+          <button
+            type="button"
+            className={`chip chip-green chip-btn${statusFilter === 'completed' ? ' chip-btn-active' : ''}`}
+            onClick={() => setStatusFilter((prev) => (prev === 'completed' ? null : 'completed'))}
+          >
+            Completed {stateCounts.completed}
+          </button>
+          <button
+            type="button"
+            className={`chip ${stateCounts.failed > 0 ? 'chip-amber' : 'chip-slate'} chip-btn${statusFilter === 'failed' ? ' chip-btn-active' : ''}`}
+            onClick={() => setStatusFilter((prev) => (prev === 'failed' ? null : 'failed'))}
+          >
+            Failed {stateCounts.failed}
+          </button>
+          <button
+            type="button"
+            className={`chip chip-purple chip-btn${statusFilter === 'delayed' ? ' chip-btn-active' : ''}`}
+            onClick={() => setStatusFilter((prev) => (prev === 'delayed' ? null : 'delayed'))}
+          >
+            Delayed {stateCounts.delayed}
+          </button>
+          <button
+            type="button"
+            className={`chip chip-slate chip-btn${statusFilter === null ? ' chip-btn-active' : ''}`}
+            onClick={() => setStatusFilter(null)}
+          >
+            Total {totalCount}
+          </button>
         </div>
       </div>
 

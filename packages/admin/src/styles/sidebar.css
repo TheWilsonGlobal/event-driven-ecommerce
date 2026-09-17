@@ -38,7 +38,7 @@
   color: var(--blue-light);
 }
 .sidebar-brand-text .subtitle {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-faint);
   margin-top: 1px;
 }
@@ -83,7 +83,7 @@
   overflow-x: hidden;
 }
 .nav-section {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -134,7 +134,7 @@
 }
 .nav-badge {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 10px;
@@ -161,7 +161,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -227,7 +227,7 @@
   gap: 8px;
 }
 .page-title .tag {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 12px;

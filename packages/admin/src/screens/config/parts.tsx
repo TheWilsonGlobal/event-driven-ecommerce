@@ -104,7 +104,7 @@ export function MultiFieldRow({ fields }: { fields: { label: string; value: Reac
           <span key={f.label} style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
             <span
               className="k"
-              style={{ fontSize: 10, textTransform: 'uppercase', fontWeight: 600 }}
+              style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}
             >
               {f.label}
             </span>

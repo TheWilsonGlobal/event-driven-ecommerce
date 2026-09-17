@@ -47,12 +47,12 @@
 }
 .btn-sm {
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 12px;
   border-radius: 5px;
 }
 .btn-sidebar {
   padding: 5px 8px;
-  font-size: 11px;
+  font-size: 12px;
   flex: 1;
   justify-content: center;
 }
@@ -75,7 +75,7 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
 }
 .stat-card .label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -219,7 +219,7 @@
   font-weight: 600;
 }
 .filter-tab .count {
-  font-size: 10px;
+  font-size: 12px;
   padding: 1px 6px;
   border-radius: 10px;
   background: rgba(148, 163, 184, 0.2);
@@ -240,7 +240,7 @@ table {
 th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -250,7 +250,7 @@ th {
 }
 td {
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: 13px;
   border-bottom: 1px solid rgba(51, 65, 85, 0.4);
   line-height: 1.4;
   vertical-align: middle;
@@ -312,15 +312,38 @@ tbody tr:nth-child(even) td {
   color: var(--red-light);
   border: 1px solid var(--red-border);
 }
+.status-delayed {
+  background: var(--purple-bg);
+  color: var(--purple);
+  border: 1px solid var(--purple-border);
+}
+.status-waiting {
+  background: var(--red-bg);
+  color: var(--red-light);
+  border: 1px solid var(--red-border);
+}
 
 .chip {
   display: inline-flex;
   align-items: center;
   padding: 2px 7px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   font-family: monospace;
+}
+.chip-btn {
+  cursor: pointer;
+  outline: none;
+  transition:
+    filter 0.15s,
+    box-shadow 0.15s;
+}
+.chip-btn:hover {
+  filter: brightness(1.25);
+}
+.chip-btn-active {
+  box-shadow: 0 0 0 2px var(--text-bright);
 }
 .chip-blue {
   background: var(--blue-bg);
@@ -341,6 +364,11 @@ tbody tr:nth-child(even) td {
   background: var(--amber-bg);
   color: var(--amber-light);
   border: 1px solid var(--amber-border);
+}
+.chip-red {
+  background: var(--red-bg);
+  color: var(--red-light);
+  border: 1px solid var(--red-border);
 }
 
 /* ── Config Cards (collapsible) ──────────────────────────────────────── */
@@ -390,7 +418,7 @@ tbody tr:nth-child(even) td {
   flex: 1;
 }
 .count-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 10px;
@@ -401,7 +429,7 @@ tbody tr:nth-child(even) td {
   display: flex;
   align-items: center;
   gap: 14px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
 }
 .config-metrics > span {
@@ -493,7 +521,7 @@ tbody tr:nth-child(even) td {
   flex: 1;
 }
 .undoc-tag {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 10px;
@@ -502,7 +530,7 @@ tbody tr:nth-child(even) td {
   border: 1px solid var(--amber-border);
 }
 .method-chip {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 4px;
@@ -568,7 +596,7 @@ tbody tr:nth-child(even) td {
   color: var(--text-faint);
 }
 .section-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -583,7 +611,7 @@ tbody tr:nth-child(even) td {
   align-items: center;
   gap: 10px;
   padding: 4px 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 .schema-index .k {
   font-family: monospace;

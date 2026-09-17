@@ -3,7 +3,7 @@ import type { RustfsHealth } from '../types'
 import { type OpenSignal } from './config/parts'
 import PersistencePanel from './config/PersistencePanel'
 import TaskQueuesPanel from './config/TaskQueuesPanel'
-import CachePanel from './config/CachePanel'
+import CachePanel, { CACHE_NAMESPACE_COUNT } from './config/CachePanel'
 import SchemaPanel from './config/SchemaPanel'
 import { SCHEMA_DATA } from './config/configSeed'
 import { QUEUE_DATA } from './queues/queueSeed'
@@ -33,7 +33,7 @@ export default function PersistenceTab({
               [
                 ['overview', 'Overview'],
                 ['queues', 'Task Queues'],
-                ['cache', 'Cache'],
+                ['cache', 'KV Cache'],
                 ['schema', 'DB Schema'],
               ] as [PersistenceSubTab, string][]
             ).map(([key, label]) => {
@@ -42,7 +42,9 @@ export default function PersistenceTab({
                   ? SCHEMA_DATA.summary.tableCount
                   : key === 'queues'
                     ? QUEUE_DATA.summary.queueCount
-                    : undefined
+                    : key === 'cache'
+                      ? CACHE_NAMESPACE_COUNT
+                      : undefined
               return (
                 <button
                   key={key}

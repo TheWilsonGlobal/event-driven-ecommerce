@@ -130,7 +130,7 @@ export default function OrdersTab({
                         background: 'var(--bg)',
                         border: '1px solid var(--border)',
                         color: 'var(--text-bright)',
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 700,
                         padding: '3px 8px',
                         borderRadius: 4,

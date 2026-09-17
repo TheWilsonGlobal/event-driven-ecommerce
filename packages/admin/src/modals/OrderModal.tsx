@@ -15,7 +15,7 @@ export default function OrderModal({ order, onClose }: Props) {
         <div className="modal-header">
           <div>
             <h3 className="mono">{order.orderNumber}</h3>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 2 }}>
               Placed: {new Date(order.createdAt).toLocaleString()}
             </div>
           </div>
@@ -46,7 +46,7 @@ export default function OrderModal({ order, onClose }: Props) {
             </div>
             <div className="panel-row">
               <span className="k">Shipping Address</span>
-              <span className="v" style={{ fontSize: 11 }}>
+              <span className="v" style={{ fontSize: 12 }}>
                 {order.shippingAddress.addressLine1}, {order.shippingAddress.city},{' '}
                 {order.shippingAddress.state} {order.shippingAddress.postalCode}
               </span>
@@ -56,7 +56,7 @@ export default function OrderModal({ order, onClose }: Props) {
           <div>
             <div
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 color: 'var(--text-dim)',
@@ -89,7 +89,7 @@ export default function OrderModal({ order, onClose }: Props) {
                     )}
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 12 }}>{item.title}</div>
-                      <div className="mono" style={{ fontSize: 10, color: 'var(--text-faint)' }}>
+                      <div className="mono" style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                         {item.sku} × {item.quantity}
                       </div>
                     </div>
@@ -158,7 +158,7 @@ export default function OrderModal({ order, onClose }: Props) {
                   color: '#ffffff',
                   fontWeight: 700,
                   textDecoration: 'underline',
-                  fontSize: 11,
+                  fontSize: 12,
                 }}
               >
                 Download PDF Receipt &rarr;
