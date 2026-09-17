@@ -25,6 +25,12 @@ export interface KeyValueStoreAdapter {
   scan(pattern?: string | undefined, limit?: number | undefined): Promise<ScanResult>
   /** Redis TTL semantics: seconds remaining, -1 = no expiry, -2 = key absent. */
   ttl(key: string): Promise<number>
+  /**
+   * Flushes pending writes and releases resources. Optional: an adapter with
+   * no durable state has nothing to close. Callers should invoke it on
+   * shutdown so a debounced snapshot is not lost.
+   */
+  close?(): Promise<void>
 }
 
 /** Snapshot file format. `version` gates forward-compatibility. */
@@ -302,10 +308,7 @@ export class EmbeddedKeyValueStore implements KeyValueStoreAdapter {
     this.scheduleWrite()
   }
 
-  async scan(
-    pattern?: string | undefined,
-    limit?: number | undefined
-  ): Promise<ScanResult> {
+  async scan(pattern?: string | undefined, limit?: number | undefined): Promise<ScanResult> {
     await this.ready()
     const matcher = compilePattern(pattern && pattern.length > 0 ? pattern : '*')
     const cap = Math.max(limit ?? DEFAULT_SCAN_LIMIT, 1)

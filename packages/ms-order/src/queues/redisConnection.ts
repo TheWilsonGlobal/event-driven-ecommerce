@@ -177,3 +177,11 @@ export async function closeAllRedisConnections(): Promise<void> {
 
 export const redisSettings = dbConfig.keyValue.redis
 export const keyValueDriver = dbConfig.keyValue.driver
+
+/**
+ * True when this process should talk to Redis at all.
+ *
+ * The 'rocksdb' and 'embedded' drivers both select the embedded file-backed
+ * store; only 'redis' creates connections and BullMQ queues.
+ */
+export const redisEnabled = dbConfig.keyValue.driver === 'redis'

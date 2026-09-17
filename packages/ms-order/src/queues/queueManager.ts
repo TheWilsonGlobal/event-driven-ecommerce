@@ -19,11 +19,15 @@ import {
   type ReleaseInventoryJob,
   type RefundPaymentJob,
 } from './jobTypes'
+import type { EmbeddedKeyValueStore, KeyValueStoreAdapter } from '@ecommerce/shared-database'
+import type { KeyspaceBackend, KeyspaceInspector } from './keyspaceInspector'
+import { EmbeddedKeyspaceInspector, RedisKeyspaceInspector } from './keyspaceInspector'
 import {
   createRedisConnection,
   closeAllRedisConnections,
   getLastRedisError,
   isConnectionUsable,
+  keyValueDriver,
 } from './redisConnection'
 import { describeError } from './describeError'
 import {
@@ -102,13 +106,37 @@ const RECENT_JOB_TYPES: JobType[] = ['active', 'waiting', 'delayed', 'completed'
 export class QueueManager {
   private readonly queues = new Map<QueueName, Queue>()
   private readonly workers: Worker[] = []
-  private readonly producerConnection: IORedis
-  private readonly scanConnection: IORedis
+  /** Undefined when this process is not backed by Redis. */
+  private readonly producerConnection: IORedis | undefined
+  private readonly scanConnection: IORedis | undefined
+  private readonly inspector: KeyspaceInspector
+  private readonly kvStore: KeyValueStoreAdapter | undefined
   private closed = false
 
-  constructor(private readonly prisma: PrismaClient) {
+  /**
+   * @param redisEnabled false when KV_CACHE_DRIVER selects the embedded store.
+   *   No Redis connections and no BullMQ queues are constructed in that case —
+   *   otherwise ms-order would open sockets that retry forever against a Redis
+   *   that is deliberately not running.
+   * @param kvStore the embedded store, required when redisEnabled is false.
+   */
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly redisEnabled: boolean = true,
+    kvStore?: KeyValueStoreAdapter | undefined
+  ) {
+    if (!redisEnabled) {
+      if (!kvStore) {
+        throw new Error('QueueManager requires a key-value store when Redis is disabled')
+      }
+      this.kvStore = kvStore
+      this.inspector = new EmbeddedKeyspaceInspector(kvStore)
+      return
+    }
+
     this.producerConnection = createRedisConnection('queue', 'bullmq-producers')
     this.scanConnection = createRedisConnection('scan', 'cache-scan')
+    this.inspector = new RedisKeyspaceInspector(this.scanConnection)
 
     for (const def of QUEUE_DEFINITIONS) {
       this.queues.set(
@@ -130,7 +158,62 @@ export class QueueManager {
 
   /** The Redis client used for cache-namespace SCANs. */
   get scanClient(): IORedis {
+    if (!this.scanConnection) {
+      throw new Error('No Redis scan connection: ms-order is running on the embedded KV driver')
+    }
     return this.scanConnection
+  }
+
+  /**
+   * Backend-agnostic keyspace reader for the cache endpoints. Works on both
+   * drivers, unlike scanClient.
+   */
+  get keyspaceInspector(): KeyspaceInspector {
+    return this.inspector
+  }
+
+  /** False when BullMQ is unavailable because the KV driver is not Redis. */
+  get queuesAvailable(): boolean {
+    return this.redisEnabled
+  }
+
+  /**
+   * Describes the active key-value backend for the driver endpoint.
+   *
+   * Reports what this process actually resolved at boot rather than what the
+   * environment requested, so the admin can never show a driver that is not
+   * the one in use.
+   */
+  keyValueInfo(): {
+    backend: KeyspaceBackend
+    label: string
+    dataPath: string | null
+    inMemory: boolean
+    loadError: string | null
+  } {
+    if (this.redisEnabled) {
+      return {
+        backend: 'redis',
+        label: 'Redis 7 (ioredis)',
+        dataPath: null,
+        inMemory: false,
+        loadError: null,
+      }
+    }
+
+    // The embedded store is the only non-Redis implementation; the extra
+    // accessors are optional so a future adapter without them still works.
+    const store = this.kvStore as EmbeddedKeyValueStore | undefined
+    const persistent = store?.isPersistent?.() ?? false
+    return {
+      backend: 'embedded',
+      // Never "RocksDB": this is a JSON snapshot, and naming it otherwise
+      // would reintroduce exactly the misreporting this work removed.
+      label: persistent ? 'Embedded (file-backed JSON)' : 'Embedded (in-memory)',
+      dataPath: store?.getFilePath?.() ?? null,
+      inMemory: !persistent,
+      loadError: store?.getLastLoadError?.()?.message ?? null,
+    }
   }
 
   private queue(name: QueueName): Queue {
@@ -363,6 +446,12 @@ export class QueueManager {
     if (this.closed) {
       return new RedisUnavailableError('queues_closed', 'Queue manager has been shut down')
     }
+    if (!this.redisEnabled || !this.producerConnection) {
+      return new RedisUnavailableError(
+        'kv_driver_not_redis',
+        `ms-order is configured with KV_CACHE_DRIVER=${keyValueDriver}; BullMQ requires Redis.`
+      )
+    }
     if (!isConnectionUsable(this.producerConnection)) {
       const last = getLastRedisError()
       // Classify via the last connection error where we have one, so the
@@ -382,6 +471,22 @@ export class QueueManager {
     } catch (err) {
       return toRedisUnavailable(err)
     }
+  }
+
+  /**
+   * Readiness gate for the CACHE endpoints, as distinct from checkRedis().
+   *
+   * The embedded store is always reachable, so cache introspection stays
+   * available on that driver even though the queue endpoints do not.
+   */
+  async checkKeyspace(): Promise<RedisUnavailableError | null> {
+    if (this.closed) {
+      return new RedisUnavailableError('queues_closed', 'Queue manager has been shut down')
+    }
+    if (!this.redisEnabled) {
+      return null
+    }
+    return this.checkRedis()
   }
 
   // -------------------------------------------------------------------------

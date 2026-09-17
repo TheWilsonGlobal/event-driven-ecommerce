@@ -1,4 +1,4 @@
-import type IORedis from 'ioredis'
+import type { KeyspaceBackend, KeyspaceInspector } from './keyspaceInspector'
 import { CACHE_NAMESPACES } from './definitions'
 import { toRedisUnavailable } from './queueManager'
 
@@ -11,11 +11,30 @@ import { toRedisUnavailable } from './queueManager'
  * yields between them.
  */
 
-/** Keys examined per SCAN round-trip. Larger = fewer round-trips, longer per call. */
-const SCAN_COUNT = 500
+/**
+ * Upper bound on keys counted per namespace. A namespace with more than this
+ * reports `truncated`, and the count is a floor rather than an exact figure.
+ */
+const NAMESPACE_SCAN_CAP = 100000
 
-/** Hard ceiling on cursor iterations per prefix, so a huge keyspace cannot hang the request. */
-const MAX_SCAN_ITERATIONS = 2000
+/**
+ * Upper bound on keys TYPE-probed per namespace.
+ *
+ * Counting is cheap (SCAN alone), but the per-type breakdown needs a TYPE call
+ * per key. That is pipelined, yet still one command per key — so on a huge
+ * namespace it is capped and the breakdown is reported as partial rather than
+ * quietly under-counting. Well above any realistic namespace here.
+ */
+const TYPE_PROBE_CAP = 5000
+
+/** Key types broken out per namespace; other Redis types fold into `other`. */
+export interface CacheTypeBreakdown {
+  hash: number
+  stream: number
+  string: number
+  zset: number
+  other: number
+}
 
 export interface CacheNamespaceView {
   prefix: string
@@ -23,6 +42,13 @@ export interface CacheNamespaceView {
   keyCount: number
   /** True when the scan hit MAX_SCAN_ITERATIONS and keyCount is a floor, not an exact count. */
   truncated: boolean
+  /** Per-type counts. Sums to keyCount unless typesPartial is true. */
+  types: CacheTypeBreakdown
+  /**
+   * True when more keys exist than were TYPE-probed, so the breakdown covers
+   * only the first TYPE_PROBE_CAP keys. The UI must not present it as complete.
+   */
+  typesPartial: boolean
 }
 
 export interface CacheNamespaceData {
@@ -30,38 +56,13 @@ export interface CacheNamespaceData {
   totalKeys: number
   /** True if any namespace was truncated — the UI can then label the total as approximate. */
   truncated: boolean
+  /** Per-type totals across every namespace. */
+  types: CacheTypeBreakdown
+  /** True when any namespace's breakdown is partial. */
+  typesPartial: boolean
+  /** Which store answered — 'redis' or the embedded file-backed store. */
+  backend: KeyspaceBackend
   scannedAt: string
-}
-
-/**
- * Counts keys matching `pattern` using SCAN.
- *
- * SCAN may return the same key more than once across iterations (it guarantees
- * only that keys present for the whole scan are returned at least once), so we
- * de-duplicate via a Set rather than summing batch lengths — otherwise the
- * count can overshoot on a keyspace being written concurrently.
- */
-async function countKeysMatching(
-  client: IORedis,
-  pattern: string
-): Promise<{ count: number; truncated: boolean }> {
-  const seen = new Set<string>()
-  let cursor = '0'
-  let iterations = 0
-
-  do {
-    const [nextCursor, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', SCAN_COUNT)
-    cursor = nextCursor
-    for (const key of keys) {
-      seen.add(key)
-    }
-    iterations += 1
-    if (iterations >= MAX_SCAN_ITERATIONS) {
-      return { count: seen.size, truncated: true }
-    }
-  } while (cursor !== '0')
-
-  return { count: seen.size, truncated: false }
 }
 
 /**
@@ -71,31 +72,59 @@ async function countKeysMatching(
  * to a 503. Returning zeros instead would be indistinguishable from a genuinely
  * empty Redis, which is precisely the ambiguity this endpoint exists to remove.
  */
-export async function getCacheNamespaceData(client: IORedis): Promise<CacheNamespaceData> {
+export async function getCacheNamespaceData(
+  inspector: KeyspaceInspector
+): Promise<CacheNamespaceData> {
   const namespaces: CacheNamespaceView[] = []
   let anyTruncated = false
 
   try {
     for (const ns of CACHE_NAMESPACES) {
-      const { count, truncated } = await countKeysMatching(client, ns.prefix)
+      const { keys, truncated } = await inspector.scanKeys(ns.prefix, NAMESPACE_SCAN_CAP)
       if (truncated) {
         anyTruncated = true
       }
+
+      const probed = keys.slice(0, TYPE_PROBE_CAP)
+      const described = probed.length > 0 ? await inspector.describeKeys(probed) : []
+      const types: CacheTypeBreakdown = { hash: 0, stream: 0, string: 0, zset: 0, other: 0 }
+      for (const entry of described) {
+        if (entry.type === 'hash') types.hash += 1
+        else if (entry.type === 'stream') types.stream += 1
+        else if (entry.type === 'string') types.string += 1
+        else if (entry.type === 'zset') types.zset += 1
+        else types.other += 1
+      }
+
       namespaces.push({
         prefix: ns.prefix,
         purpose: ns.purpose,
-        keyCount: count,
+        keyCount: keys.length,
         truncated,
+        types,
+        typesPartial: keys.length > probed.length,
       })
     }
   } catch (err) {
     throw toRedisUnavailable(err)
   }
 
+  const totals: CacheTypeBreakdown = { hash: 0, stream: 0, string: 0, zset: 0, other: 0 }
+  for (const ns of namespaces) {
+    totals.hash += ns.types.hash
+    totals.stream += ns.types.stream
+    totals.string += ns.types.string
+    totals.zset += ns.types.zset
+    totals.other += ns.types.other
+  }
+
   return {
     namespaces,
     totalKeys: namespaces.reduce((sum, ns) => sum + ns.keyCount, 0),
     truncated: anyTruncated,
+    types: totals,
+    typesPartial: namespaces.some((ns) => ns.typesPartial),
+    backend: inspector.backend,
     scannedAt: new Date().toISOString(),
   }
 }

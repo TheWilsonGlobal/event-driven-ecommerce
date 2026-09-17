@@ -21,4 +21,6 @@ export type {
   ReleaseInventoryJob,
   RefundPaymentJob,
 } from './jobTypes'
-export { keyValueDriver, redisSettings } from './redisConnection'
+export { keyValueDriver, redisSettings, redisEnabled } from './redisConnection'
+export { RedisKeyspaceInspector, EmbeddedKeyspaceInspector } from './keyspaceInspector'
+export type { KeyspaceInspector, KeyspaceBackend, KeyspaceEntry } from './keyspaceInspector'

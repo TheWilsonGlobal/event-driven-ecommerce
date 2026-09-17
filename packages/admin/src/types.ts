@@ -4,6 +4,7 @@ export type Tab =
   | 'orders'
   | 'users'
   | 'task-queues'
+  | 'kv-keys'
   | 'storage'
   | 'persistence'
   | 'config'

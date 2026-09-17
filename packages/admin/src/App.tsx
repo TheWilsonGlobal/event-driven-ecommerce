@@ -13,6 +13,7 @@ import {
   QueueIcon,
   StorageIcon,
   PersistenceIcon,
+  CacheIcon,
   ConfigIcon,
   ExternalLinkIcon,
 } from './components/icons'
@@ -25,8 +26,9 @@ import UsersTab from './screens/UsersTab'
 import TaskQueuesTab from './screens/TaskQueuesTab'
 import StorageTab from './screens/StorageTab'
 import PersistenceTab from './screens/PersistenceTab'
+import KvKeysTab from './screens/KvKeysTab'
 import ConfigTab from './screens/ConfigTab'
-import { useQueueData } from './hooks/useQueueData'
+import { useCacheKeys, useQueueData } from './hooks/useQueueData'
 
 // Modals
 import ServiceModal from './modals/ServiceModal'
@@ -47,14 +49,17 @@ export default function App() {
   // Sidebar job-count badge: live, and omitted entirely (rather than faked)
   // while loading or when Redis/ms-order is unreachable.
   const queueData = useQueueData()
+  const cacheKeyData = useCacheKeys()
 
-  // The badge owns a separate hook instance from the tabs, so refresh it on
-  // navigation. Without this it would stay stuck on its mount-time result —
+  // These badges own separate hook instances from the tabs, so refresh them on
+  // navigation. Without this they would stay stuck on their mount-time result —
   // notably staying blank after Redis recovers, until a full page reload.
   const refetchQueues = queueData.refetch
+  const refetchCacheKeys = cacheKeyData.refetch
   useEffect(() => {
     refetchQueues()
-  }, [app.tab, refetchQueues])
+    refetchCacheKeys()
+  }, [app.tab, refetchQueues, refetchCacheKeys])
 
   const OPERATIONS: NavEntry[] = [{ key: 'dashboard', label: 'Dashboard', Icon: DashboardIcon }]
 
@@ -75,6 +80,7 @@ export default function App() {
       Icon: QueueIcon,
       count: queueData.data?.summary.totalJobs,
     },
+    { key: 'kv-keys', label: 'KV Cache', Icon: CacheIcon, count: cacheKeyData.data?.totalKeys },
     { key: 'storage', label: 'Storage', Icon: StorageIcon, count: data.objectCount },
   ]
 
@@ -233,6 +239,8 @@ export default function App() {
         )}
 
         {app.tab === 'task-queues' && <TaskQueuesTab />}
+
+        {app.tab === 'kv-keys' && <KvKeysTab />}
 
         {app.tab === 'storage' && <StorageTab />}
 

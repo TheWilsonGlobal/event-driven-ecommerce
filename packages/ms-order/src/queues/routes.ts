@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify'
 import { QueueManager, RedisUnavailableError, toRedisUnavailable } from './queueManager'
 import { getCacheNamespaceData } from './cacheNamespaces'
 import { getCacheKeyData, MAX_KEYS_RETURNED } from './cacheKeys'
+import { keyValueDriver, redisSettings } from './redisConnection'
 import { JOB_STATES } from './definitions'
 
 /**
@@ -50,6 +51,20 @@ const serviceUnavailableSchema = {
     timestamp: { type: 'string', format: 'date-time' },
   },
   required: ['error', 'reason', 'message', 'timestamp'],
+} as const
+
+const cacheTypeBreakdownSchema = {
+  type: 'object',
+  description: 'Key counts by Redis type; types outside the broken-out set fold into `other`.',
+  properties: {
+    hash: { type: 'number' },
+    stream: { type: 'number' },
+    string: { type: 'number' },
+    zset: { type: 'number' },
+    other: { type: 'number' },
+  },
+  required: ['hash', 'stream', 'string', 'zset', 'other'],
+  additionalProperties: false,
 } as const
 
 const cacheKeysQuerystringSchema = {
@@ -203,28 +218,55 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
                       description:
                         'True when the SCAN hit its iteration ceiling; keyCount is then a floor.',
                     },
+                    types: cacheTypeBreakdownSchema,
+                    typesPartial: {
+                      type: 'boolean',
+                      description:
+                        'True when only the first N keys were TYPE-probed, so the breakdown ' +
+                        'covers a subset and does not sum to keyCount.',
+                    },
                   },
-                  required: ['prefix', 'purpose', 'keyCount', 'truncated'],
+                  required: [
+                    'prefix',
+                    'purpose',
+                    'keyCount',
+                    'truncated',
+                    'types',
+                    'typesPartial',
+                  ],
                 },
               },
               totalKeys: { type: 'number' },
               truncated: { type: 'boolean' },
+              types: cacheTypeBreakdownSchema,
+              typesPartial: { type: 'boolean' },
+              backend: { type: 'string', enum: ['redis', 'embedded'] },
               scannedAt: { type: 'string', format: 'date-time' },
             },
-            required: ['namespaces', 'totalKeys', 'truncated', 'scannedAt'],
+            required: [
+              'namespaces',
+              'totalKeys',
+              'truncated',
+              'types',
+              'typesPartial',
+              'backend',
+              'scannedAt',
+            ],
           },
           503: serviceUnavailableSchema,
         },
       },
     },
     async (_request, reply) => {
-      const unavailable = await queueManager.checkRedis()
+      // checkKeyspace, not checkRedis: cache introspection is available on the
+      // embedded driver too, whereas the queue endpoints genuinely are not.
+      const unavailable = await queueManager.checkKeyspace()
       if (unavailable) {
         return sendUnavailable(reply, unavailable)
       }
 
       try {
-        return await getCacheNamespaceData(queueManager.scanClient)
+        return await getCacheNamespaceData(queueManager.keyspaceInspector)
       } catch (err) {
         return sendUnavailable(reply, toRedisUnavailable(err))
       }
@@ -253,16 +295,17 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
                 description: 'True when more keys exist than were returned.',
               },
               sizeApproximate: { type: 'boolean' },
+              backend: { type: 'string', enum: ['redis', 'embedded'] },
               scannedAt: { type: 'string', format: 'date-time' },
             },
-            required: ['keys', 'totalKeys', 'truncated', 'sizeApproximate', 'scannedAt'],
+            required: ['keys', 'totalKeys', 'truncated', 'sizeApproximate', 'backend', 'scannedAt'],
           },
           503: serviceUnavailableSchema,
         },
       },
     },
     async (request, reply) => {
-      const unavailable = await queueManager.checkRedis()
+      const unavailable = await queueManager.checkKeyspace()
       if (unavailable) {
         return sendUnavailable(reply, unavailable)
       }
@@ -270,9 +313,64 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
       const { pattern, limit } = request.query as { pattern?: string; limit?: number }
 
       try {
-        return await getCacheKeyData(queueManager.scanClient, { pattern, limit })
+        return await getCacheKeyData(queueManager.keyspaceInspector, { pattern, limit })
       } catch (err) {
         return sendUnavailable(reply, toRedisUnavailable(err))
+      }
+    }
+  )
+
+  server.get(
+    '/api/v1/cache/driver',
+    {
+      schema: {
+        tags: ['cache'],
+        description:
+          'The key-value driver this process actually resolved at boot. Deliberately has no ' +
+          '503 branch: it answers even when Redis is down, because "which driver is active" ' +
+          'is exactly what an operator needs when the other endpoints are failing. Lets the ' +
+          'admin report the real driver instead of hardcoding one.',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              driver: { type: 'string', enum: ['redis', 'rocksdb', 'embedded'] },
+              backend: { type: 'string', enum: ['redis', 'embedded'] },
+              label: { type: 'string' },
+              host: { type: ['string', 'null'] },
+              dataPath: { type: ['string', 'null'] },
+              inMemory: { type: 'boolean' },
+              queuesAvailable: {
+                type: 'boolean',
+                description: 'False on the embedded driver: BullMQ requires real Redis.',
+              },
+              loadError: { type: ['string', 'null'] },
+            },
+            required: [
+              'driver',
+              'backend',
+              'label',
+              'host',
+              'dataPath',
+              'inMemory',
+              'queuesAvailable',
+              'loadError',
+            ],
+          },
+        },
+      },
+    },
+    async () => {
+      const info = queueManager.keyValueInfo()
+      return {
+        driver: keyValueDriver,
+        backend: queueManager.keyspaceInspector.backend,
+        label: info.label,
+        host: info.backend === 'redis' ? `${redisSettings.host}:${redisSettings.port}` : null,
+        dataPath: info.dataPath,
+        inMemory: info.inMemory,
+        queuesAvailable: queueManager.queuesAvailable,
+        loadError: info.loadError,
       }
     }
   )

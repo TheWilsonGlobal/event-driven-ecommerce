@@ -115,6 +115,8 @@ media/
 
 # RustFS bind-mounted object storage
 data/rustfs/
+# Embedded KV snapshot (KV_CACHE_DRIVER=rocksdb|embedded). Runtime state, not source.
+data/rocksdb/
 
 # Docker
 .dockerignore

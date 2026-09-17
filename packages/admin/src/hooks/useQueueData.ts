@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { QueueData } from '../screens/queues/queueTypes'
-import type { CacheData, CacheKeysData } from '../screens/config/cacheTypes'
+import type { CacheData, CacheKeysData, CacheDriverInfo } from '../screens/config/cacheTypes'
 import { ORDER_SERVICE_URL } from '../data/serviceUrls'
 
 // Live queue + KV-cache introspection, served by ms-order directly (the API
@@ -23,12 +23,10 @@ export type UnavailableReason =
   | 'redis_unavailable'
   | 'redis_error'
   | 'queues_closed'
-  // Not currently emitted by ms-order: redisConnection.ts ignores
-  // dbConfig.keyValue.driver and always connects to Redis, so a non-Redis
-  // driver surfaces as `redis_connection_refused`. Kept because it is the
-  // contract's documented reason and costs nothing if the backend starts
-  // honouring the driver setting; unknown reasons fall through to the
-  // `| string` case in FetchError and degrade to the generic label.
+  // Emitted when KV_CACHE_DRIVER selects the embedded store: ms-order then
+  // constructs no Redis connection and no BullMQ queues, so the QUEUE
+  // endpoints 503 with this reason while the CACHE endpoints keep working
+  // against the embedded store.
   | 'kv_driver_not_redis'
 
 export interface FetchError {
@@ -154,6 +152,11 @@ export function useCacheNamespaces(): LiveResource<CacheData> {
 /** GET /api/v1/cache/keys — live listing of individual Redis keys. */
 export function useCacheKeys(): LiveResource<CacheKeysData> {
   return useLiveResource<CacheKeysData>(`${ORDER_SERVICE_URL}/api/v1/cache/keys`)
+}
+
+/** GET /api/v1/cache/driver — which KV backend ms-order actually resolved. */
+export function useCacheDriver(): LiveResource<CacheDriverInfo> {
+  return useLiveResource<CacheDriverInfo>(`${ORDER_SERVICE_URL}/api/v1/cache/driver`)
 }
 
 /** Short operator-facing label for the failure, used in banners. */

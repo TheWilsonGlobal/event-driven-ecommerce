@@ -6,7 +6,7 @@ import TaskQueuesPanel from './config/TaskQueuesPanel'
 import CachePanel from './config/CachePanel'
 import SchemaPanel from './config/SchemaPanel'
 import { withLiveRowCounts } from './config/configSeed'
-import { useCacheKeys, useCacheNamespaces, useQueueData } from '../hooks/useQueueData'
+import { useCacheDriver, useCacheNamespaces, useQueueData } from '../hooks/useQueueData'
 
 type PersistenceSubTab = 'overview' | 'queues' | 'cache' | 'schema'
 
@@ -25,7 +25,7 @@ export default function PersistenceTab({
 
   const queues = useQueueData()
   const cache = useCacheNamespaces()
-  const cacheKeys = useCacheKeys()
+  const driver = useCacheDriver()
 
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
@@ -34,15 +34,12 @@ export default function PersistenceTab({
 
   // The live sub-tabs refetch in place; the static ones have nothing to fetch,
   // so a full page reload remains the only meaningful "reload" there.
-  const reloading =
-    (tab === 'queues' && queues.loading) ||
-    (tab === 'cache' && (cache.loading || cacheKeys.loading))
+  const reloading = (tab === 'queues' && queues.loading) || (tab === 'cache' && cache.loading)
   const handleReload = () => {
     if (tab === 'queues') {
       queues.refetch()
     } else if (tab === 'cache') {
       cache.refetch()
-      cacheKeys.refetch()
     } else {
       window.location.reload()
     }
@@ -125,6 +122,7 @@ export default function PersistenceTab({
           openSignal={openSignal}
           onPingRustFS={onPingRustFS}
           queueData={queues}
+          driver={driver}
         />
       )}
       {tab === 'queues' && (
@@ -141,10 +139,6 @@ export default function PersistenceTab({
           loading={cache.loading}
           error={cache.error}
           onRetry={cache.refetch}
-          keysData={cacheKeys.data}
-          keysLoading={cacheKeys.loading}
-          keysError={cacheKeys.error}
-          onRetryKeys={cacheKeys.refetch}
         />
       )}
       {tab === 'schema' && <SchemaPanel schema={schemaData} openSignal={openSignal} />}

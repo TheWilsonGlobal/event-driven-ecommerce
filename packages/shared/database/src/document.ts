@@ -70,7 +70,9 @@ export class EmbeddedDocumentStore<
     this.dataPath = dataPath
 
     const useFile = !inMemory && !!dataPath
-    const filename = useFile ? EmbeddedDocumentStore.resolveFilePath(dataPath!, collectionName) : undefined
+    const filename = useFile
+      ? EmbeddedDocumentStore.resolveFilePath(dataPath!, collectionName)
+      : undefined
 
     this.db = new Datastore<T>({
       filename,

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
-import type { CacheData, CacheKeysData, CacheKeyType, CacheKeyView } from './cacheTypes'
+import { Fragment } from 'react'
+import type { CacheData, CacheTypeBreakdown } from './cacheTypes'
 import type { FetchError } from '../../hooks/useQueueData'
 import { describeError } from '../../hooks/useQueueData'
-import { EmptyState, OfflineBanner, Pagination, Spinner } from '../../components/ui'
+import { EmptyState, OfflineBanner, Spinner } from '../../components/ui'
 
 // A truncated count is a lower bound (the SCAN hit its cap), so it is rendered
 // with a "≥" prefix rather than as an exact figure.
@@ -10,99 +10,67 @@ function fmtCount(count: number, truncated: boolean): string {
   return `${truncated ? '≥' : ''}${count.toLocaleString()}`
 }
 
-// Redis TTL conventions: -1 = the key has no expiry, -2 = the key is gone (it
-// expired between the SCAN and the TTL read). Neither is a duration, so
-// neither is formatted as one.
-function fmtTtl(ttlSeconds: number): string {
-  if (ttlSeconds === -1) return 'no expiry'
-  if (ttlSeconds < 0) return '—'
-  if (ttlSeconds < 60) return `${ttlSeconds}s`
-  if (ttlSeconds < 3600) return `${Math.round(ttlSeconds / 60)}m`
-  return `${Math.round(ttlSeconds / 3600)}h`
+/** Columns broken out of the per-namespace type breakdown, in display order. */
+const TYPE_COLUMNS = ['hash', 'stream', 'string', 'zset'] as const
+
+// A zero is real data here, not missing data — so it renders as 0, just muted
+// so the populated cells carry the eye.
+function typeCell(value: number) {
+  return (
+    <td
+      className="mono cell-right"
+      style={value === 0 ? { color: 'var(--text-faint)' } : undefined}
+    >
+      {value}
+    </td>
+  )
 }
 
-// null means "could not be measured" and must not render as 0 B — a zero here
-// would read as a real measurement of an empty key.
-function fmtBytes(sizeBytes: number | null): string {
-  if (sizeBytes === null) return '—'
-  if (sizeBytes < 1024) return `${sizeBytes} B`
-  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`
-  return `${(sizeBytes / 1024 / 1024).toFixed(2)} MB`
+/** True when a namespace holds a type outside the broken-out columns. */
+function hasOther(types: CacheTypeBreakdown): boolean {
+  return types.other > 0
 }
-
-// Stable empty array: `keysData?.keys ?? NO_KEYS` must not hand useMemo a fresh
-// [] on every render, or the filter memo recomputes constantly.
-const NO_KEYS: CacheKeyView[] = []
-
-const KEYS_PAGE_SIZE = 10
 
 export default function CachePanel({
   data,
   loading,
   error,
   onRetry,
-  keysData,
-  keysLoading,
-  keysError,
-  onRetryKeys,
 }: {
   data: CacheData | null
   loading: boolean
   error: FetchError | null
   onRetry: () => void
-  keysData: CacheKeysData | null
-  keysLoading: boolean
-  keysError: FetchError | null
-  onRetryKeys: () => void
 }) {
-  const [filter, setFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState<CacheKeyType | null>(null)
-  const [page, setPage] = useState(1)
-
-  const allKeys = keysData?.keys ?? NO_KEYS
-
-  // Null (not an empty object) while there is no data, so the chips can render
-  // an em-dash instead of a plausible-looking zero.
-  const typeCounts = useMemo(() => {
-    if (!keysData) return null
-    const counts: Partial<Record<CacheKeyType, number>> = {}
-    for (const entry of allKeys) {
-      counts[entry.type] = (counts[entry.type] ?? 0) + 1
-    }
-    return counts
-  }, [keysData, allKeys])
-
-  const filteredKeys = useMemo(() => {
-    const needle = filter.trim().toLowerCase()
-    return allKeys.filter(
-      (entry) =>
-        (!needle || entry.key.toLowerCase().includes(needle)) &&
-        (!typeFilter || entry.type === typeFilter)
-    )
-  }, [allKeys, filter, typeFilter])
-
-  const paginatedKeys = filteredKeys.slice((page - 1) * KEYS_PAGE_SIZE, page * KEYS_PAGE_SIZE)
-
-  // Any filter change resets to page 1 — otherwise a narrowed result set can
-  // leave the view stranded on a page that no longer exists.
-  const changeFilter = (next: string) => {
-    setFilter(next)
-    setPage(1)
-  }
-  const toggleType = (next: CacheKeyType) => {
-    setTypeFilter((prev) => (prev === next ? null : next))
-    setPage(1)
-  }
-
-  const presentTypes = typeCounts
-    ? (Object.keys(typeCounts) as CacheKeyType[]).sort((a, b) => a.localeCompare(b))
-    : []
+  // The `other` column only appears when a type outside the broken-out set is
+  // actually present — an always-zero column is noise.
+  const showOther = Boolean(
+    data && (hasOther(data.types) || data.namespaces.some((ns) => hasOther(ns.types)))
+  )
 
   return (
     <>
-      <div className="section-title spaced" style={{ marginBottom: 8 }}>
-        Key Namespaces
+      <div
+        className="section-title spaced"
+        style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}
+      >
+        <span>Key Namespaces</span>
+        {data && (
+          <span className="chip chip-slate">
+            {data.backend === 'redis' ? 'redis' : 'embedded (file-backed)'}
+          </span>
+        )}
       </div>
+
+      {/* Without this, seven namespaces reading zero looks like a bug rather
+          than the truth: BullMQ does not run on the embedded driver, so no
+          bull:* keys can exist. */}
+      {data?.backend === 'embedded' && (
+        <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 8 }}>
+          Queue namespaces are empty because BullMQ is not running on this driver — it requires
+          Redis.
+        </div>
+      )}
 
       {data?.truncated && (
         <div className="warn-banner">
@@ -135,6 +103,12 @@ export default function CachePanel({
               <tr>
                 <th>Prefix</th>
                 <th>Purpose</th>
+                {TYPE_COLUMNS.map((type) => (
+                  <th key={type} className="cell-right">
+                    {type}
+                  </th>
+                ))}
+                {showOther && <th className="cell-right">other</th>}
                 <th className="cell-right">Keys</th>
               </tr>
             </thead>
@@ -143,11 +117,22 @@ export default function CachePanel({
                 <tr key={ns.prefix}>
                   <td className="mono">{ns.prefix}</td>
                   <td className="cell-muted">{ns.purpose}</td>
+                  {TYPE_COLUMNS.map((type) => (
+                    <Fragment key={type}>{typeCell(ns.types[type])}</Fragment>
+                  ))}
+                  {showOther && typeCell(ns.types.other)}
                   <td
                     className="mono cell-right"
-                    title={ns.truncated ? 'SCAN cap reached — at least this many keys' : undefined}
+                    title={
+                      ns.typesPartial
+                        ? 'Type breakdown covers only the first probed keys'
+                        : ns.truncated
+                          ? 'SCAN cap reached — at least this many keys'
+                          : undefined
+                    }
                   >
                     {fmtCount(ns.keyCount, ns.truncated)}
+                    {ns.typesPartial ? ' *' : ''}
                   </td>
                 </tr>
               ))}
@@ -156,6 +141,23 @@ export default function CachePanel({
                   Total
                 </td>
                 <td className="cell-muted"></td>
+                {TYPE_COLUMNS.map((type) => (
+                  <td
+                    key={type}
+                    className="mono cell-right"
+                    style={{ fontWeight: 700, color: 'var(--text-bright)' }}
+                  >
+                    {data.types[type]}
+                  </td>
+                ))}
+                {showOther && (
+                  <td
+                    className="mono cell-right"
+                    style={{ fontWeight: 700, color: 'var(--text-bright)' }}
+                  >
+                    {data.types.other}
+                  </td>
+                )}
                 <td
                   className="mono cell-right"
                   style={{ fontWeight: 700, color: 'var(--text-bright)' }}
@@ -169,120 +171,16 @@ export default function CachePanel({
         </div>
       )}
 
+      {data?.typesPartial && (
+        <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 8 }}>
+          * Rows marked with an asterisk hold more keys than were type-probed, so their per-type
+          columns cover only the probed subset and do not sum to the key count.
+        </div>
+      )}
+
       {data && (
         <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 8 }}>
           Scanned {new Date(data.scannedAt).toLocaleString()} · live from ms-order
-        </div>
-      )}
-
-      <div className="section-title spaced" style={{ marginTop: 20, marginBottom: 8 }}>
-        Keys
-      </div>
-
-      <div className="toolbar">
-        <div className="toolbar-left">
-          <input
-            type="text"
-            placeholder="Filter keys by name..."
-            value={filter}
-            onChange={(e) => changeFilter(e.target.value)}
-          />
-        </div>
-        <div className="toolbar-right">
-          <span className="chip chip-slate">Keys {keysData ? keysData.totalKeys : '—'}</span>
-          {presentTypes.map((type) => (
-            <button
-              key={type}
-              type="button"
-              className={`chip chip-slate chip-btn${typeFilter === type ? ' chip-btn-active' : ''}`}
-              onClick={() => toggleType(type)}
-              aria-pressed={typeFilter === type}
-            >
-              {type} {typeCounts?.[type] ?? 0}
-            </button>
-          ))}
-          {typeFilter && (
-            <button
-              type="button"
-              className="chip chip-slate chip-btn"
-              onClick={() => {
-                setTypeFilter(null)
-                setPage(1)
-              }}
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      </div>
-
-      {keysData?.truncated && (
-        <div className="warn-banner">
-          Only the first {keysData.totalKeys.toLocaleString()} keys are listed — the scan hit its
-          cap and more keys exist.
-        </div>
-      )}
-
-      {keysError ? (
-        <OfflineBanner
-          title={`Key listing unavailable — ${describeError(keysError)}`}
-          detail={keysError.message}
-          reason={
-            keysError.reason ?? (keysError.status ? `HTTP ${keysError.status}` : 'network_error')
-          }
-          onRetry={onRetryKeys}
-          retrying={keysLoading}
-        />
-      ) : keysLoading && !keysData ? (
-        <Spinner label="Listing Redis keys…" />
-      ) : !keysData ? (
-        <EmptyState message="No key data loaded yet." />
-      ) : allKeys.length === 0 ? (
-        <EmptyState message="Redis is reachable but holds no keys." />
-      ) : filteredKeys.length === 0 ? (
-        <EmptyState message={`No keys match "${filter}"`} />
-      ) : (
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Key</th>
-                <th className="cell-center">Type</th>
-                <th className="cell-right">TTL</th>
-                <th
-                  className="cell-right"
-                  title={
-                    keysData.sizeApproximate
-                      ? 'Approximate — MEMORY USAGE with a bounded sample count'
-                      : undefined
-                  }
-                >
-                  Size{keysData.sizeApproximate ? ' ≈' : ''}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedKeys.map((entry) => (
-                <tr key={entry.key}>
-                  <td className="mono" title={entry.key}>
-                    {entry.key}
-                  </td>
-                  <td className="cell-center">
-                    <span className="chip chip-slate">{entry.type}</span>
-                  </td>
-                  <td className="mono cell-right cell-muted">{fmtTtl(entry.ttlSeconds)}</td>
-                  <td className="mono cell-right cell-muted">{fmtBytes(entry.sizeBytes)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination
-            page={page}
-            pageSize={KEYS_PAGE_SIZE}
-            total={filteredKeys.length}
-            onPage={setPage}
-            noun="keys"
-          />
         </div>
       )}
     </>

@@ -8,25 +8,43 @@ import * as dotenv from 'dotenv'
 import * as path from 'path'
 import * as crypto from 'crypto'
 import { PrismaClient, Prisma } from '../node_modules/.prisma-ms-order/client'
-import { loadDatabaseConfig } from '@ecommerce/shared-database'
+import { createKeyValueStore, loadDatabaseConfig } from '@ecommerce/shared-database'
 import {
   seedOrdersIfEmpty,
   paymentMethodToProvider,
   paymentStatusToPaymentRowStatus,
 } from './seedOrders'
-import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS } from './queues'
+import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS, redisEnabled } from './queues'
 
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
+/** Workspace root — this service's cwd is packages/ms-order. */
+const REPO_ROOT = path.resolve(__dirname, '../../../')
+
+dotenv.config({ path: path.resolve(REPO_ROOT, '.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.ORDER_SERVICE_PORT || '3003', 10)
 
+// Relative KV paths are written from the repo root, but this process runs in
+// packages/ms-order — without this, './data/rocksdb' would land in
+// packages/ms-order/data/. Mirrors what ms-product does for its NeDB path.
+if (!path.isAbsolute(dbConfig.keyValue.embedded.dataPath)) {
+  dbConfig.keyValue.embedded.dataPath = path.resolve(REPO_ROOT, dbConfig.keyValue.embedded.dataPath)
+}
+
 const prisma = new PrismaClient()
+
+// The embedded store is only constructed when it is the active driver, so the
+// Redis path does not create a file it never reads.
+const kvStore = redisEnabled ? undefined : createKeyValueStore(dbConfig)
 
 // BullMQ queues + workers. Construction never throws and never blocks on a
 // connection, so ms-order boots and serves the order API even when Redis is
 // down; the queue endpoints report 503 instead of pretending to be empty.
-const queueManager = new QueueManager(prisma)
+//
+// On the embedded driver no Redis connection is created at all — otherwise the
+// process would open sockets retrying forever against a Redis that is
+// deliberately not running — and the queue endpoints report kv_driver_not_redis.
+const queueManager = new QueueManager(prisma, redisEnabled, kvStore)
 
 const ORDER_STATUSES = [
   'PENDING',
@@ -887,10 +905,20 @@ async function bootstrap() {
 
   // Workers attach to Redis lazily; if Redis is down they sit reconnecting
   // (with an 'error' handler attached) and the service still serves HTTP.
-  queueManager.startWorkers()
-  console.log(
-    `[Order Service] BullMQ workers started for: ${QUEUE_DEFINITIONS.map((q) => q.name).join(', ')}`
-  )
+  if (redisEnabled) {
+    queueManager.startWorkers()
+  } else {
+    const info = queueManager.keyValueInfo()
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[Order Service] KV driver is "${dbConfig.keyValue.driver}" (${info.label}); ` +
+        `BullMQ workers are disabled and the queue endpoints will report ` +
+        `kv_driver_not_redis. Snapshot: ${info.dataPath ?? 'in-memory'}`
+    )
+    console.log(
+      `[Order Service] BullMQ workers started for: ${QUEUE_DEFINITIONS.map((q) => q.name).join(', ')}`
+    )
+  }
 
   registerShutdownHandlers()
 
@@ -928,6 +956,13 @@ function registerShutdownHandlers(): void {
       await queueManager.close()
     } catch (err) {
       console.warn(`[Order Service] Error closing queues: ${(err as Error).message}`)
+    }
+
+    try {
+      await kvStore?.close?.()
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(`[Order Service] Error closing KV store: ${(err as Error).message}`)
     }
 
     try {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RustfsHealth } from '../../types'
 import type { LiveResource } from '../../hooks/useQueueData'
 import type { QueueData } from '../queues/queueTypes'
+import type { CacheDriverInfo } from './cacheTypes'
 import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './parts'
 
 const PRODUCT_SERVICE_URL = 'http://localhost:3002'
@@ -15,12 +16,15 @@ export default function PersistencePanel({
   openSignal,
   onPingRustFS,
   queueData,
+  driver,
 }: {
   rustfsHealth: RustfsHealth
   openSignal?: OpenSignal
   onPingRustFS: () => void
   /** Shared with the Task Queues sub-tab; this panel does not fetch its own. */
   queueData: LiveResource<QueueData>
+  /** The KV backend ms-order actually resolved at boot. */
+  driver: LiveResource<CacheDriverInfo>
 }) {
   const [objectCount, setObjectCount] = useState(0)
   const [totalSizeMb, setTotalSizeMb] = useState(0)
@@ -62,7 +66,16 @@ export default function PersistencePanel({
           </>
         }
       >
-        <ReadOnlyRow label="Queue Driver" value="BullMQ over Redis" />
+        <ReadOnlyRow
+          label="Queue Driver"
+          value={
+            driver.data
+              ? driver.data.queuesAvailable
+                ? 'BullMQ over Redis'
+                : `Unavailable — KV driver is "${driver.data.driver}", BullMQ requires Redis`
+              : '—'
+          }
+        />
         <ReadOnlyRow label="Worker Concurrency" value="5–10 workers per queue" />
         <ReadOnlyRow
           label="Registered Queues"
@@ -76,8 +89,18 @@ export default function PersistencePanel({
         />
         <MultiFieldRow
           fields={[
-            { label: 'Client', value: 'ioredis (BullMQ client)' },
-            { label: 'Backing Store', value: 'Redis 7 (DB 0)' },
+            {
+              label: 'Client',
+              value: driver.data?.queuesAvailable ? 'ioredis (BullMQ client)' : '—',
+            },
+            {
+              label: 'Backing Store',
+              value: driver.data
+                ? driver.data.queuesAvailable
+                  ? 'Redis 7 (DB 0)'
+                  : 'None — queues disabled'
+                : '—',
+            },
             { label: 'Retry Policy', value: 'per-queue backoff, 3–5 attempts' },
           ]}
         />
@@ -88,27 +111,60 @@ export default function PersistencePanel({
         title={
           <>
             <span>KV Cache</span>
-            <span className="chip chip-purple">Redis 7</span>
+            <span className="chip chip-purple">
+              {driver.data
+                ? driver.data.backend === 'redis'
+                  ? 'Redis 7'
+                  : 'Embedded (file-backed)'
+                : 'KV'}
+            </span>
           </>
         }
       >
-        {/* KV_CACHE_DRIVER accepts "rocksdb"/"embedded" and .env documents a
-            ./data/rocksdb path, but no fallback is wired up: ms-order's queue
-            code (src/queues/redisConnection.ts) talks to ioredis directly and
-            never calls createKeyValueStore() from @ecommerce/shared-database.
-            That adapter is also an in-memory Map with no scan(), and BullMQ
-            needs real Redis (Lua, sorted sets, blocking ops) regardless — so
-            claiming a fallback here would misreport what the system can do. */}
-        <ReadOnlyRow label="Active Driver" value="redis (KV_CACHE_DRIVER)" />
-        <ReadOnlyRow label="Redis Host" value="localhost:6379" />
-        <ReadOnlyRow label="Client" value="ioredis" />
+        {/* Every value here is reported by GET /api/v1/cache/driver rather than
+            hardcoded, so the panel can never name a driver that is not the one
+            in use. An em-dash means "not measured yet", never a guess. */}
+        <ReadOnlyRow
+          label="Active Driver"
+          value={driver.data ? `${driver.data.driver} (KV_CACHE_DRIVER)` : '—'}
+        />
+        <ReadOnlyRow
+          label={driver.data?.backend === 'embedded' ? 'Snapshot Path' : 'Redis Host'}
+          value={driver.data ? (driver.data.host ?? driver.data.dataPath ?? 'in-memory') : '—'}
+        />
+        <ReadOnlyRow label="Client" value={driver.data?.label ?? '—'} />
         <MultiFieldRow
           fields={[
-            { label: 'Image', value: 'redis:7-alpine' },
-            { label: 'DB Index', value: '0' },
-            { label: 'Fallback', value: 'none — Redis required' },
+            {
+              label: 'Image',
+              value: driver.data?.backend === 'redis' ? 'redis:7-alpine' : 'n/a (in-process)',
+            },
+            {
+              label: driver.data?.backend === 'embedded' ? 'Persistence' : 'DB Index',
+              value: driver.data
+                ? driver.data.backend === 'embedded'
+                  ? driver.data.inMemory
+                    ? 'in-memory (not persisted)'
+                    : 'file-backed JSON snapshot'
+                  : '0'
+                : '—',
+            },
+            {
+              label: 'Fallback',
+              value: driver.data
+                ? driver.data.backend === 'embedded'
+                  ? 'active — embedded (file-backed)'
+                  : 'embedded (file-backed) via KV_CACHE_DRIVER'
+                : '—',
+            },
           ]}
         />
+        {driver.data?.loadError && (
+          <div className="warn-banner" style={{ marginTop: 8 }}>
+            The embedded snapshot could not be read, so the store started empty:{' '}
+            {driver.data.loadError}
+          </div>
+        )}
 
         {/* Runtime INFO metrics (used memory, clients, ops/sec, hit rate) used
             to be rendered here from a Math.random() generator, which reported a
