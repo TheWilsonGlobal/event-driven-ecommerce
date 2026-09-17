@@ -773,7 +773,11 @@ async function bootstrap() {
     async (
       request: FastifyRequest<{
         Params: { id: string }
-        Body: { step: string; compensation: 'release-inventory' | 'refund-payment'; reason?: string }
+        Body: {
+          step: string
+          compensation: 'release-inventory' | 'refund-payment'
+          reason?: string
+        }
       }>,
       reply: FastifyReply
     ) => {

@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { JobState, QueueData, QueueInfo, RecentJob } from './queueTypes'
-import { EmptyState } from '../../components/ui'
+import { EmptyState, OfflineBanner, Spinner } from '../../components/ui'
+import { describeError, type FetchError } from '../../hooks/useQueueData'
+
+const NO_QUEUES: QueueInfo[] = []
 
 function stateStatus(state: JobState): string {
   switch (state) {
@@ -27,20 +30,34 @@ interface FlatJob extends RecentJob {
   queue: string
 }
 
-export default function QueuesPanel({ data }: { data: QueueData }) {
+export default function QueuesPanel({
+  data,
+  loading = false,
+  error = null,
+  onRetry,
+}: {
+  data: QueueData | null
+  loading?: boolean
+  error?: FetchError | null
+  onRetry?: () => void
+}) {
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobState | null>(null)
 
+  // No fallback numbers: when there is no live payload the derived counts are
+  // genuinely zero and the table is replaced by an explicit banner below.
+  const allQueues = data?.queues ?? NO_QUEUES
+
   const queues = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    if (!q) return data.queues
-    return data.queues.filter(
+    if (!q) return allQueues
+    return allQueues.filter(
       (queue) =>
         queue.name.toLowerCase().includes(q) ||
         queue.service.toLowerCase().includes(q) ||
         queue.description.toLowerCase().includes(q)
     )
-  }, [data, filter])
+  }, [allQueues, filter])
 
   const jobs: FlatJob[] = useMemo(
     () =>
@@ -55,7 +72,7 @@ export default function QueuesPanel({ data }: { data: QueueData }) {
 
   const stateCounts = useMemo(
     () =>
-      data.queues.reduce(
+      allQueues.reduce(
         (acc, q) => ({
           waiting: acc.waiting + q.counts.waiting,
           active: acc.active + q.counts.active,
@@ -65,7 +82,7 @@ export default function QueuesPanel({ data }: { data: QueueData }) {
         }),
         { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 }
       ),
-    [data]
+    [allQueues]
   )
   const totalCount =
     stateCounts.waiting +
@@ -86,7 +103,7 @@ export default function QueuesPanel({ data }: { data: QueueData }) {
           />
         </div>
         <div className="toolbar-right">
-          <span className="chip chip-slate">Queues {data.summary.queueCount}</span>
+          <span className="chip chip-slate">Queues {data ? data.summary.queueCount : '—'}</span>
           <button
             type="button"
             className={`chip chip-red chip-btn${statusFilter === 'waiting' ? ' chip-btn-active' : ''}`}
@@ -132,10 +149,30 @@ export default function QueuesPanel({ data }: { data: QueueData }) {
         </div>
       </div>
 
-      {queues.length === 0 ? (
+      {error ? (
+        <OfflineBanner
+          title={`Queue data unavailable — ${describeError(error)}`}
+          detail={error.message}
+          reason={error.reason ?? (error.status ? `HTTP ${error.status}` : 'network_error')}
+          onRetry={onRetry}
+          retrying={loading}
+        />
+      ) : loading && !data ? (
+        <Spinner label="Loading live queue data…" />
+      ) : !data ? (
+        <EmptyState message="No queue data loaded yet." />
+      ) : allQueues.length === 0 ? (
+        <EmptyState message="ms-order reports no registered queues." />
+      ) : queues.length === 0 ? (
         <EmptyState message={`No queues match "${filter}"`} />
       ) : jobs.length === 0 ? (
-        <EmptyState message="No recent jobs for the current filter." />
+        <EmptyState
+          message={
+            statusFilter
+              ? `No ${statusFilter} jobs right now.`
+              : 'Queues are registered but hold no recent jobs.'
+          }
+        />
       ) : (
         <div className="table-wrapper">
           <table>

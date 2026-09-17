@@ -21,10 +21,7 @@ export const JOB_STATES: readonly JobState[] = [
 ] as const
 
 export type QueueName =
-  | 'order-expiration'
-  | 'payment-retry'
-  | 'notification-dispatch'
-  | 'saga-compensation'
+  'order-expiration' | 'payment-retry' | 'notification-dispatch' | 'saga-compensation'
 
 export interface QueueDefinition {
   name: QueueName

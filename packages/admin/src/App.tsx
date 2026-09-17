@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useAdminApp } from './hooks/useAdminApp'
 import { useEcommerceData } from './hooks/useEcommerceData'
 import type { Tab } from './types'
@@ -25,7 +26,7 @@ import TaskQueuesTab from './screens/TaskQueuesTab'
 import StorageTab from './screens/StorageTab'
 import PersistenceTab from './screens/PersistenceTab'
 import ConfigTab from './screens/ConfigTab'
-import { QUEUE_DATA } from './screens/queues/queueSeed'
+import { useQueueData } from './hooks/useQueueData'
 
 // Modals
 import ServiceModal from './modals/ServiceModal'
@@ -43,6 +44,17 @@ type NavEntry = {
 export default function App() {
   const app = useAdminApp()
   const data = useEcommerceData(app.autoPolling, app.showToast)
+  // Sidebar job-count badge: live, and omitted entirely (rather than faked)
+  // while loading or when Redis/ms-order is unreachable.
+  const queueData = useQueueData()
+
+  // The badge owns a separate hook instance from the tabs, so refresh it on
+  // navigation. Without this it would stay stuck on its mount-time result —
+  // notably staying blank after Redis recovers, until a full page reload.
+  const refetchQueues = queueData.refetch
+  useEffect(() => {
+    refetchQueues()
+  }, [app.tab, refetchQueues])
 
   const OPERATIONS: NavEntry[] = [{ key: 'dashboard', label: 'Dashboard', Icon: DashboardIcon }]
 
@@ -61,9 +73,9 @@ export default function App() {
       key: 'task-queues',
       label: 'Task Queues',
       Icon: QueueIcon,
-      count: QUEUE_DATA.summary.totalJobs,
+      count: queueData.data?.summary.totalJobs,
     },
-    { key: 'storage', label: 'Storage (RustFS)', Icon: StorageIcon, count: data.objectCount },
+    { key: 'storage', label: 'Storage', Icon: StorageIcon, count: data.objectCount },
   ]
 
   const SYSTEM: NavEntry[] = [{ key: 'config', label: 'Configuration', Icon: ConfigIcon }]

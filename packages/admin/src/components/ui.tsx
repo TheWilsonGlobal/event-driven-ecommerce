@@ -119,3 +119,47 @@ export function Pagination({
     </div>
   )
 }
+
+/**
+ * Shown when a live panel could not load its data (Redis down, ms-order down,
+ * unexpected status). Deliberately replaces the data rather than decorating a
+ * fallback: no numbers are rendered alongside it.
+ */
+export function OfflineBanner({
+  title,
+  detail,
+  reason,
+  onRetry,
+  retrying,
+}: {
+  title: string
+  detail?: string
+  reason?: string
+  onRetry?: () => void
+  retrying?: boolean
+}) {
+  return (
+    <div className="warn-banner" role="alert">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <strong>{title}</strong>
+        {reason && <span className="chip chip-mono chip-slate">{reason}</span>}
+        {onRetry && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onRetry}
+            disabled={retrying}
+            style={{ marginLeft: 'auto' }}
+          >
+            {retrying ? 'Retrying…' : 'Retry ↻'}
+          </button>
+        )}
+      </div>
+      {detail && (
+        <div className="mono" style={{ marginTop: 6, opacity: 0.85, wordBreak: 'break-word' }}>
+          {detail}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -465,19 +465,28 @@ export function toRedisUnavailable(err: unknown): RedisUnavailableError {
   // ioredis surfaces a dead server in a few distinct ways; give each a
   // machine-readable reason so the admin can distinguish them.
   if (/ECONNREFUSED/i.test(message)) {
-    return new RedisUnavailableError('redis_connection_refused', `Redis refused the connection: ${message}`)
+    return new RedisUnavailableError(
+      'redis_connection_refused',
+      `Redis refused the connection: ${message}`
+    )
   }
   if (/ETIMEDOUT|Command timed out|connect ETIMEDOUT/i.test(message)) {
     return new RedisUnavailableError('redis_timeout', `Redis command timed out: ${message}`)
   }
   if (/ENOTFOUND|EAI_AGAIN/i.test(message)) {
-    return new RedisUnavailableError('redis_dns_failure', `Redis host could not be resolved: ${message}`)
+    return new RedisUnavailableError(
+      'redis_dns_failure',
+      `Redis host could not be resolved: ${message}`
+    )
   }
   if (/Stream isn't writeable|enableOfflineQueue/i.test(message)) {
     return new RedisUnavailableError('redis_unavailable', `Redis is not connected: ${message}`)
   }
   if (/NOAUTH|WRONGPASS|ERR Client sent AUTH/i.test(message)) {
-    return new RedisUnavailableError('redis_auth_failure', `Redis authentication failed: ${message}`)
+    return new RedisUnavailableError(
+      'redis_auth_failure',
+      `Redis authentication failed: ${message}`
+    )
   }
   return new RedisUnavailableError('redis_error', message)
 }

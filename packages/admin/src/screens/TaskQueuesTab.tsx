@@ -1,7 +1,9 @@
 import QueuesPanel from './queues/QueuesPanel'
-import { QUEUE_DATA } from './queues/queueSeed'
+import { useQueueData } from '../hooks/useQueueData'
 
 export default function TaskQueuesTab() {
+  const { data, loading, error, refetch } = useQueueData()
+
   return (
     <>
       <div className="page-header">
@@ -17,13 +19,18 @@ export default function TaskQueuesTab() {
           </div>
         </div>
         <div className="header-actions">
-          <button className="btn btn-primary btn-sm" onClick={() => window.location.reload()}>
-            Reload ↻
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={refetch}
+            disabled={loading}
+            aria-busy={loading}
+          >
+            {loading ? 'Reloading…' : 'Reload ↻'}
           </button>
         </div>
       </div>
 
-      <QueuesPanel data={QUEUE_DATA} />
+      <QueuesPanel data={data} loading={loading} error={error} onRetry={refetch} />
     </>
   )
 }

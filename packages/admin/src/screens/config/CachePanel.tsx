@@ -1,88 +1,105 @@
-interface RedisNamespace {
-  prefix: string
-  purpose: string
-  approxKeyCount: number
+import type { CacheData } from './cacheTypes'
+import type { FetchError } from '../../hooks/useQueueData'
+import { describeError } from '../../hooks/useQueueData'
+import { EmptyState, OfflineBanner, Spinner } from '../../components/ui'
+
+// A truncated count is a lower bound (the SCAN hit its cap), so it is rendered
+// with a "≥" prefix rather than as an exact figure.
+function fmtCount(count: number, truncated: boolean): string {
+  return `${truncated ? '≥' : ''}${count.toLocaleString()}`
 }
 
-const NAMESPACES: RedisNamespace[] = [
-  {
-    prefix: 'bull:order-expiration:*',
-    purpose: 'BullMQ job data, state sets & events for the order-expiration queue',
-    approxKeyCount: 412,
-  },
-  {
-    prefix: 'bull:payment-retry:*',
-    purpose: 'BullMQ job data, state sets & events for the payment-retry queue',
-    approxKeyCount: 187,
-  },
-  {
-    prefix: 'bull:notification-dispatch:*',
-    purpose: 'BullMQ job data, state sets & events for the notification-dispatch queue',
-    approxKeyCount: 264,
-  },
-  {
-    prefix: 'bull:saga-compensation:*',
-    purpose: 'BullMQ job data, state sets & events for the saga-compensation queue',
-    approxKeyCount: 38,
-  },
-  {
-    prefix: 'cache:products:*',
-    purpose: 'Cache-aside entries for ms-product catalog reads (product & category lookups)',
-    approxKeyCount: 1360,
-  },
-  {
-    prefix: 'session:*',
-    purpose: 'Short-lived refresh-token / session lookups issued by ms-user',
-    approxKeyCount: 96,
-  },
-  {
-    prefix: 'ratelimit:*',
-    purpose: 'API gateway rate-limit counters (100 req/min window per client)',
-    approxKeyCount: 54,
-  },
-]
+export default function CachePanel({
+  data,
+  loading,
+  error,
+  onRetry,
+}: {
+  data: CacheData | null
+  loading: boolean
+  error: FetchError | null
+  onRetry: () => void
+}) {
+  if (loading && !data) {
+    return <Spinner label="Scanning Redis key namespaces…" />
+  }
 
-const TOTAL_KEYS = NAMESPACES.reduce((sum, n) => sum + n.approxKeyCount, 0)
+  if (error) {
+    return (
+      <OfflineBanner
+        title={`KV cache unavailable — ${describeError(error)}`}
+        detail={error.message}
+        reason={error.reason ?? (error.status ? `HTTP ${error.status}` : 'network_error')}
+        onRetry={onRetry}
+        retrying={loading}
+      />
+    )
+  }
 
-export const CACHE_NAMESPACE_COUNT = NAMESPACES.length
+  if (!data) {
+    return <EmptyState message="No cache data loaded yet." />
+  }
 
-export default function CachePanel() {
+  const { namespaces, totalKeys, truncated, scannedAt } = data
+
   return (
     <>
       <div className="section-title spaced" style={{ marginBottom: 8 }}>
         Key Namespaces
       </div>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Prefix</th>
-              <th>Purpose</th>
-              <th className="cell-right">Approx. Keys</th>
-            </tr>
-          </thead>
-          <tbody>
-            {NAMESPACES.map((ns) => (
-              <tr key={ns.prefix}>
-                <td className="mono">{ns.prefix}</td>
-                <td className="cell-muted">{ns.purpose}</td>
-                <td className="mono cell-right">{ns.approxKeyCount.toLocaleString()}</td>
+
+      {truncated && (
+        <div className="warn-banner">
+          The Redis SCAN hit its cap, so counts marked with &ldquo;≥&rdquo; are lower bounds, not
+          exact totals.
+        </div>
+      )}
+
+      {namespaces.length === 0 ? (
+        <EmptyState message="Redis is reachable but holds no keys in any known namespace." />
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Prefix</th>
+                <th>Purpose</th>
+                <th className="cell-right">Keys</th>
               </tr>
-            ))}
-            <tr>
-              <td className="mono" style={{ fontWeight: 700, color: 'var(--text-bright)' }}>
-                Total
-              </td>
-              <td className="cell-muted"></td>
-              <td
-                className="mono cell-right"
-                style={{ fontWeight: 700, color: 'var(--text-bright)' }}
-              >
-                {TOTAL_KEYS.toLocaleString()}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {namespaces.map((ns) => (
+                <tr key={ns.prefix}>
+                  <td className="mono">{ns.prefix}</td>
+                  <td className="cell-muted">{ns.purpose}</td>
+                  <td
+                    className="mono cell-right"
+                    title={ns.truncated ? 'SCAN cap reached — at least this many keys' : undefined}
+                  >
+                    {fmtCount(ns.keyCount, ns.truncated)}
+                  </td>
+                </tr>
+              ))}
+              <tr>
+                <td className="mono" style={{ fontWeight: 700, color: 'var(--text-bright)' }}>
+                  Total
+                </td>
+                <td className="cell-muted"></td>
+                <td
+                  className="mono cell-right"
+                  style={{ fontWeight: 700, color: 'var(--text-bright)' }}
+                  title={truncated ? 'SCAN cap reached — at least this many keys' : undefined}
+                >
+                  {fmtCount(totalKeys, truncated)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 8 }}>
+        Scanned {new Date(scannedAt).toLocaleString()} · live from ms-order
       </div>
     </>
   )

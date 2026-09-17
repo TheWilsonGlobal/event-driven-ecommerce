@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RustfsHealth } from '../../types'
 import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './parts'
-import { QUEUE_DATA } from '../queues/queueSeed'
+import { useQueueData } from '../../hooks/useQueueData'
 
 const PRODUCT_SERVICE_URL = 'http://localhost:3002'
 
@@ -38,6 +38,8 @@ export default function PersistencePanel({
   openSignal?: OpenSignal
   onPingRustFS: () => void
 }) {
+  const queueData = useQueueData()
+
   const [redisStats, setRedisStats] = useState<RedisStats>(randomRedisStats)
 
   const [objectCount, setObjectCount] = useState(0)
@@ -82,7 +84,16 @@ export default function PersistencePanel({
       >
         <ReadOnlyRow label="Queue Driver" value="BullMQ over Redis" />
         <ReadOnlyRow label="Worker Concurrency" value="5–10 workers per queue" />
-        <ReadOnlyRow label="Registered Queues" value={`${QUEUE_DATA.summary.queueCount} queues`} />
+        <ReadOnlyRow
+          label="Registered Queues"
+          value={
+            queueData.data
+              ? `${queueData.data.summary.queueCount} queues`
+              : queueData.loading
+                ? 'Loading…'
+                : 'Unavailable — Redis unreachable'
+          }
+        />
         <MultiFieldRow
           fields={[
             { label: 'Client', value: 'ioredis (BullMQ client)' },
