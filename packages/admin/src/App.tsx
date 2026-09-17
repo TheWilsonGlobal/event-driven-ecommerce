@@ -13,6 +13,7 @@ import {
   PersistenceIcon,
   QueueIcon,
   CacheIcon,
+  StorageIcon,
   ConfigIcon,
   ExternalLinkIcon,
 } from './components/icons'
@@ -26,6 +27,7 @@ import UsersTab from './screens/UsersTab'
 import PersistenceTab from './screens/PersistenceTab'
 import TaskQueuesTab from './screens/TaskQueuesTab'
 import RedisCacheTab from './screens/RedisCacheTab'
+import StorageTab from './screens/StorageTab'
 import ConfigTab from './screens/ConfigTab'
 
 // Modals
@@ -63,6 +65,7 @@ export default function App() {
     { key: 'persistence', label: 'Persistence', Icon: PersistenceIcon },
     { key: 'task-queues', label: 'Task Queues', Icon: QueueIcon },
     { key: 'redis-cache', label: 'Cache (Redis)', Icon: CacheIcon },
+    { key: 'storage', label: 'Storage (RustFS)', Icon: StorageIcon },
     { key: 'config', label: 'Configuration', Icon: ConfigIcon },
   ]
 
@@ -231,6 +234,10 @@ export default function App() {
         {app.tab === 'task-queues' && <TaskQueuesTab />}
 
         {app.tab === 'redis-cache' && <RedisCacheTab />}
+
+        {app.tab === 'storage' && (
+          <StorageTab rustfsHealth={data.rustfsHealth} onPingRustFS={data.pingRustFS} />
+        )}
 
         {app.tab === 'config' && <ConfigTab />}
       </main>

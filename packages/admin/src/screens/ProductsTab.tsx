@@ -72,6 +72,7 @@ export default function ProductsTab({
           <thead>
             <tr>
               <th>Item</th>
+              <th>Description</th>
               <th>SKU</th>
               <th>Category</th>
               <th>Price</th>
@@ -84,7 +85,7 @@ export default function ProductsTab({
             {paginated.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)' }}
                 >
                   No products found matching filter criteria.
@@ -94,21 +95,29 @@ export default function ProductsTab({
               paginated.map((p) => (
                 <tr key={p.id}>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <img
                         src={p.images[0]?.url}
                         alt=""
-                        style={{ width: 34, height: 34, borderRadius: 4, objectFit: 'cover' }}
+                        style={{ width: 26, height: 26, borderRadius: 4, objectFit: 'cover' }}
                       />
-                      <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-bright)' }}>
-                          {p.title}
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>
-                          {p.description.slice(0, 45)}...
-                        </div>
-                      </div>
+                      <span style={{ fontWeight: 600, color: 'var(--text-bright)' }}>
+                        {p.title}
+                      </span>
                     </div>
+                  </td>
+                  <td
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-faint)',
+                      maxWidth: 260,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={p.description}
+                  >
+                    {p.description}
                   </td>
                   <td className="mono" style={{ color: 'var(--blue-light)', fontWeight: 600 }}>
                     {p.sku}

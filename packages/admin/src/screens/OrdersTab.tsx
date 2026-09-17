@@ -85,6 +85,7 @@ export default function OrdersTab({
             <tr>
               <th>Order #</th>
               <th>Customer</th>
+              <th>Email</th>
               <th>Items</th>
               <th>Total</th>
               <th>Payment</th>
@@ -96,7 +97,7 @@ export default function OrdersTab({
             {paginated.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)' }}
                 >
                   No orders found matching filter criteria.
@@ -108,11 +109,9 @@ export default function OrdersTab({
                   <td className="mono" style={{ color: 'var(--blue-light)', fontWeight: 700 }}>
                     {ord.orderNumber}
                   </td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{ord.customerName}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>
-                      {ord.customerEmail}
-                    </div>
+                  <td style={{ fontWeight: 600 }}>{ord.customerName}</td>
+                  <td className="mono" style={{ color: 'var(--text-dim)' }}>
+                    {ord.customerEmail}
                   </td>
                   <td className="mono">{ord.items.reduce((s, i) => s + i.quantity, 0)} items</td>
                   <td className="mono" style={{ color: 'var(--green-light)', fontWeight: 700 }}>

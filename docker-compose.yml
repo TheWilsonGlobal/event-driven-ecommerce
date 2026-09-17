@@ -68,7 +68,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - rustfs_data:/data
+      - ./data/rustfs:/data
     networks:
       - ecommerce-network
 
@@ -237,7 +237,6 @@ volumes:
   redis_data:
   elasticsearch_data:
   grafana_data:
-  rustfs_data:
 
 networks:
   ecommerce-network:

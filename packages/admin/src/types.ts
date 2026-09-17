@@ -7,6 +7,7 @@ export type Tab =
   | 'persistence'
   | 'task-queues'
   | 'redis-cache'
+  | 'storage'
   | 'config'
 
 export interface ServiceItem {

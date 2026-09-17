@@ -113,6 +113,9 @@ uploads/
 public/uploads/
 media/
 
+# RustFS bind-mounted object storage
+data/rustfs/
+
 # Docker
 .dockerignore
 
