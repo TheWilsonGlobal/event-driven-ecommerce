@@ -1,78 +1,18 @@
-version: '3.8'
+# Application services for the micro-services e-commerce platform.
+#
+# Backing services (PostgreSQL, MongoDB, Redis, Elasticsearch, RustFS,
+# Prometheus, Grafana) are NOT defined here -- they moved to the infra-hub
+# repo, which owns their lifecycle. Redis and RustFS run by default there;
+# the rest sit behind compose profiles.
+#
+# Start infrastructure first, or this file fails with "network not found":
+#     cd ../infra-hub && docker compose up -d
+#     docker compose up -d
+#
+# `version:` is obsolete in Compose v2 and ignored; kept off deliberately.
 
 services:
-  # Database Services
-  postgres:
-    image: postgres:15-alpine
-    container_name: ecommerce-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: ecommerce
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - ecommerce-network
 
-  mongodb:
-    image: mongo:7
-    container_name: ecommerce-mongodb
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: ecommerce_sessions
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - ecommerce-network
-
-  redis:
-    image: redis:7-alpine
-    container_name: ecommerce-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - ecommerce-network
-
-  # Search Engine
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: ecommerce-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    networks:
-      - ecommerce-network
-
-  # Distributed Object Storage (RustFS / S3 Compatible)
-  rustfs:
-    image: rustfs/rustfs:latest
-    container_name: ecommerce-rustfs
-    environment:
-      - RUSTFS_ACCESS_KEY=rustfsadmin
-      - RUSTFS_SECRET_KEY=rustfspassword
-      - RUSTFS_DEFAULT_BUCKET=ecommerce-uploads
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - ./data/rustfs:/data
-    networks:
-      - ecommerce-network
-
-  # Application Services
   api-gateway:
     build:
       context: .
@@ -94,13 +34,11 @@ services:
     ports:
       - "5460:5460"
     depends_on:
-      - postgres
-      - redis
       - user-service
       - product-service
       - order-service
     networks:
-      - ecommerce-network
+      - infra-network
     volumes:
       - ./packages/gateway/src:/app/src
       - /app/node_modules
@@ -124,12 +62,8 @@ services:
       JWT_SECRET: your-super-secret-jwt-key
     ports:
       - "5463:5463"
-    depends_on:
-      - postgres
-      - redis
-      - mongodb
     networks:
-      - ecommerce-network
+      - infra-network
     volumes:
       - ./packages/ms-user/src:/app/src
       - /app/node_modules
@@ -152,12 +86,8 @@ services:
       ELASTICSEARCH_HOST: http://elasticsearch:9200
     ports:
       - "5464:5464"
-    depends_on:
-      - postgres
-      - redis
-      - elasticsearch
     networks:
-      - ecommerce-network
+      - infra-network
     volumes:
       - ./packages/ms-product/src:/app/src
       - /app/node_modules
@@ -180,11 +110,8 @@ services:
       STRIPE_SECRET_KEY: sk_test_your-stripe-secret-key
     ports:
       - "5465:5465"
-    depends_on:
-      - postgres
-      - redis
     networks:
-      - ecommerce-network
+      - infra-network
     volumes:
       - ./packages/ms-order/src:/app/src
       - /app/node_modules
@@ -202,42 +129,23 @@ services:
     depends_on:
       - api-gateway
     networks:
-      - ecommerce-network
+      - infra-network
     volumes:
       - ./packages/client/src:/app/src
       - ./packages/client/public:/app/public
       - /app/node_modules
 
-  # Monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: ecommerce-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    networks:
-      - ecommerce-network
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: ecommerce-grafana
-    ports:
-      - "3005:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana_data:/var/lib/grafana
-    networks:
-      - ecommerce-network
-
-volumes:
-  postgres_data:
-  mongodb_data:
-  redis_data:
-  elasticsearch_data:
-  grafana_data:
-
 networks:
-  ecommerce-network:
-    driver: bridge
+  # The backing services (postgres, redis, mongodb, elasticsearch, rustfs,
+  # prometheus, grafana) moved to the infra-hub repo, which owns their
+  # lifecycle. Joining its network as `external` is what keeps the service
+  # hostnames below (DB_HOST: postgres, REDIS_HOST: redis, ...) resolving.
+  #
+  # infra-hub must be up first, or compose fails with "network not found":
+  #     cd ../infra-hub && docker compose up -d
+  #
+  # The network is named <project>_infra-network, and infra-hub's project name
+  # comes from its directory.
+  infra-network:
+    external: true
+    name: infra-hub_infra-network

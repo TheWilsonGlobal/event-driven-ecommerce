@@ -8,18 +8,13 @@ import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
+import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
 const server: FastifyInstance = fastify({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-      },
-    },
-  },
+  // Pretty terminal output, plus shipping to Loki when it is reachable.
+  logger: buildLoggerOptions({ service: 'gateway' }),
 })
 
 const PORT = parseInt(process.env.API_GATEWAY_PORT || process.env.PORT || '5460', 10)
@@ -28,6 +23,9 @@ const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1
 const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5465'
 
 async function bootstrap() {
+  // Before every other plugin, so the onResponse hook sees all traffic.
+  registerMetrics(server, { service: 'gateway' })
+
   await server.register(cors, {
     origin: '*',
   })

@@ -15,6 +15,7 @@ import {
   paymentStatusToPaymentRowStatus,
 } from './seedOrders'
 import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS, redisEnabled } from './queues'
+import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
 
 /** Workspace root — this service's cwd is packages/ms-order. */
 const REPO_ROOT = path.resolve(__dirname, '../../../')
@@ -175,17 +176,14 @@ async function generateUniqueOrderNumber(): Promise<string> {
 }
 
 const server: FastifyInstance = fastify({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-      },
-    },
-  },
+  // Pretty terminal output, plus shipping to Loki when it is reachable.
+  logger: buildLoggerOptions({ service: 'ms-order' }),
 })
 
 async function bootstrap() {
+  // Before every other plugin, so the onResponse hook sees all traffic.
+  registerMetrics(server, { service: 'ms-order' })
+
   await server.register(cors, { origin: '*' })
   await server.register(helmet)
 

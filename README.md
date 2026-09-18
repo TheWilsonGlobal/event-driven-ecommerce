@@ -188,21 +188,87 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🤝 Contributing
 
 Please read our contributing guidelines before submitting a pull request.
-## Backing services (Redis, RustFS)
+## Backing services
 
-Redis and RustFS are **no longer defined in this repo**. They moved to the
-`infra-hub` repo, which owns their lifecycle:
+**No backing service is defined in this repo.** PostgreSQL, MongoDB, Redis,
+Elasticsearch, RustFS, Prometheus and Grafana all live in the `infra-hub` repo,
+which owns their lifecycle:
 
 ```bash
 cd ../infra-hub
-docker compose up -d          # starts infra-redis + infra-rustfs
+docker compose up -d                      # Redis + RustFS (the two this repo uses)
+docker compose --profile all up -d        # plus Postgres, Mongo, ES, Prometheus, Grafana
 ```
 
-Ports are unchanged (Redis `6379`, RustFS `9000`/`9001`), so this repo reaches
-them on `localhost` via the existing `.env` values and needs no code change.
-RustFS object data now lives at `C:\Hub\RustFS` (see `RUSTFS_DATA_PATH`),
-outside both repos.
+Ports are unchanged, so running the app on the host via `pnpm run dev` reaches
+them on `localhost` using this repo's existing `.env` values — no code change.
 
-`docker-compose.yml` here still defines `redis`/`rustfs` for the full
-all-in-Docker topology. Do not run both it and infra-hub at once — they would
-contend for the same ports.
+`docker-compose.yml` here now defines only the five application services and
+joins infra-hub's network as `external`, which is what keeps container
+hostnames (`DB_HOST: postgres`, `REDIS_HOST: redis`, …) resolving. **Start
+infra-hub first**, or compose fails with "network not found".
+
+RustFS object data lives at `C:\Hub\RustFS` (see `RUSTFS_DATA_PATH`), outside
+both repos.
+
+## Search (Elasticsearch)
+
+`ms-product` indexes products into Elasticsearch and uses it to answer
+`GET /api/v1/products?search=`. NeDB remains the **source of truth** — the index
+is a search accelerator, never the record.
+
+```bash
+cd ../infra-hub && docker compose --profile search up -d
+```
+
+- Every write path (seed, create, update, delete) mirrors into the index, and
+  the whole catalogue is re-indexed from NeDB on each boot, so a wiped or stale
+  index self-heals on restart.
+- Search results are ranked by relevance, tolerate a typo (`fuzziness: AUTO`)
+  and match on `tags`/`sku` as well as title and description — none of which the
+  previous substring scan could do.
+- Matching ids are resolved back to NeDB records before the response is built,
+  so the API can never serve a stale indexed copy.
+
+`GET /health` reports cluster status from a **10s cache**, so a liveness probe
+never blocks on Elasticsearch: it answers in ~3ms whether the cluster is up or
+down (an uncached probe took ~2.5s during an outage). The `search.cachedAgeMs`
+field gives the age of that reading.
+
+**When Elasticsearch is down the endpoint still works**, falling back to the old
+in-memory substring filter. The response's `searchEngine` field
+(`elasticsearch` | `memory` | `none`) says which path answered, and
+`GET /health` reports cluster reachability and the indexed document count.
+Set `ELASTICSEARCH_ENABLED=false` to skip it entirely and avoid the
+connection timeout on every search.
+
+## Metrics (Prometheus + Grafana)
+
+All four backend services expose `GET /metrics` via the shared plugin in
+[`packages/shared/utils/src/metrics.ts`](packages/shared/utils/src/metrics.ts):
+request counts, latency histograms and Node process/event-loop stats, each
+labelled with `service`.
+
+```bash
+cd ../infra-hub && docker compose --profile monitoring up -d
+```
+
+- Prometheus (<http://localhost:9090>) scrapes all four over
+  `host.docker.internal`, since the services run on the host via `pnpm`.
+- Grafana (<http://localhost:3005>, `admin`/`admin`) auto-provisions the
+  Prometheus datasource and a **Micro-services Overview** dashboard from
+  committed files in `infra-hub/monitoring/grafana/`.
+
+Grafana also has an **Elasticsearch (products)** datasource pointed at the
+search index. It is for browsing indexed documents in **Explore**, not for
+dashboards: the index has no date field, so time-series panels built on it
+return nothing. In Explore, set **Query type → Raw Data**; the default "Logs"
+mode fails with `elasticsearch time field name is required`, since Logs and
+Metrics both need a timestamp field this index does not have. Use Prometheus for graphs. Add datasources by committing a file
+under `infra-hub/monitoring/grafana/provisioning/datasources/` rather than
+clicking through the UI, so they survive a wiped data directory.
+
+Targets show as `down` for any service that isn't running — expected during
+partial local development, not an outage. Latency is labelled with route
+**patterns** (`/api/v1/products/:id`), never raw URLs, to keep metric
+cardinality bounded.

@@ -12,9 +12,11 @@ import {
   loadDatabaseConfig,
   createRustFSClient,
   createDocumentStore,
+  createSearchClient,
   SEED_PRODUCTS,
   SEED_CATEGORIES,
 } from '@ecommerce/shared-database'
+import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
 import type { ProductDoc, CategoryDoc } from './types'
 
 const REPO_ROOT = path.resolve(__dirname, '../../../')
@@ -36,23 +38,26 @@ if (!path.isAbsolute(dbConfig.document.nedb.dataPath)) {
 // Initialise the RustFS client (singleton per process)
 const rustfs = createRustFSClient(process.env)
 
+// Elasticsearch search index. NeDB below stays the source of truth — this only
+// answers ?search=. It fails soft when the cluster is down (it sits behind a
+// compose profile in infra-hub), so search degrades to a substring scan rather
+// than erroring.
+const search = createSearchClient(process.env)
+
 // Real NeDB-backed document stores — one physical file per collection under
 // the configured data path (e.g. data/db/products.db, data/db/categories.db).
 const productsStore = createDocumentStore<ProductDoc>('products', dbConfig)
 const categoriesStore = createDocumentStore<CategoryDoc>('categories', dbConfig)
 
 const server: FastifyInstance = fastify({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-      },
-    },
-  },
+  // Pretty terminal output, plus shipping to Loki when it is reachable.
+  logger: buildLoggerOptions({ service: 'ms-product' }),
 })
 
 async function bootstrap() {
+  // Before every other plugin, so the onResponse hook sees all traffic.
+  registerMetrics(server, { service: 'ms-product' })
+
   await server.register(cors, { origin: '*' })
   await server.register(helmet)
   await server.register(multipart, {
@@ -119,6 +124,25 @@ async function bootstrap() {
     )
   }
 
+  // ─── Search index ─────────────────────────────────────────────────────────
+  // Backfill Elasticsearch from NeDB on every boot rather than only after a
+  // seed. NeDB is authoritative and survives independently of the cluster, so
+  // the index can be empty (fresh volume), stale (writes while the search
+  // profile was down) or absent — reindexing from the source of truth is the
+  // one action that fixes all three, and it is cheap at this catalogue size.
+  if (await search.ensureIndex()) {
+    const all = await productsStore.find({})
+    const indexed = await search.indexProducts(all)
+    server.log.info(
+      `[Search] Elasticsearch ready at ${search.nodeUrl} — indexed ${indexed}/${all.length} products into "${search.indexName}"`
+    )
+  } else {
+    server.log.warn(
+      `[Search] Elasticsearch unreachable at ${search.nodeUrl} — ?search falls back to in-memory filtering. ` +
+        `Start it with: cd ../infra-hub && docker compose --profile search up -d`
+    )
+  }
+
   // ─── Health ───────────────────────────────────────────────────────────────
   server.get(
     '/health',
@@ -140,12 +164,26 @@ async function bootstrap() {
                   driver: { type: 'string' },
                 },
               },
+              search: {
+                type: 'object',
+                properties: {
+                  enabled: { type: 'boolean' },
+                  reachable: { type: 'boolean' },
+                  node: { type: 'string' },
+                  index: { type: 'string' },
+                  clusterStatus: { type: 'string' },
+                  documents: { type: 'number' },
+                  // Age of the cached probe in ms; 0 means freshly fetched.
+                  cachedAgeMs: { type: 'number' },
+                },
+              },
             },
           },
         },
       },
     },
     async () => {
+      const searchStatus = await search.ping()
       return {
         status: 'ok',
         service: 'ms-product',
@@ -153,6 +191,21 @@ async function bootstrap() {
         database: {
           mode: dbConfig.mode,
           driver: dbConfig.document.driver,
+        },
+        // Reported, but never allowed to change `status`: Elasticsearch is an
+        // optional search accelerator, so a down cluster is a degraded feature,
+        // not an unhealthy service. Flipping /health to a failure here would
+        // take the service out of rotation for something it can work without.
+        search: {
+          enabled: search.isEnabled(),
+          reachable: searchStatus.reachable,
+          node: search.nodeUrl,
+          index: search.indexName,
+          ...(searchStatus.status ? { clusterStatus: searchStatus.status } : {}),
+          ...(searchStatus.docs !== undefined ? { documents: searchStatus.docs } : {}),
+          ...(searchStatus.cachedAgeMs !== undefined
+            ? { cachedAgeMs: searchStatus.cachedAgeMs }
+            : {}),
         },
       }
     }
@@ -297,6 +350,9 @@ async function bootstrap() {
               total: { type: 'number' },
               page: { type: 'number' },
               limit: { type: 'number' },
+              // Which engine answered: "elasticsearch" (relevance-ranked),
+              // "memory" (substring fallback) or "none" (no ?search term).
+              searchEngine: { type: 'string' },
             },
           },
         },
@@ -306,25 +362,45 @@ async function bootstrap() {
       const page = Math.max(parseInt(req.query.page ?? '1', 10) || 1, 1)
       const limit = Math.max(parseInt(req.query.limit ?? '20', 10) || 20, 1)
       const categorySlug = req.query.category
-      const search = req.query.search?.toLowerCase().trim()
+      const term = req.query.search?.trim()
 
       let all = await productsStore.find({})
+      // Relevance-ordered when Elasticsearch answered; insertion order otherwise.
+      let searchEngine: 'elasticsearch' | 'memory' | 'none' = 'none'
 
-      if (categorySlug) {
+      if (term) {
+        const hits = await search.searchProductIds(term, { categorySlug })
+        if (hits) {
+          // Elasticsearch ranked the ids; re-read the authoritative NeDB records
+          // and reorder them to match, so the response body always comes from
+          // the source of truth even if the index holds a stale copy.
+          searchEngine = 'elasticsearch'
+          const byId = new Map(all.map((p) => [p.id ?? p._id, p]))
+          all = hits.ids
+            .map((id) => byId.get(id))
+            .filter((p): p is (typeof all)[number] => p !== undefined)
+        } else {
+          // Cluster unreachable or disabled — substring scan, as before.
+          searchEngine = 'memory'
+          const needle = term.toLowerCase()
+          if (categorySlug) {
+            all = all.filter((p) => p.category?.slug === categorySlug)
+          }
+          all = all.filter(
+            (p) =>
+              p.title?.toLowerCase().includes(needle) ||
+              p.description?.toLowerCase().includes(needle)
+          )
+        }
+      } else if (categorySlug) {
         all = all.filter((p) => p.category?.slug === categorySlug)
-      }
-      if (search) {
-        all = all.filter(
-          (p) =>
-            p.title?.toLowerCase().includes(search) || p.description?.toLowerCase().includes(search)
-        )
       }
 
       const total = all.length
       const start = (page - 1) * limit
       const products = all.slice(start, start + limit)
 
-      return { products, total, page, limit }
+      return { products, total, page, limit, searchEngine }
     }
   )
 
@@ -387,6 +463,10 @@ async function bootstrap() {
         ratings: body.ratings ?? { average: 0, count: 0 },
       }
       const created = await productsStore.insert(doc)
+      // Mirror into the search index. Awaited so a create followed immediately
+      // by a search finds the product; best-effort, so a down cluster cannot
+      // fail a write that NeDB already committed.
+      await search.indexProduct(created)
       return reply.status(201).send(created)
     }
   )
@@ -415,6 +495,9 @@ async function bootstrap() {
         return reply.status(404).send({ error: 'Product not found' })
       }
       const updated = await productsStore.findOne({ id: req.params.id })
+      if (updated) {
+        await search.indexProduct(updated)
+      }
       return updated
     }
   )
@@ -441,6 +524,7 @@ async function bootstrap() {
       if (numRemoved === 0) {
         return reply.status(404).send({ error: 'Product not found' })
       }
+      await search.removeProduct(req.params.id)
       return { success: true }
     }
   )

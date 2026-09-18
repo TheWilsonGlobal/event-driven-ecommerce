@@ -9,6 +9,7 @@ import * as path from 'path'
 import * as bcrypt from 'bcryptjs'
 import { PrismaClient } from '../node_modules/.prisma-ms-user/client'
 import { loadDatabaseConfig, SEED_USERS } from '@ecommerce/shared-database'
+import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
 
 // Load ms-user's own .env first (takes precedence: dotenv does not
 // override already-set keys). It supplies the SQLite DATABASE_URL used by
@@ -23,14 +24,8 @@ const PORT = parseInt(process.env.USER_SERVICE_PORT || '5463', 10)
 const prisma = new PrismaClient()
 
 const server: FastifyInstance = fastify({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-      },
-    },
-  },
+  // Pretty terminal output, plus shipping to Loki when it is reachable.
+  logger: buildLoggerOptions({ service: 'ms-user' }),
 })
 
 // Placeholder dev password hash used for users created ad hoc via the admin
@@ -117,6 +112,9 @@ function toPublicUser(user: UserWithAddresses) {
 
 async function bootstrap() {
   await seedIfEmpty()
+
+  // Before every other plugin, so the onResponse hook sees all traffic.
+  registerMetrics(server, { service: 'ms-user' })
 
   await server.register(cors, { origin: '*' })
   await server.register(helmet)
