@@ -4,8 +4,12 @@ import type { LiveResource } from '../../hooks/useQueueData'
 import type { QueueData } from '../queues/queueTypes'
 import type { CacheDriverInfo } from './cacheTypes'
 import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './parts'
-
-const PRODUCT_SERVICE_URL = 'http://localhost:5464'
+import {
+  DB_HOST,
+  DB_PORT,
+  PRODUCT_SERVICE_URL,
+  RUSTFS_CONSOLE_ENDPOINT,
+} from '../../data/serviceUrls'
 
 interface StorageObject {
   sizeBytes: number
@@ -268,7 +272,7 @@ export default function PersistencePanel({
           }}
         >
           <a
-            href="http://localhost:9001"
+            href={RUSTFS_CONSOLE_ENDPOINT}
             target="_blank"
             rel="noreferrer"
             style={{ fontSize: 12, color: 'var(--blue-light)', fontWeight: 600 }}
@@ -288,7 +292,7 @@ export default function PersistencePanel({
         }
       >
         <ReadOnlyRow label="ORM Engine" value="Prisma 5.22.0" />
-        <ReadOnlyRow label="Connection URL" value="postgresql://***@localhost:5432" />
+        <ReadOnlyRow label="Connection URL" value={`postgresql://***@${DB_HOST}:${DB_PORT}`} />
         <ReadOnlyRow label="Target Services" value="ms-user, ms-order" />
       </ConfigCard>
 

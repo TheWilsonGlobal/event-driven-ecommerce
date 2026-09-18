@@ -1,4 +1,4 @@
-// Shape of GET http://localhost:5465/api/v1/cache/namespaces (ms-order).
+// Shape of GET <ORDER_SERVICE_URL>/api/v1/cache/namespaces (ms-order).
 //
 // `truncated` (per-namespace and top-level) means the Redis SCAN hit its cap,
 // so the count is a lower bound rather than an exact figure — the UI must not
@@ -39,7 +39,7 @@ export interface CacheData {
 
 export type KeyspaceBackend = 'redis' | 'embedded'
 
-// Shape of GET http://localhost:5465/api/v1/cache/keys (ms-order).
+// Shape of GET <ORDER_SERVICE_URL>/api/v1/cache/keys (ms-order).
 //
 // `sizeBytes` is APPROXIMATE: the backend reads it with MEMORY USAGE using a
 // bounded sample count, because an exact read is O(N) over the value and would
@@ -69,7 +69,7 @@ export interface CacheKeysData {
   scannedAt: string
 }
 
-// Shape of GET http://localhost:5465/api/v1/cache/driver (ms-order).
+// Shape of GET <ORDER_SERVICE_URL>/api/v1/cache/driver (ms-order).
 //
 // Reports the driver this process actually resolved at boot, so the admin can
 // render the real backend instead of asserting one. It has no 503 branch: it

@@ -29,6 +29,7 @@ import PersistenceTab from './screens/PersistenceTab'
 import KvKeysTab from './screens/KvKeysTab'
 import ConfigTab from './screens/ConfigTab'
 import { useCacheKeys, useQueueData } from './hooks/useQueueData'
+import { CLIENT_URL } from './data/serviceUrls'
 
 // Modals
 import ServiceModal from './modals/ServiceModal'
@@ -159,7 +160,7 @@ export default function App() {
           </div>
           <div style={{ padding: '4px 6px 0' }}>
             <a
-              href="http://localhost:5462"
+              href={CLIENT_URL}
               target="_blank"
               rel="noreferrer"
               className="btn btn-ghost btn-sidebar"

@@ -1,4 +1,12 @@
 import { useState } from 'react'
+import {
+  ADMIN_PORT,
+  CLIENT_PORT,
+  GATEWAY_PORT,
+  ORDER_SERVICE_PORT,
+  PRODUCT_SERVICE_PORT,
+  USER_SERVICE_PORT,
+} from '../data/serviceUrls'
 import type { ServiceItem } from '../types'
 import { ConfigCard, ReadOnlyRow, type OpenSignal } from './config/parts'
 import ApiPanel from './config/ApiPanel'
@@ -96,15 +104,15 @@ export default function ConfigTab({
             count={6}
             openSignal={openSignal}
           >
-            <ReadOnlyRow label="API Gateway Ingress" value="5460" />
-            <ReadOnlyRow label="User Microservice" value="5463" />
-            <ReadOnlyRow label="Product Microservice" value="5464" />
-            <ReadOnlyRow label="Order Microservice" value="5465" />
-            <ReadOnlyRow label="Customer Storefront (Next.js)" value="5462" />
+            <ReadOnlyRow label="API Gateway Ingress" value={GATEWAY_PORT} />
+            <ReadOnlyRow label="User Microservice" value={USER_SERVICE_PORT} />
+            <ReadOnlyRow label="Product Microservice" value={PRODUCT_SERVICE_PORT} />
+            <ReadOnlyRow label="Order Microservice" value={ORDER_SERVICE_PORT} />
+            <ReadOnlyRow label="Customer Storefront (Next.js)" value={CLIENT_PORT} />
             <div className="config-row">
               <span className="k">Admin Cockpit (Active)</span>
               <span className="v" style={{ color: 'var(--blue-light)' }}>
-                5461
+                {ADMIN_PORT}
               </span>
             </div>
           </ConfigCard>

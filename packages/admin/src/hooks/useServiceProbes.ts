@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ServiceItem, RustfsHealth } from '../types'
 import { INITIAL_SERVICES } from '../data/seed'
+import { PRODUCT_SERVICE_URL, RUSTFS_BUCKET, RUSTFS_ENDPOINT } from '../data/serviceUrls'
 
 export function useServiceProbes(autoPolling: boolean) {
   const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES)
@@ -9,8 +10,8 @@ export function useServiceProbes(autoPolling: boolean) {
   const [rustfsHealth, setRustfsHealth] = useState<RustfsHealth>({
     healthy: null,
     latencyMs: 0,
-    endpoint: 'http://localhost:9000',
-    bucket: 'ecommerce-uploads',
+    endpoint: RUSTFS_ENDPOINT,
+    bucket: RUSTFS_BUCKET,
     lastChecked: '',
   })
 
@@ -19,7 +20,7 @@ export function useServiceProbes(autoPolling: boolean) {
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 2000)
-      const res = await fetch('http://localhost:5464/api/v1/storage/health', {
+      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/health`, {
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
@@ -28,8 +29,8 @@ export function useServiceProbes(autoPolling: boolean) {
         setRustfsHealth({
           healthy: data.healthy ?? true,
           latencyMs: data.latencyMs ?? Date.now() - start,
-          endpoint: data.endpoint ?? 'http://localhost:9000',
-          bucket: data.bucket ?? 'ecommerce-uploads',
+          endpoint: data.endpoint ?? RUSTFS_ENDPOINT,
+          bucket: data.bucket ?? RUSTFS_BUCKET,
           lastChecked: new Date().toISOString(),
         })
       } else {

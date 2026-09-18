@@ -1,10 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { ServiceItem, UserRecord, ProductRecord, OrderRecord } from '../types'
 import { useServiceProbes } from './useServiceProbes'
-
-const USER_SERVICE_URL = 'http://localhost:5463'
-const PRODUCT_SERVICE_URL = 'http://localhost:5464'
-const ORDER_SERVICE_URL = 'http://localhost:5465'
+import { ORDER_SERVICE_URL, PRODUCT_SERVICE_URL, USER_SERVICE_URL } from '../data/serviceUrls'
 
 // This admin dashboard doesn't have real pagination UI wired to these list
 // endpoints yet — request a single large page and let the existing

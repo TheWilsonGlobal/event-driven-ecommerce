@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { EmptyState } from '../components/ui'
 import { DownloadIcon } from '../components/icons'
+import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT } from '../data/serviceUrls'
 
 // RustFS is a real S3-compatible object store (docker-compose `rustfs`
 // service, bind-mounted at ./data/rustfs). The object list below is fetched
@@ -9,8 +10,6 @@ import { DownloadIcon } from '../components/icons'
 // /storage/download, so both listing and download move real bytes, not mock
 // data. Connection health, bind-mount info and bucket summary now live in
 // Configuration -> Persistence's "Object Storage (S3-API)" card.
-
-const PRODUCT_SERVICE_URL = 'http://localhost:5464'
 
 interface StorageObject {
   key: string
@@ -158,7 +157,7 @@ export default function StorageTab() {
 
       <div style={{ marginTop: 14 }}>
         <a
-          href="http://localhost:9001"
+          href={RUSTFS_CONSOLE_ENDPOINT}
           target="_blank"
           rel="noreferrer"
           style={{ fontSize: 12, color: 'var(--blue-light)', fontWeight: 600 }}

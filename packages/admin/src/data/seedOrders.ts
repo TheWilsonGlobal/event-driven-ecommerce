@@ -1,4 +1,5 @@
 import type { OrderRecord } from '../types'
+import { RUSTFS_BUCKET_URL } from './serviceUrls'
 
 export const INITIAL_ORDERS: OrderRecord[] = [
   {
@@ -35,7 +36,7 @@ export const INITIAL_ORDERS: OrderRecord[] = [
         imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80',
       },
     ],
-    receiptUrl: 'http://localhost:9000/ecommerce-uploads/receipts/ORD-894201.pdf',
+    receiptUrl: `${RUSTFS_BUCKET_URL}/receipts/ORD-894201.pdf`,
     createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
     updatedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
   },
@@ -73,7 +74,7 @@ export const INITIAL_ORDERS: OrderRecord[] = [
         imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&q=80',
       },
     ],
-    receiptUrl: 'http://localhost:9000/ecommerce-uploads/receipts/ORD-752109.pdf',
+    receiptUrl: `${RUSTFS_BUCKET_URL}/receipts/ORD-752109.pdf`,
     createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
   },
@@ -120,7 +121,7 @@ export const INITIAL_ORDERS: OrderRecord[] = [
         imageUrl: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80',
       },
     ],
-    receiptUrl: 'http://localhost:9000/ecommerce-uploads/receipts/ORD-612480.pdf',
+    receiptUrl: `${RUSTFS_BUCKET_URL}/receipts/ORD-612480.pdf`,
     createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
     updatedAt: new Date(Date.now() - 3600000 * 6).toISOString(),
   },

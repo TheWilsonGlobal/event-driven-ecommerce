@@ -6,6 +6,13 @@
 // actual prisma/schema.prisma files (ms-user, ms-order) and src/index.ts route
 // declarations (gateway, ms-user, ms-product, ms-order) as they exist on disk.
 
+import {
+  GATEWAY_URL,
+  ORDER_SERVICE_URL,
+  PRODUCT_SERVICE_URL,
+  USER_SERVICE_URL,
+} from '../../data/serviceUrls'
+
 import type { ApiEndpointData, LogFile, SchemaData } from './configTypes'
 
 export const SCHEMA_DATA: SchemaData = {
@@ -232,7 +239,7 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
       name: 'gateway',
       service: 'API Gateway',
       port: 5460,
-      docsUrl: 'http://localhost:5460/api-docs',
+      docsUrl: `${GATEWAY_URL}/api-docs`,
       endpoints: [
         {
           method: 'GET',
@@ -288,7 +295,7 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
       name: 'ms-user',
       service: 'User Service',
       port: 5463,
-      docsUrl: 'http://localhost:5463/api-docs',
+      docsUrl: `${USER_SERVICE_URL}/api-docs`,
       endpoints: [
         {
           method: 'GET',
@@ -315,7 +322,7 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
       name: 'ms-product',
       service: 'Product Service',
       port: 5464,
-      docsUrl: 'http://localhost:5464/api-docs',
+      docsUrl: `${PRODUCT_SERVICE_URL}/api-docs`,
       endpoints: [
         {
           method: 'GET',
@@ -349,7 +356,7 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
       name: 'ms-order',
       service: 'Order Service',
       port: 5465,
-      docsUrl: 'http://localhost:5465/api-docs',
+      docsUrl: `${ORDER_SERVICE_URL}/api-docs`,
       endpoints: [
         {
           method: 'GET',

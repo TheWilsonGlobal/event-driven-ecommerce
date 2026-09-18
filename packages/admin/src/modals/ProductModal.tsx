@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProductRecord } from '../types'
+import { PRODUCT_SERVICE_URL, RUSTFS_BUCKET_URL } from '../data/serviceUrls'
 
 const DEFAULT_IMAGE_URL = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'
-const PRODUCT_SERVICE_URL = 'http://localhost:5464'
-const RUSTFS_BUCKET_URL = 'http://localhost:9000/ecommerce-uploads'
 
 function objectPublicUrl(key: string): string {
   return `${RUSTFS_BUCKET_URL}/${key}`

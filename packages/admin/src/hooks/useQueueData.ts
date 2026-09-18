@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { QueueData } from '../screens/queues/queueTypes'
 import type { CacheData, CacheKeysData, CacheDriverInfo } from '../screens/config/cacheTypes'
-import { ORDER_SERVICE_URL } from '../data/serviceUrls'
+import { ORDER_SERVICE_AUTHORITY, ORDER_SERVICE_URL } from '../data/serviceUrls'
 
 // Live queue + KV-cache introspection, served by ms-order directly (the API
 // gateway does not proxy these routes).
@@ -180,7 +180,7 @@ export function describeError(error: FetchError): string {
       return 'ms-order is not configured with a Redis KV driver'
     default:
       return error.kind === 'network'
-        ? 'ms-order (localhost:5465) is unreachable'
+        ? `ms-order (${ORDER_SERVICE_AUTHORITY}) is unreachable`
         : `Request failed${error.status ? ` (HTTP ${error.status})` : ''}`
   }
 }

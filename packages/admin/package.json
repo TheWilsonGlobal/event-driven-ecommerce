@@ -5,9 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5461",
+    "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
-    "preview": "vite preview --port 5461",
+    "preview": "vite preview",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
