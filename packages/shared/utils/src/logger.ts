@@ -16,19 +16,19 @@
  * there is no container whose stdout Docker could collect.
  */
 
+import type { FastifyLoggerOptions } from 'fastify'
+import type { PinoLoggerOptions } from 'fastify/types/logger'
+
 /**
- * The logger config shape Fastify accepts.
+ * The logger config shape Fastify accepts for a default (HTTP/1) server.
  *
- * Deliberately NOT `FastifyServerOptions['logger']`: that union includes a
- * logger-instance branch, and passing it to `fastify({ logger })` makes
- * TypeScript select the HTTP/2 overload, so the result is typed as an HTTP/2
- * instance and no longer assignable to `FastifyInstance`. A plain object type
- * keeps the default HTTP/1 overload selected.
+ * Deliberately NOT `FastifyServerOptions['logger']`: that union also admits a
+ * pre-built `Logger` instance, and a value of the whole union makes TypeScript
+ * fall through to the HTTP/2 `fastify()` overload — the result is then typed as
+ * an HTTP/2 instance and no longer assignable to `FastifyInstance`. Naming the
+ * options branch alone keeps the default overload selected.
  */
-interface PinoLoggerConfig {
-  level: string
-  transport: Record<string, unknown>
-}
+type PinoLoggerConfig = FastifyLoggerOptions & PinoLoggerOptions
 
 export interface LoggerOptions {
   /** Value of the `service` label on every log line, e.g. "ms-product". */
@@ -67,6 +67,12 @@ export function buildLoggerOptions(options: LoggerOptions): PinoLoggerConfig {
 
   return {
     level,
+    // Emit `level` as "info"/"error" rather than pino's numeric codes (30/50).
+    // pino-loki promotes this field straight to a Loki label, and `{level="30"}`
+    // is not a query anyone wants to write or read.
+    formatters: {
+      level: (label: string) => ({ level: label }),
+    },
     transport: {
       // Both targets receive every line. pino runs transports in a worker
       // thread, so a slow or unreachable Loki does not block request handling.
