@@ -4,7 +4,8 @@ import { DownloadIcon } from '../components/icons'
 import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT } from '../data/serviceUrls'
 
 // RustFS is a real S3-compatible object store (docker-compose `rustfs`
-// service, bind-mounted at ./data/rustfs). The object list below is fetched
+// service, bind-mounted from the host path in RUSTFS_DATA_PATH, owned by the
+// infra-hub repo). The object list below is fetched
 // live from ms-product's /storage/objects (a real ListObjectsV2 call against
 // the bucket) — download uses a pre-signed RustFS GET URL via
 // /storage/download, so both listing and download move real bytes, not mock

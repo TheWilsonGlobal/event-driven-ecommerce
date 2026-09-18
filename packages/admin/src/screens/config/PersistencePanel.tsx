@@ -9,6 +9,7 @@ import {
   DB_PORT,
   PRODUCT_SERVICE_URL,
   RUSTFS_CONSOLE_ENDPOINT,
+  RUSTFS_DATA_PATH,
 } from '../../data/serviceUrls'
 
 interface StorageObject {
@@ -224,7 +225,7 @@ export default function PersistencePanel({
         />
         <MultiFieldRow
           fields={[
-            { label: 'Host Path', value: './data/rustfs' },
+            { label: 'Host Path', value: RUSTFS_DATA_PATH },
             { label: 'Container Path', value: '/data' },
             { label: 'Mount Type', value: 'bind' },
           ]}

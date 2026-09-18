@@ -19,6 +19,9 @@ export const ORDER_SERVICE_URL = import.meta.env.VITE_ORDER_SERVICE_URL
 export const RUSTFS_ENDPOINT = import.meta.env.VITE_RUSTFS_ENDPOINT
 export const RUSTFS_CONSOLE_ENDPOINT = import.meta.env.VITE_RUSTFS_CONSOLE_ENDPOINT
 export const RUSTFS_BUCKET = import.meta.env.VITE_RUSTFS_BUCKET
+
+/** Host dir backing the RustFS bind mount. Owned by the infra-hub repo. */
+export const RUSTFS_DATA_PATH = import.meta.env.VITE_RUSTFS_DATA_PATH
 export const RUSTFS_BUCKET_URL = `${RUSTFS_ENDPOINT}/${RUSTFS_BUCKET}`
 
 /** Primary relational database, shown read-only in the Persistence panel. */

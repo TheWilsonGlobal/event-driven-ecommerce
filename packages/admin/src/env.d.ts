@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_RUSTFS_ENDPOINT: string
   readonly VITE_RUSTFS_CONSOLE_ENDPOINT: string
   readonly VITE_RUSTFS_BUCKET: string
+  readonly VITE_RUSTFS_DATA_PATH: string
   readonly VITE_DB_HOST: string
   readonly VITE_DB_PORT: string
 }

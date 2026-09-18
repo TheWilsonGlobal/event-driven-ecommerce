@@ -188,3 +188,21 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🤝 Contributing
 
 Please read our contributing guidelines before submitting a pull request.
+## Backing services (Redis, RustFS)
+
+Redis and RustFS are **no longer defined in this repo**. They moved to the
+`infra-hub` repo, which owns their lifecycle:
+
+```bash
+cd ../infra-hub
+docker compose up -d          # starts infra-redis + infra-rustfs
+```
+
+Ports are unchanged (Redis `6379`, RustFS `9000`/`9001`), so this repo reaches
+them on `localhost` via the existing `.env` values and needs no code change.
+RustFS object data now lives at `C:\Infra\RustFS` (see `RUSTFS_DATA_PATH`),
+outside both repos.
+
+`docker-compose.yml` here still defines `redis`/`rustfs` for the full
+all-in-Docker topology. Do not run both it and infra-hub at once — they would
+contend for the same ports.
