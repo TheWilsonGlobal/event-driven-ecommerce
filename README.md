@@ -268,6 +268,35 @@ Metrics both need a timestamp field this index does not have. Use Prometheus for
 under `infra-hub/monitoring/grafana/provisioning/datasources/` rather than
 clicking through the UI, so they survive a wiped data directory.
 
+## Logs (Loki)
+
+All four backend services ship their pino logs to Loki via `pino-loki`,
+configured once in
+[`packages/shared/utils/src/logger.ts`](packages/shared/utils/src/logger.ts).
+Logs go to the terminal **and** Loki, so `pnpm run dev` looks exactly as before.
+
+```bash
+cd ../infra-hub && docker compose --profile logging up -d
+```
+
+Query them in Grafana → **Explore** → **Loki**:
+
+| Query | Finds |
+|---|---|
+| `{service="ms-product"}` | everything from one service |
+| `{service=~"ms-.*\|gateway"}` | all four services |
+| `{level="error"}` | errors only |
+| `{service="ms-order"} \|= "payment"` | full-text search within a service |
+
+Labels are `service`, `level` and `env` — kept low-cardinality on purpose. Never
+add a request id or URL as a label; each distinct value creates a Loki stream.
+Log bodies stay searchable with `|=` regardless.
+
+Shipping is in-process rather than via Docker's log driver because the services
+run on the **host** under `pnpm`, so there is no container stdout to collect.
+**If Loki is down the services are unaffected** — they log to the terminal and
+keep serving; set `LOKI_ENABLED=false` to disable shipping entirely.
+
 Targets show as `down` for any service that isn't running — expected during
 partial local development, not an outage. Latency is labelled with route
 **patterns** (`/api/v1/products/:id`), never raw URLs, to keep metric

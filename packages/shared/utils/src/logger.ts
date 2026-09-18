@@ -67,12 +67,6 @@ export function buildLoggerOptions(options: LoggerOptions): PinoLoggerConfig {
 
   return {
     level,
-    // Emit `level` as "info"/"error" rather than pino's numeric codes (30/50).
-    // pino-loki promotes this field straight to a Loki label, and `{level="30"}`
-    // is not a query anyone wants to write or read.
-    formatters: {
-      level: (label: string) => ({ level: label }),
-    },
     transport: {
       // Both targets receive every line. pino runs transports in a worker
       // thread, so a slow or unreachable Loki does not block request handling.
@@ -90,12 +84,19 @@ export function buildLoggerOptions(options: LoggerOptions): PinoLoggerConfig {
               service: options.service,
               env: env.NODE_ENV || 'development',
             },
-            // Promote pino's numeric level to a label so `{level="error"}`
-            // works without parsing every line's JSON.
-            propsToLabels: ['level'],
-            // Batch pushes instead of one HTTP request per log line.
-            batching: true,
-            interval: 5,
+            // NOTE: do NOT add `propsToLabels: ['level']`. pino-loki already
+            // emits a readable `level` label ("info"/"error") from its own
+            // level mapping, but it spreads propsToLabels AFTER that — so
+            // promoting `level` overwrites the readable value with pino's raw
+            // numeric code and you get {level="30"} instead of {level="info"}.
+            //
+            // A custom pino `formatters.level` is not an alternative: pino
+            // throws "option.transport.targets do not allow custom level
+            // formatters" whenever more than one target is present, and there
+            // are two here (pretty + loki).
+            // Batch pushes instead of one HTTP request per log line. This is an
+            // OBJECT, not `true` — a boolean silently disables batching.
+            batching: { interval: 5 },
             // Print transport failures to stderr rather than swallowing them.
             // Without this, a misconfigured host looks exactly like "no logs
             // were produced", which is a miserable thing to debug.
