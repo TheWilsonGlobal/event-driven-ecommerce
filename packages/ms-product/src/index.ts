@@ -21,7 +21,7 @@ const REPO_ROOT = path.resolve(__dirname, '../../../')
 dotenv.config({ path: path.join(REPO_ROOT, '.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
-const PORT = parseInt(process.env.PRODUCT_SERVICE_PORT || '3002', 10)
+const PORT = parseInt(process.env.PRODUCT_SERVICE_PORT || '5464', 10)
 
 // NEDB_DATA_PATH (e.g. "./data/db") is relative-by-convention to the repo
 // root — same as how the .env file itself is located above — not to

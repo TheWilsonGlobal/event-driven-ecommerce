@@ -207,7 +207,7 @@ export default function CheckoutModal({
             </div>
             <h3 className="text-xl font-black text-slate-900">Thank you for your purchase!</h3>
             <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-              Your order has been registered via <b>Order Service (Port 3003)</b>.
+              Your order has been registered via <b>Order Service (Port 5465)</b>.
             </p>
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-1.5 text-xs">
               <div className="flex justify-between">

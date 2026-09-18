@@ -10,7 +10,7 @@ import { DownloadIcon } from '../components/icons'
 // data. Connection health, bind-mount info and bucket summary now live in
 // Configuration -> Persistence's "Object Storage (S3-API)" card.
 
-const PRODUCT_SERVICE_URL = 'http://localhost:3002'
+const PRODUCT_SERVICE_URL = 'http://localhost:5464'
 
 interface StorageObject {
   key: string

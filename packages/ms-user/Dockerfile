@@ -39,8 +39,8 @@ COPY --from=builder /app/node_modules ./node_modules
 
 USER nodejs
 
-EXPOSE 3001
+EXPOSE 5463
 
-ENV PORT=3001
+ENV PORT=5463
 
 CMD ["node", "dist/index.js"]

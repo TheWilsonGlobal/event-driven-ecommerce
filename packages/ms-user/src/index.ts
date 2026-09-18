@@ -18,7 +18,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') })
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
-const PORT = parseInt(process.env.USER_SERVICE_PORT || '3001', 10)
+const PORT = parseInt(process.env.USER_SERVICE_PORT || '5463', 10)
 
 const prisma = new PrismaClient()
 

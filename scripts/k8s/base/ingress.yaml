@@ -17,18 +17,18 @@ spec:
               service:
                 name: api-gateway
                 port:
-                  number: 3000
+                  number: 5460
           - path: /api-docs
             pathType: Prefix
             backend:
               service:
                 name: api-gateway
                 port:
-                  number: 3000
+                  number: 5460
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: frontend
                 port:
-                  number: 3000
+                  number: 5462

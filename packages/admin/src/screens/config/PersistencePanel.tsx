@@ -5,7 +5,7 @@ import type { QueueData } from '../queues/queueTypes'
 import type { CacheDriverInfo } from './cacheTypes'
 import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './parts'
 
-const PRODUCT_SERVICE_URL = 'http://localhost:3002'
+const PRODUCT_SERVICE_URL = 'http://localhost:5464'
 
 interface StorageObject {
   sizeBytes: number

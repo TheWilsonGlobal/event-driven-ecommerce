@@ -231,8 +231,8 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
     {
       name: 'gateway',
       service: 'API Gateway',
-      port: 3000,
-      docsUrl: 'http://localhost:3000/api-docs',
+      port: 5460,
+      docsUrl: 'http://localhost:5460/api-docs',
       endpoints: [
         {
           method: 'GET',
@@ -243,43 +243,43 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
         {
           method: 'ANY',
           path: '/api/v1/auth/*',
-          summary: 'Proxied → ms-user :3001',
+          summary: 'Proxied → ms-user :5463',
           documented: false,
         },
         {
           method: 'ANY',
           path: '/api/v1/users/*',
-          summary: 'Proxied → ms-user :3001',
+          summary: 'Proxied → ms-user :5463',
           documented: false,
         },
         {
           method: 'ANY',
           path: '/api/v1/products/*',
-          summary: 'Proxied → ms-product :3002',
+          summary: 'Proxied → ms-product :5464',
           documented: false,
         },
         {
           method: 'ANY',
           path: '/api/v1/categories/*',
-          summary: 'Proxied → ms-product :3002',
+          summary: 'Proxied → ms-product :5464',
           documented: false,
         },
         {
           method: 'ANY',
           path: '/api/v1/orders/*',
-          summary: 'Proxied → ms-order :3003',
+          summary: 'Proxied → ms-order :5465',
           documented: false,
         },
         {
           method: 'ANY',
           path: '/api/v1/cart/*',
-          summary: 'Proxied → ms-order :3003',
+          summary: 'Proxied → ms-order :5465',
           documented: false,
         },
         {
           method: 'ANY',
           path: '/api/v1/payments/*',
-          summary: 'Proxied → ms-order :3003',
+          summary: 'Proxied → ms-order :5465',
           documented: false,
         },
       ],
@@ -287,8 +287,8 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
     {
       name: 'ms-user',
       service: 'User Service',
-      port: 3001,
-      docsUrl: 'http://localhost:3001/api-docs',
+      port: 5463,
+      docsUrl: 'http://localhost:5463/api-docs',
       endpoints: [
         {
           method: 'GET',
@@ -314,8 +314,8 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
     {
       name: 'ms-product',
       service: 'Product Service',
-      port: 3002,
-      docsUrl: 'http://localhost:3002/api-docs',
+      port: 5464,
+      docsUrl: 'http://localhost:5464/api-docs',
       endpoints: [
         {
           method: 'GET',
@@ -348,8 +348,8 @@ export const API_ENDPOINT_DATA: ApiEndpointData = {
     {
       name: 'ms-order',
       service: 'Order Service',
-      port: 3003,
-      docsUrl: 'http://localhost:3003/api-docs',
+      port: 5465,
+      docsUrl: 'http://localhost:5465/api-docs',
       endpoints: [
         {
           method: 'GET',
@@ -391,9 +391,9 @@ export const LOG_FILES: LogFile[] = [
     created: '2026-09-16T00:00:05.000Z',
     level: 'info',
     preview: sampleLog('gateway', [
-      'INFO  server listening on http://0.0.0.0:3000',
-      'INFO  proxied GET /api/v1/products/prod-42 -> ms-product:3002 (200, 18ms)',
-      'INFO  proxied POST /api/v1/auth/login -> ms-user:3001 (200, 34ms)',
+      'INFO  server listening on http://0.0.0.0:5460',
+      'INFO  proxied GET /api/v1/products/prod-42 -> ms-product:5464 (200, 18ms)',
+      'INFO  proxied POST /api/v1/auth/login -> ms-user:5463 (200, 34ms)',
       'INFO  rate-limit window reset (100 req/min)',
     ]),
   },
@@ -405,8 +405,8 @@ export const LOG_FILES: LogFile[] = [
     created: '2026-09-15T00:00:03.000Z',
     level: 'warn',
     preview: sampleLog('gateway', [
-      'INFO  server listening on http://0.0.0.0:3000',
-      'WARN  upstream ms-order:3003 responded slowly (612ms) for GET /api/v1/orders',
+      'INFO  server listening on http://0.0.0.0:5460',
+      'WARN  upstream ms-order:5465 responded slowly (612ms) for GET /api/v1/orders',
       'WARN  rate limit exceeded for 203.0.113.7, request throttled',
     ]),
   },
@@ -418,7 +418,7 @@ export const LOG_FILES: LogFile[] = [
     created: '2026-09-16T00:00:11.000Z',
     level: 'info',
     preview: sampleLog('ms-user', [
-      'INFO  server listening on http://0.0.0.0:3001',
+      'INFO  server listening on http://0.0.0.0:5463',
       'INFO  POST /api/v1/auth/register 200 (email: user@example.com)',
       'INFO  POST /api/v1/auth/login 200 (mock-jwt-token issued)',
       'INFO  GET /api/v1/users 200 (total: 0)',
@@ -432,7 +432,7 @@ export const LOG_FILES: LogFile[] = [
     created: '2026-09-16T00:00:09.000Z',
     level: 'error',
     preview: sampleLog('ms-product', [
-      'INFO  server listening on http://0.0.0.0:3002',
+      'INFO  server listening on http://0.0.0.0:5464',
       'INFO  GET /api/v1/categories 200',
       'ERROR RustFS upload failed: connect ECONNREFUSED 127.0.0.1:9000',
       'ERROR POST /api/v1/products/upload 500 (Storage upload failed)',
@@ -446,7 +446,7 @@ export const LOG_FILES: LogFile[] = [
     created: '2026-09-16T00:00:14.000Z',
     level: 'info',
     preview: sampleLog('ms-order', [
-      'INFO  server listening on http://0.0.0.0:3003',
+      'INFO  server listening on http://0.0.0.0:5465',
       'INFO  GET /api/v1/orders 200 (total: 0)',
       'INFO  GET /api/v1/cart 200 (items: 0)',
     ]),
@@ -459,7 +459,7 @@ export const LOG_FILES: LogFile[] = [
     created: '2026-09-15T00:00:08.000Z',
     level: 'warn',
     preview: sampleLog('ms-order', [
-      'INFO  server listening on http://0.0.0.0:3003',
+      'INFO  server listening on http://0.0.0.0:5465',
       'WARN  saga step "reserve-inventory" retried (attempt 2/5)',
       'WARN  BullMQ job order-expire-3021 delayed by 4200ms',
     ]),

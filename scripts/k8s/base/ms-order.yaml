@@ -20,7 +20,7 @@ spec:
           image: microservices-ecommerce/ms-order:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3003
+            - containerPort: 5465
               name: http
           envFrom:
             - configMapRef:
@@ -29,7 +29,7 @@ spec:
                 name: ecommerce-secrets
           env:
             - name: PORT
-              value: "3003"
+              value: "5465"
           resources:
             requests:
               cpu: 100m
@@ -40,13 +40,13 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 3003
+              port: 5465
             initialDelaySeconds: 20
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health
-              port: 3003
+              port: 5465
             initialDelaySeconds: 10
             periodSeconds: 5
 ---
@@ -59,8 +59,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 3003
-      targetPort: 3003
+    - port: 5465
+      targetPort: 5465
       name: http
   selector:
     app: ms-order

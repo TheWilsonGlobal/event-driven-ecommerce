@@ -4,7 +4,7 @@
   "description": "React Next.js customer web client for the e-commerce platform",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3004",
+    "dev": "next dev -p 5462",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

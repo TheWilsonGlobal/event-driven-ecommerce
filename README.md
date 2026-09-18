@@ -7,10 +7,10 @@ A scalable, production-ready microservices e-commerce platform built with Node.j
 This monorepo contains the following services:
 
 ### Backend Services (Fastify 4)
-- **API Gateway** (`packages/gateway` · Port 3000) - Reverse proxy, JWT verification, rate limiting
-- **User Service** (`packages/ms-user` · Port 3001) - Authentication, authorization, and user management
-- **Product Service** (`packages/ms-product` · Port 3002) - Product catalog, Elasticsearch search, and inventory
-- **Order Service** (`packages/ms-order` · Port 3003) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal
+- **API Gateway** (`packages/gateway` · Port 5460) - Reverse proxy, JWT verification, rate limiting
+- **User Service** (`packages/ms-user` · Port 5463) - Authentication, authorization, and user management
+- **Product Service** (`packages/ms-product` · Port 5464) - Product catalog, Elasticsearch search, and inventory
+- **Order Service** (`packages/ms-order` · Port 5465) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal
 
 ### Shared Libraries
 - **Types** (`packages/shared/types`) - Common TypeScript type definitions & DTOs
@@ -19,8 +19,8 @@ This monorepo contains the following services:
 - **Messaging** (`packages/shared/messaging`) - BullMQ queues & workers over Redis 7
 
 ### Frontend & Control Plane
-- **Web Client** (`packages/client` · Port 3004) - Next.js 14 SSR React customer application
-- **Admin Portal** (`packages/admin` · Port 3005) - Next.js 14 centralized service & config cockpit
+- **Web Client** (`packages/client` · Port 5462) - Next.js 14 SSR React customer application
+- **Admin Portal** (`packages/admin` · Port 5461) - React + Vite centralized service & config cockpit
 
 ## 🚀 Quick Start
 
@@ -71,12 +71,12 @@ pnpm run dev
 - `pnpm run docker:down` - Stop Docker Compose services
 
 ### Service-Specific Scripts
-- `pnpm run dev:gateway` - Start API Gateway only (`@ecommerce/gateway` · Port 3000)
-- `pnpm run dev:ms-user` - Start User Service (`@ecommerce/ms-user` · Port 3001)
-- `pnpm run dev:ms-product` - Start Product Service (`@ecommerce/ms-product` · Port 3002)
-- `pnpm run dev:ms-order` - Start Order Service (`@ecommerce/ms-order` · Port 3003)
-- `pnpm run dev:client` - Start Customer Client (`@ecommerce/client` · Port 3004)
-- `pnpm run dev:admin` - Start Admin Cockpit (`@ecommerce/admin` · Port 3005)
+- `pnpm run dev:gateway` - Start API Gateway only (`@ecommerce/gateway` · Port 5460)
+- `pnpm run dev:admin` - Start Admin Cockpit (`@ecommerce/admin` · Port 5461)
+- `pnpm run dev:client` - Start Customer Client (`@ecommerce/client` · Port 5462)
+- `pnpm run dev:ms-user` - Start User Service (`@ecommerce/ms-user` · Port 5463)
+- `pnpm run dev:ms-product` - Start Product Service (`@ecommerce/ms-product` · Port 5464)
+- `pnpm run dev:ms-order` - Start Order Service (`@ecommerce/ms-order` · Port 5465)
 
 ## 🏃 Development Workflow
 
@@ -114,7 +114,7 @@ orders, but the queue endpoints return `503`.
 | `notification-dispatch` | 10 | 4 | fixed 3s | An order reaching `CONFIRMED` |
 | `saga-compensation` | 5 | 5 | exponential 8s | Exhausted payment retries, or `POST /api/v1/orders/:id/saga-failure` |
 
-Introspection endpoints (ms-order, port 3003):
+Introspection endpoints (ms-order, port 5465):
 
 - `GET /api/v1/queues` — live job counts and recent jobs per queue.
 - `GET /api/v1/cache/namespaces` — real Redis key counts per prefix, via `SCAN`.
@@ -165,7 +165,7 @@ kubectl apply -k scripts/k8s/overlays/production
 ## 📚 API Documentation
 
 API documentation is available at:
-- Swagger UI: http://localhost:3000/api-docs
+- Swagger UI: http://localhost:5460/api-docs
 - API Gateway: Routes to all service endpoints
 
 ## 🧪 Testing

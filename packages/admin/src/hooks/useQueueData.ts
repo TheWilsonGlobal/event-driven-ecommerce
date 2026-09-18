@@ -180,7 +180,7 @@ export function describeError(error: FetchError): string {
       return 'ms-order is not configured with a Redis KV driver'
     default:
       return error.kind === 'network'
-        ? 'ms-order (localhost:3003) is unreachable'
+        ? 'ms-order (localhost:5465) is unreachable'
         : `Request failed${error.status ? ` (HTTP ${error.status})` : ''}`
   }
 }

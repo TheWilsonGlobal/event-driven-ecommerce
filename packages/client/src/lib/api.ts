@@ -55,7 +55,7 @@ export interface CreatedOrder {
   updatedAt: string
 }
 
-const ORDER_SERVICE_URL = 'http://localhost:3003'
+const ORDER_SERVICE_URL = 'http://localhost:5465'
 
 export class OrderApiError extends Error {
   status: number | undefined

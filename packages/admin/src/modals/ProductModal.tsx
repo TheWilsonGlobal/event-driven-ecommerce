@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ProductRecord } from '../types'
 
 const DEFAULT_IMAGE_URL = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'
-const PRODUCT_SERVICE_URL = 'http://localhost:3002'
+const PRODUCT_SERVICE_URL = 'http://localhost:5464'
 const RUSTFS_BUCKET_URL = 'http://localhost:9000/ecommerce-uploads'
 
 function objectPublicUrl(key: string): string {
@@ -106,7 +106,7 @@ export default function ProductModal({ isOpen, editingProduct, onClose, onSave }
       setUploadError(
         err instanceof Error
           ? err.message
-          : 'Upload failed — is ms-product (port 3002) and RustFS running?'
+          : 'Upload failed — is ms-product (port 5464) and RustFS running?'
       )
     } finally {
       setUploading(false)

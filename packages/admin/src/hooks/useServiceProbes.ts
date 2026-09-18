@@ -19,7 +19,7 @@ export function useServiceProbes(autoPolling: boolean) {
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 2000)
-      const res = await fetch('http://localhost:3002/api/v1/storage/health', {
+      const res = await fetch('http://localhost:5464/api/v1/storage/health', {
         signal: controller.signal,
       })
       clearTimeout(timeoutId)

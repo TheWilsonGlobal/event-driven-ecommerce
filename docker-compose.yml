@@ -80,7 +80,7 @@ services:
     container_name: ecommerce-api-gateway
     environment:
       NODE_ENV: development
-      PORT: 3000
+      PORT: 5460
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: postgres
@@ -88,11 +88,11 @@ services:
       DB_DATABASE: ecommerce
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      USER_SERVICE_URL: http://user-service:3001
-      PRODUCT_SERVICE_URL: http://product-service:3002
-      ORDER_SERVICE_URL: http://order-service:3003
+      USER_SERVICE_URL: http://user-service:5463
+      PRODUCT_SERVICE_URL: http://product-service:5464
+      ORDER_SERVICE_URL: http://order-service:5465
     ports:
-      - "3000:3000"
+      - "5460:5460"
     depends_on:
       - postgres
       - redis
@@ -112,7 +112,7 @@ services:
     container_name: ecommerce-user-service
     environment:
       NODE_ENV: development
-      PORT: 3001
+      PORT: 5463
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: postgres
@@ -123,7 +123,7 @@ services:
       MONGODB_URI: mongodb://admin:password@mongodb:27017/ecommerce_sessions?authSource=admin
       JWT_SECRET: your-super-secret-jwt-key
     ports:
-      - "3001:3001"
+      - "5463:5463"
     depends_on:
       - postgres
       - redis
@@ -141,7 +141,7 @@ services:
     container_name: ecommerce-product-service
     environment:
       NODE_ENV: development
-      PORT: 3002
+      PORT: 5464
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: postgres
@@ -151,7 +151,7 @@ services:
       REDIS_PORT: 6379
       ELASTICSEARCH_HOST: http://elasticsearch:9200
     ports:
-      - "3002:3002"
+      - "5464:5464"
     depends_on:
       - postgres
       - redis
@@ -169,7 +169,7 @@ services:
     container_name: ecommerce-order-service
     environment:
       NODE_ENV: development
-      PORT: 3003
+      PORT: 5465
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: postgres
@@ -179,7 +179,7 @@ services:
       REDIS_PORT: 6379
       STRIPE_SECRET_KEY: sk_test_your-stripe-secret-key
     ports:
-      - "3003:3003"
+      - "5465:5465"
     depends_on:
       - postgres
       - redis
@@ -196,9 +196,9 @@ services:
     container_name: ecommerce-client
     environment:
       NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:5460
     ports:
-      - "3004:3000"
+      - "5462:5462"
     depends_on:
       - api-gateway
     networks:

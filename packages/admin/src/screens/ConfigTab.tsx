@@ -93,19 +93,18 @@ export default function ConfigTab({
                 </span>
               </>
             }
-            count={7}
+            count={6}
             openSignal={openSignal}
           >
-            <ReadOnlyRow label="API Gateway Ingress" value="3000" />
-            <ReadOnlyRow label="User Microservice" value="3001" />
-            <ReadOnlyRow label="Product Microservice" value="3002" />
-            <ReadOnlyRow label="Order Microservice" value="3003" />
-            <ReadOnlyRow label="Customer Storefront (Next.js)" value="3004" />
-            <ReadOnlyRow label="Admin Cockpit Classic" value="3005" />
+            <ReadOnlyRow label="API Gateway Ingress" value="5460" />
+            <ReadOnlyRow label="User Microservice" value="5463" />
+            <ReadOnlyRow label="Product Microservice" value="5464" />
+            <ReadOnlyRow label="Order Microservice" value="5465" />
+            <ReadOnlyRow label="Customer Storefront (Next.js)" value="5462" />
             <div className="config-row">
-              <span className="k">Admin Cockpit v2 (Active)</span>
+              <span className="k">Admin Cockpit (Active)</span>
               <span className="v" style={{ color: 'var(--blue-light)' }}>
-                3006
+                5461
               </span>
             </div>
           </ConfigCard>

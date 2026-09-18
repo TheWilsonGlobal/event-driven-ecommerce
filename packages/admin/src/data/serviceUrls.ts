@@ -4,6 +4,6 @@
 // than one screen needs, so there is a single place to change a port.
 //
 // Note: the API gateway does NOT proxy the queue/cache introspection routes,
-// so those calls go straight to ms-order on 3003.
+// so those calls go straight to ms-order on 5465.
 
-export const ORDER_SERVICE_URL = 'http://localhost:3003'
+export const ORDER_SERVICE_URL = 'http://localhost:5465'

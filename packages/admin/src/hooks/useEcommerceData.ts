@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { ServiceItem, UserRecord, ProductRecord, OrderRecord } from '../types'
 import { useServiceProbes } from './useServiceProbes'
 
-const USER_SERVICE_URL = 'http://localhost:3001'
-const PRODUCT_SERVICE_URL = 'http://localhost:3002'
-const ORDER_SERVICE_URL = 'http://localhost:3003'
+const USER_SERVICE_URL = 'http://localhost:5463'
+const PRODUCT_SERVICE_URL = 'http://localhost:5464'
+const ORDER_SERVICE_URL = 'http://localhost:5465'
 
 // This admin dashboard doesn't have real pagination UI wired to these list
 // endpoints yet — request a single large page and let the existing
@@ -122,7 +122,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
       setUsers((data.users ?? []).map(mapUser))
     } catch (err) {
       setUsersError(
-        err instanceof Error ? err.message : 'Failed to load users — is ms-user (3001) running?'
+        err instanceof Error ? err.message : 'Failed to load users — is ms-user (5463) running?'
       )
     } finally {
       setUsersLoading(false)
@@ -143,7 +143,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
       setProductsError(
         err instanceof Error
           ? err.message
-          : 'Failed to load products — is ms-product (3002) running?'
+          : 'Failed to load products — is ms-product (5464) running?'
       )
     } finally {
       setProductsLoading(false)
@@ -160,7 +160,7 @@ export function useEcommerceData(autoPolling: boolean, showToast: (msg: string) 
       setOrders((data.orders ?? []).map(mapOrder))
     } catch (err) {
       setOrdersError(
-        err instanceof Error ? err.message : 'Failed to load orders — is ms-order (3003) running?'
+        err instanceof Error ? err.message : 'Failed to load orders — is ms-order (5465) running?'
       )
     } finally {
       setOrdersLoading(false)

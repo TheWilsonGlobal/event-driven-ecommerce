@@ -9,16 +9,16 @@ export default function StorefrontFooter() {
         <div className="flex items-center gap-3">
           <span className="font-bold text-slate-800">Microservices Architecture:</span>
           <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
-            Gateway: 3000
+            Gateway: 5460
           </span>
           <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
-            User: 3001
+            User: 5463
           </span>
           <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
-            Product: 3002
+            Product: 5464
           </span>
           <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
-            Order: 3003
+            Order: 5465
           </span>
           <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
             RustFS: 9000
@@ -26,7 +26,7 @@ export default function StorefrontFooter() {
         </div>
         <div className="flex items-center gap-4">
           <a
-            href="http://localhost:3005"
+            href="http://localhost:5461"
             target="_blank"
             rel="noreferrer"
             className="hover:text-indigo-600 font-medium"
@@ -34,7 +34,7 @@ export default function StorefrontFooter() {
             Admin Cockpit &rarr;
           </a>
           <a
-            href="http://localhost:3000/health"
+            href="http://localhost:5460/health"
             target="_blank"
             rel="noreferrer"
             className="hover:text-indigo-600 font-medium"

@@ -20,14 +20,14 @@ spec:
           image: microservices-ecommerce/frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3000
+            - containerPort: 5462
               name: http
           envFrom:
             - configMapRef:
                 name: ecommerce-config
           env:
             - name: PORT
-              value: "3000"
+              value: "5462"
           resources:
             requests:
               cpu: 100m
@@ -38,13 +38,13 @@ spec:
           livenessProbe:
             httpGet:
               path: /
-              port: 3000
+              port: 5462
             initialDelaySeconds: 30
             periodSeconds: 15
           readinessProbe:
             httpGet:
               path: /
-              port: 3000
+              port: 5462
             initialDelaySeconds: 15
             periodSeconds: 5
 ---
@@ -57,8 +57,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 3000
-      targetPort: 3000
+    - port: 5462
+      targetPort: 5462
       name: http
   selector:
     app: frontend

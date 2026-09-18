@@ -159,14 +159,14 @@ export default function App() {
           </div>
           <div style={{ padding: '4px 6px 0' }}>
             <a
-              href="http://localhost:3004"
+              href="http://localhost:5462"
               target="_blank"
               rel="noreferrer"
               className="btn btn-ghost btn-sidebar"
               style={{ width: '100%', textDecoration: 'none', gap: 6 }}
             >
               <ExternalLinkIcon style={{ width: 14, height: 14 }} />
-              <span>Storefront (:3004)</span>
+              <span>Storefront (:5462)</span>
             </a>
           </div>
         </div>

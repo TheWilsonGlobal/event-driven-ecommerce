@@ -20,7 +20,7 @@ spec:
           image: microservices-ecommerce/ms-user:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 3001
+            - containerPort: 5463
               name: http
           envFrom:
             - configMapRef:
@@ -29,7 +29,7 @@ spec:
                 name: ecommerce-secrets
           env:
             - name: PORT
-              value: "3001"
+              value: "5463"
           resources:
             requests:
               cpu: 100m
@@ -40,13 +40,13 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 3001
+              port: 5463
             initialDelaySeconds: 20
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /health
-              port: 3001
+              port: 5463
             initialDelaySeconds: 10
             periodSeconds: 5
 ---
@@ -59,8 +59,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 3001
-      targetPort: 3001
+    - port: 5463
+      targetPort: 5463
       name: http
   selector:
     app: ms-user

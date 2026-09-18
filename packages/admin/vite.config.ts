@@ -10,11 +10,11 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3006,
+    port: 5461,
     host: true,
   },
   preview: {
-    port: 3006,
+    port: 5461,
     host: true,
   },
 })

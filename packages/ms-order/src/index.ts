@@ -22,7 +22,7 @@ const REPO_ROOT = path.resolve(__dirname, '../../../')
 dotenv.config({ path: path.resolve(REPO_ROOT, '.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
-const PORT = parseInt(process.env.ORDER_SERVICE_PORT || '3003', 10)
+const PORT = parseInt(process.env.ORDER_SERVICE_PORT || '5465', 10)
 
 // Relative KV paths are written from the repo root, but this process runs in
 // packages/ms-order — without this, './data/rocksdb' would land in
