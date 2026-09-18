@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
     VITE_RUSTFS_ENDPOINT: env.RUSTFS_ENDPOINT || 'http://localhost:9000',
     VITE_RUSTFS_CONSOLE_ENDPOINT: env.RUSTFS_CONSOLE_ENDPOINT || 'http://localhost:9001',
     VITE_RUSTFS_BUCKET: env.RUSTFS_BUCKET || 'ecommerce-uploads',
-    VITE_RUSTFS_DATA_PATH: env.RUSTFS_DATA_PATH || 'C:\\Infra\\RustFS',
+    VITE_RUSTFS_DATA_PATH: env.RUSTFS_DATA_PATH || 'C:\\Hub\\RustFS',
     VITE_DB_HOST: env.DB_HOST || 'localhost',
     VITE_DB_PORT: env.DB_PORT || '5432',
   })

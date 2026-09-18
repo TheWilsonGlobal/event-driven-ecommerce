@@ -200,7 +200,7 @@ docker compose up -d          # starts infra-redis + infra-rustfs
 
 Ports are unchanged (Redis `6379`, RustFS `9000`/`9001`), so this repo reaches
 them on `localhost` via the existing `.env` values and needs no code change.
-RustFS object data now lives at `C:\Infra\RustFS` (see `RUSTFS_DATA_PATH`),
+RustFS object data now lives at `C:\Hub\RustFS` (see `RUSTFS_DATA_PATH`),
 outside both repos.
 
 `docker-compose.yml` here still defines `redis`/`rustfs` for the full

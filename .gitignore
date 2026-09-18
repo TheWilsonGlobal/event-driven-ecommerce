@@ -113,8 +113,8 @@ uploads/
 public/uploads/
 media/
 
-# RustFS bind-mounted object storage
-data/rustfs/
+# RustFS object storage now lives outside this repo, at C:\Hub\RustFS
+# (RUSTFS_DATA_PATH), owned by the infra-hub repo.
 # Embedded KV snapshot (KV_CACHE_DRIVER=rocksdb|embedded). Runtime state, not source.
 data/rocksdb/
 

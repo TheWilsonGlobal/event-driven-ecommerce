@@ -19,6 +19,10 @@ import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS, redisEnabled } fr
 /** Workspace root — this service's cwd is packages/ms-order. */
 const REPO_ROOT = path.resolve(__dirname, '../../../')
 
+// Package-local .env first: dotenv never overrides an already-set key, so the
+// SQLite DATABASE_URL this service's Prisma schema needs wins over the root
+// .env's Postgres DATABASE_URL (which other, non-Prisma consumers read).
+dotenv.config({ path: path.resolve(__dirname, '../.env') })
 dotenv.config({ path: path.resolve(REPO_ROOT, '.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
