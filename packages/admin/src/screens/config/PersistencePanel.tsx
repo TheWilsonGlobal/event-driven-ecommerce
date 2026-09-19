@@ -254,7 +254,7 @@ export default function PersistencePanel({
         title={
           <>
             <span>Relational Database</span>
-            <span className="chip chip-blue">PostgreSQL / SQLite</span>
+            <span className="chip chip-blue">SQLite</span>
             <span className={`chip ${relationalHealthy === null ? 'chip-amber' : relationalHealthy ? 'chip-green' : 'chip-red'}`}>
               {relationalHealthy === null ? 'Probing…' : relationalHealthy ? '✓ Online' : '✗ Offline'}
             </span>
