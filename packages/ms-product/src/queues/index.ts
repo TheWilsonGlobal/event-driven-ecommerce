@@ -3,3 +3,4 @@ export { QUEUE_DEFINITIONS, getQueueDefinition, JOB_STATES } from './definitions
 export type { JobState, BackoffType, QueueName, QueueDefinition } from './definitions'
 export { JOB_NAMES } from './jobTypes'
 export type { ReindexProductJob, RemoveProductFromIndexJob, ReindexSearchJob } from './jobTypes'
+export { registerQueueRoutes } from './routes'

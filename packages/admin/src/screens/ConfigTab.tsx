@@ -13,7 +13,8 @@ import ServicesPanel from './config/ServicesPanel'
 import TaskQueuesPanel from './config/TaskQueuesPanel'
 import ApiPanel from './config/ApiPanel'
 import SystemLogsPanel from './config/SystemLogsPanel'
-import { useCacheDriver, useQueueData } from '../hooks/useQueueData'
+import { useCacheDriver, useMergedQueueData, describeSourceError } from '../hooks/useQueueData'
+import { OfflineBanner } from '../components/ui'
 import { useApiDocs } from '../hooks/useApiDocs'
 import { useLogFiles } from '../hooks/useLogFiles'
 
@@ -32,7 +33,7 @@ export default function ConfigTab({
 }) {
   const [tab, setTab] = useState<ConfigSubTab>('general')
 
-  const queueData = useQueueData()
+  const queueData = useMergedQueueData()
   const driver = useCacheDriver()
   const apiDocs = useApiDocs()
   const logFiles = useLogFiles()
@@ -242,12 +243,34 @@ export default function ConfigTab({
         />
       )}
       {tab === 'queues' && (
-        <TaskQueuesPanel
-          data={queueData.data}
-          loading={queueData.loading}
-          error={queueData.error}
-          onRetry={queueData.refetch}
-        />
+        <>
+          {queueData.data !== null &&
+            queueData.sources
+              .filter((s) => s.error)
+              .map((source) => (
+                <OfflineBanner
+                  key={source.service}
+                  title={`${source.service} queue data unavailable — ${describeSourceError(source)}`}
+                  detail={source.error?.message}
+                  reason={
+                    source.error?.reason ??
+                    (source.error?.status ? `HTTP ${source.error.status}` : 'network_error')
+                  }
+                  onRetry={queueData.refetch}
+                  retrying={queueData.loading}
+                />
+              ))}
+          <TaskQueuesPanel
+            data={queueData.data}
+            loading={queueData.loading}
+            error={
+              queueData.data === null
+                ? (queueData.sources.find((s) => s.error)?.error ?? null)
+                : null
+            }
+            onRetry={queueData.refetch}
+          />
+        </>
       )}
       {tab === 'api' && (
         <ApiPanel

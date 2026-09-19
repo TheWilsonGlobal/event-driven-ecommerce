@@ -8,6 +8,9 @@ import {
 import {
   createRedisConnectionRegistry,
   describeError,
+  isConnectionUsable,
+  RedisUnavailableError,
+  toRedisUnavailable,
   type RedisConnectionRegistry,
 } from '@ecommerce/shared-messaging'
 import { QUEUE_DEFINITIONS, type QueueName } from './definitions'
@@ -76,6 +79,52 @@ export class QueueManager {
   /** False when BullMQ is unavailable because the KV driver is not Redis. */
   get queuesAvailable(): boolean {
     return this.redisEnabled
+  }
+
+  /** True once close() has run — introspection must not read a torn-down queue. */
+  get isClosed(): boolean {
+    return this.closed
+  }
+
+  /** The one queue this manager owns, for introspection. Throws if Redis is disabled. */
+  queueFor(name: QueueName): Queue<ReindexProductJob | RemoveProductFromIndexJob> {
+    if (name !== QUEUE_DEFINITIONS[0].name) {
+      throw new Error(`Unknown queue definition: ${name}`)
+    }
+    return this.requireQueue()
+  }
+
+  /**
+   * Live ping used by the queue route to fail fast before doing real work.
+   * Returns null when healthy, or a RedisUnavailableError when not. Mirrors
+   * ms-order's checkRedis (queues/health.ts).
+   */
+  async checkRedis(): Promise<RedisUnavailableError | null> {
+    if (this.closed) {
+      return new RedisUnavailableError('queues_closed', 'Queue manager has been shut down')
+    }
+    if (!this.redisEnabled || !this.producerConnection) {
+      return new RedisUnavailableError(
+        'kv_driver_not_redis',
+        'ms-product is not configured with a Redis KV driver; BullMQ requires Redis.'
+      )
+    }
+    if (!isConnectionUsable(this.producerConnection)) {
+      const last = this.registry.getLastError()
+      if (last) {
+        return toRedisUnavailable(last)
+      }
+      return new RedisUnavailableError(
+        'redis_unavailable',
+        `Redis is unreachable (connection status: ${this.producerConnection.status})`
+      )
+    }
+    try {
+      await this.producerConnection.ping()
+      return null
+    } catch (err) {
+      return toRedisUnavailable(err)
+    }
   }
 
   /** Starts the reindex-search worker on its own dedicated connection. */

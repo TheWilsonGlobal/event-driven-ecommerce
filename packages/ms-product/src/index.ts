@@ -31,7 +31,7 @@ import {
   registerUploadRoutes,
 } from './routes'
 import { seedAndIndex } from './seed'
-import { QueueManager } from './queues'
+import { QueueManager, registerQueueRoutes } from './queues'
 import { registerShutdownHandlers } from './shutdown'
 
 const REPO_ROOT = path.resolve(__dirname, '../../../')
@@ -115,6 +115,7 @@ async function bootstrap() {
         { name: 'schema', description: 'Live database schema introspection' },
         { name: 'logs', description: 'Real log file listing and reading' },
         { name: 'endpoints', description: 'Live registered-route inventory' },
+        { name: 'queues', description: 'Live BullMQ queue introspection' },
       ],
     },
   })
@@ -138,6 +139,7 @@ async function bootstrap() {
   registerProductRoutes(server, { productsStore, search, queueManager })
   registerCategoryRoutes(server, { categoriesStore })
   registerUploadRoutes(server, { rustfs })
+  registerQueueRoutes(server, queueManager)
 
   // Started after routes are registered, same ordering ms-order uses: the
   // worker begins pulling jobs only once the service is otherwise ready.

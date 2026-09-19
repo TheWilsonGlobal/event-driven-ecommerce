@@ -28,7 +28,7 @@ import StorageTab from './screens/StorageTab'
 import InfraTab from './screens/InfraTab'
 import KvKeysTab from './screens/KvKeysTab'
 import ConfigTab from './screens/ConfigTab'
-import { useCacheKeys, useQueueData } from './hooks/useQueueData'
+import { useCacheKeys, useMergedQueueData } from './hooks/useQueueData'
 import { CLIENT_URL } from './data/serviceUrls'
 
 // Modals
@@ -47,9 +47,11 @@ type NavEntry = {
 export default function App() {
   const app = useAdminApp()
   const data = useEcommerceData(app.autoPolling, app.showToast)
-  // Sidebar job-count badge: live, and omitted entirely (rather than faked)
-  // while loading or when Redis/ms-order is unreachable.
-  const queueData = useQueueData()
+  // Sidebar job-count badge: live, merged across every service with queues
+  // (ms-order + ms-product), and omitted entirely (rather than faked) while
+  // loading or when every source is unreachable. A partial failure still
+  // shows the reachable source(s)' total — see useMergedQueueData.
+  const queueData = useMergedQueueData()
   const cacheKeyData = useCacheKeys()
 
   // These badges own separate hook instances from the tabs, so refresh them on

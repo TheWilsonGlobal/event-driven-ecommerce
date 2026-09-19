@@ -6,7 +6,8 @@
 // than writing a literal origin in a component.
 //
 // Note: the API gateway does NOT proxy the queue/cache introspection routes,
-// so those calls go straight to ms-order.
+// so those calls go straight to the owning service — ms-order for both queues
+// and cache, ms-product for its own queues only (it has no cache endpoints).
 
 export const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL
 export const ADMIN_URL = import.meta.env.VITE_ADMIN_URL
@@ -48,5 +49,6 @@ export const USER_SERVICE_PORT = new URL(USER_SERVICE_URL).port
 export const PRODUCT_SERVICE_PORT = new URL(PRODUCT_SERVICE_URL).port
 export const ORDER_SERVICE_PORT = new URL(ORDER_SERVICE_URL).port
 
-/** Host:port for the order service, for use in operator-facing error text. */
+/** Host:port for the order/product services, for use in operator-facing error text. */
 export const ORDER_SERVICE_AUTHORITY = new URL(ORDER_SERVICE_URL).host
+export const PRODUCT_SERVICE_AUTHORITY = new URL(PRODUCT_SERVICE_URL).host

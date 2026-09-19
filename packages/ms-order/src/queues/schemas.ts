@@ -1,7 +1,4 @@
-import type { FastifyReply } from 'fastify'
-import { RedisUnavailableError } from './errors'
 import { MAX_KEYS_RETURNED } from './cacheKeys'
-import { JOB_STATES } from './definitions'
 
 /**
  * JSON schema fragments and the shared 503 helper for the queue and cache
@@ -11,46 +8,19 @@ import { JOB_STATES } from './definitions'
  * unreachable — never an empty 200. An empty 200 renders in the admin as
  * "zero keys / zero jobs", which is indistinguishable from a healthy but empty
  * Redis. Distinguishing "no data" from "no connection" is the entire point.
+ *
+ * jobStateCountsSchema/recentJobSchema/serviceUnavailableSchema/
+ * sendUnavailable moved to @ecommerce/shared-messaging 2026-09-19 — ms-product
+ * needed the identical fragments for its own queue route. The cache-specific
+ * fragments below (ms-order's Redis key browser, not queue mechanics) stayed
+ * here.
  */
-
-export const jobStateCountsSchema = {
-  type: 'object',
-  description: 'Job counts for exactly the five contract states; every key is always present.',
-  properties: Object.fromEntries(JOB_STATES.map((s) => [s, { type: 'number' }])),
-  required: [...JOB_STATES],
-  additionalProperties: false,
-} as const
-
-export const recentJobSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    name: { type: 'string' },
-    status: { type: 'string', enum: [...JOB_STATES] },
-    attempts: { type: 'number' },
-    maxAttempts: { type: 'number' },
-    timestamp: { type: 'string', format: 'date-time' },
-  },
-  required: ['id', 'name', 'status', 'attempts', 'maxAttempts', 'timestamp'],
-} as const
-
-export const serviceUnavailableSchema = {
-  type: 'object',
-  description: 'Redis is unreachable. Never returned as an empty 200.',
-  properties: {
-    error: { type: 'string' },
-    reason: {
-      type: 'string',
-      description:
-        'Machine-readable cause: redis_connection_refused | redis_timeout | ' +
-        'redis_dns_failure | redis_auth_failure | redis_unavailable | ' +
-        'redis_error | queues_closed | kv_driver_not_redis',
-    },
-    message: { type: 'string' },
-    timestamp: { type: 'string', format: 'date-time' },
-  },
-  required: ['error', 'reason', 'message', 'timestamp'],
-} as const
+export {
+  jobStateCountsSchema,
+  recentJobSchema,
+  serviceUnavailableSchema,
+  sendUnavailable,
+} from '@ecommerce/shared-messaging'
 
 export const cacheTypeBreakdownSchema = {
   type: 'object',
@@ -105,12 +75,3 @@ export const cacheKeySchema = {
   },
   required: ['key', 'type', 'ttlSeconds', 'sizeBytes'],
 } as const
-
-export function sendUnavailable(reply: FastifyReply, err: RedisUnavailableError): FastifyReply {
-  return reply.status(503).send({
-    error: 'Service Unavailable',
-    reason: err.reason,
-    message: err.message,
-    timestamp: new Date().toISOString(),
-  })
-}
