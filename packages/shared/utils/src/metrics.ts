@@ -50,10 +50,7 @@ const LATENCY_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]
  * Returns the metric handles so a service can record its own domain metrics
  * against the same registry.
  */
-export function registerMetrics(
-  server: FastifyInstance,
-  options: MetricsOptions
-): ServiceMetrics {
+export function registerMetrics(server: FastifyInstance, options: MetricsOptions): ServiceMetrics {
   const path = options.path ?? '/metrics'
 
   // A per-service registry rather than the global default one: two services in

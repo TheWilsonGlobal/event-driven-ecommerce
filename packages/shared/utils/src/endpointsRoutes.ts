@@ -41,7 +41,11 @@ function normalizePath(path: string): string {
   return path.replace(/\/$/, '') || '/'
 }
 
-export function registerEndpointsRoute(server: FastifyInstance, registry: RouteRegistry, service: string): void {
+export function registerEndpointsRoute(
+  server: FastifyInstance,
+  registry: RouteRegistry,
+  service: string
+): void {
   server.get(
     '/api/v1/endpoints',
     {

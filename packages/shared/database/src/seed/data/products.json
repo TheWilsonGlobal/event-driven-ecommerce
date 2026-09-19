@@ -15,12 +15,7 @@
       "name": "Audio & Headphones",
       "slug": "audio-headphones"
     },
-    "tags": [
-      "wireless",
-      "noise-cancelling",
-      "bluetooth 5.3",
-      "spatial-audio"
-    ],
+    "tags": ["wireless", "noise-cancelling", "bluetooth 5.3", "spatial-audio"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80",
@@ -68,12 +63,7 @@
       "name": "Computers & Laptops",
       "slug": "computers-laptops"
     },
-    "tags": [
-      "laptop",
-      "workstation",
-      "retina-display",
-      "120hz"
-    ],
+    "tags": ["laptop", "workstation", "retina-display", "120hz"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=800&q=80",
@@ -120,13 +110,7 @@
       "name": "Smartphones & Watches",
       "slug": "smartphones-watches"
     },
-    "tags": [
-      "smartwatch",
-      "titanium",
-      "gps",
-      "fitness-tracker",
-      "ecg"
-    ],
+    "tags": ["smartwatch", "titanium", "gps", "fitness-tracker", "ecg"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80",
@@ -169,12 +153,7 @@
       "name": "Audio & Headphones",
       "slug": "audio-headphones"
     },
-    "tags": [
-      "earbuds",
-      "true-wireless",
-      "wireless-charging",
-      "ipx5"
-    ],
+    "tags": ["earbuds", "true-wireless", "wireless-charging", "ipx5"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&q=80",
@@ -213,12 +192,7 @@
       "name": "Gaming & VR",
       "slug": "gaming-vr"
     },
-    "tags": [
-      "gaming",
-      "mechanical-keyboard",
-      "rgb",
-      "hot-swappable"
-    ],
+    "tags": ["gaming", "mechanical-keyboard", "rgb", "hot-swappable"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80",
@@ -257,13 +231,7 @@
       "name": "Computers & Laptops",
       "slug": "computers-laptops"
     },
-    "tags": [
-      "4k",
-      "144hz",
-      "ips-monitor",
-      "hdr600",
-      "usb-c"
-    ],
+    "tags": ["4k", "144hz", "ips-monitor", "hdr600", "usb-c"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=800&q=80",
@@ -306,12 +274,7 @@
       "name": "Computers & Laptops",
       "slug": "computers-laptops"
     },
-    "tags": [
-      "laptop",
-      "ultralight",
-      "oled",
-      "long-battery"
-    ],
+    "tags": ["laptop", "ultralight", "oled", "long-battery"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=800&q=80",
@@ -358,12 +321,7 @@
       "name": "Computers & Laptops",
       "slug": "computers-laptops"
     },
-    "tags": [
-      "laptop",
-      "gaming",
-      "240hz",
-      "rgb"
-    ],
+    "tags": ["laptop", "gaming", "240hz", "rgb"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=800&q=80",
@@ -406,12 +364,7 @@
       "name": "Smartphones & Watches",
       "slug": "smartphones-watches"
     },
-    "tags": [
-      "smartphone",
-      "5g",
-      "amoled",
-      "fast-charging"
-    ],
+    "tags": ["smartphone", "5g", "amoled", "fast-charging"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&q=80",
@@ -454,12 +407,7 @@
       "name": "Smartphones & Watches",
       "slug": "smartphones-watches"
     },
-    "tags": [
-      "smartwatch",
-      "fitness-tracker",
-      "gps",
-      "lightweight"
-    ],
+    "tags": ["smartwatch", "fitness-tracker", "gps", "lightweight"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?w=800&q=80",
@@ -502,12 +450,7 @@
       "name": "Gaming & VR",
       "slug": "gaming-vr"
     },
-    "tags": [
-      "vr",
-      "wireless",
-      "gaming",
-      "6dof"
-    ],
+    "tags": ["vr", "wireless", "gaming", "6dof"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?w=800&q=80",
@@ -550,12 +493,7 @@
       "name": "Gaming & VR",
       "slug": "gaming-vr"
     },
-    "tags": [
-      "gaming",
-      "mouse",
-      "wireless",
-      "lightweight"
-    ],
+    "tags": ["gaming", "mouse", "wireless", "lightweight"],
     "images": [
       {
         "url": "https://images.unsplash.com/photo-1527814050087-3793815479db?w=800&q=80",

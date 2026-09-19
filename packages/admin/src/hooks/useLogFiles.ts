@@ -79,7 +79,9 @@ export function useLogFiles(): LogFilesResource {
 
     files.sort((a, b) => b.mtime.localeCompare(a.mtime))
 
-    setData(files.length > 0 || failures.length < SERVICES.length ? { files, total: files.length } : null)
+    setData(
+      files.length > 0 || failures.length < SERVICES.length ? { files, total: files.length } : null
+    )
     setUnreachable(failures)
     setLoading(false)
   }, [])

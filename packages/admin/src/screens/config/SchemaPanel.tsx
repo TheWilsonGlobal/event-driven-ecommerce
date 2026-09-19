@@ -26,7 +26,8 @@ export default function SchemaPanel({
   }, [data, filter])
 
   if (loading && !data) return <Spinner label="Introspecting live database schema…" />
-  if (!data) return <EmptyState message="No service is currently reachable for schema introspection." />
+  if (!data)
+    return <EmptyState message="No service is currently reachable for schema introspection." />
 
   return (
     <>
@@ -50,9 +51,8 @@ export default function SchemaPanel({
 
       {unreachable.length > 0 && (
         <div className="warn-banner">
-          {unreachable.map((u) => u.service).join(', ')}{' '}
-          {unreachable.length === 1 ? 'is' : 'are'} unreachable — its tables are omitted below
-          rather than shown from a stale copy.
+          {unreachable.map((u) => u.service).join(', ')} {unreachable.length === 1 ? 'is' : 'are'}{' '}
+          unreachable — its tables are omitted below rather than shown from a stale copy.
         </div>
       )}
 

@@ -50,7 +50,8 @@ export default function ApiPanel({
   }, [data, filter, methodFilter, undocOnly])
 
   if (loading && !data) return <Spinner label="Fetching live OpenAPI docs from each service…" />
-  if (!data) return <EmptyState message="No service is currently reachable for endpoint inventory." />
+  if (!data)
+    return <EmptyState message="No service is currently reachable for endpoint inventory." />
 
   const undocumented = data.summary.endpointCount - data.summary.documentedCount
 
@@ -60,7 +61,8 @@ export default function ApiPanel({
         <div className="warn-banner">
           {undocumented} of {data.summary.endpointCount} routes carry no route-level description —
           mostly the gateway's proxy routes and Swagger's own static UI routes, which have no schema
-          of their own to describe them, documented in each upstream service's own Swagger UI instead.
+          of their own to describe them, documented in each upstream service's own Swagger UI
+          instead.
         </div>
       )}
 
@@ -131,9 +133,9 @@ export default function ApiPanel({
 
       {unreachable.length > 0 && (
         <div className="warn-banner">
-          {unreachable.map((u) => u.service).join(', ')}{' '}
-          {unreachable.length === 1 ? 'is' : 'are'} unreachable — its live route inventory could not
-          be fetched, so its routes are omitted below rather than shown from a stale copy.
+          {unreachable.map((u) => u.service).join(', ')} {unreachable.length === 1 ? 'is' : 'are'}{' '}
+          unreachable — its live route inventory could not be fetched, so its routes are omitted
+          below rather than shown from a stale copy.
         </div>
       )}
 

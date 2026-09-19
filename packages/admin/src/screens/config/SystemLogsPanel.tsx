@@ -89,8 +89,8 @@ export default function SystemLogsPanel({
 
       {unreachable.length > 0 && (
         <div className="warn-banner">
-          {unreachable.map((u) => u.service).join(', ')}{' '}
-          {unreachable.length === 1 ? 'is' : 'are'} unreachable — its log files are omitted below.
+          {unreachable.map((u) => u.service).join(', ')} {unreachable.length === 1 ? 'is' : 'are'}{' '}
+          unreachable — its log files are omitted below.
         </div>
       )}
 
@@ -129,7 +129,9 @@ export default function SystemLogsPanel({
       )}
 
       {filtered.length === 0 ? (
-        <EmptyState message={files.length === 0 ? 'No log files on disk yet.' : `No files match "${filter}"`} />
+        <EmptyState
+          message={files.length === 0 ? 'No log files on disk yet.' : `No files match "${filter}"`}
+        />
       ) : (
         <div className="table-wrapper">
           <table>

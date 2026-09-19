@@ -478,7 +478,9 @@ tbody tr:nth-child(even) td {
 .config-metrics.clickable > span {
   cursor: pointer;
   border-radius: 4px;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 .config-metrics.clickable > span:not(.metric-empty):hover {
   background: rgba(148, 163, 184, 0.15);

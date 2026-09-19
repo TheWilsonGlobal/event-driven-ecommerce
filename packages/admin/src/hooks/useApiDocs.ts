@@ -107,7 +107,9 @@ export function useApiDocs(): ApiDocsResource {
     }
 
     setData(
-      groups.length > 0 ? { groups, summary: { endpointCount, documentedCount, methodCounts } } : null
+      groups.length > 0
+        ? { groups, summary: { endpointCount, documentedCount, methodCounts } }
+        : null
     )
     setUnreachable(failures)
     setLoading(false)

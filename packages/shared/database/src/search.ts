@@ -391,8 +391,6 @@ export class ProductSearchClient {
   }
 }
 
-export function createSearchClient(
-  env: NodeJS.ProcessEnv = process.env
-): ProductSearchClient {
+export function createSearchClient(env: NodeJS.ProcessEnv = process.env): ProductSearchClient {
   return new ProductSearchClient(loadSearchConfig(env))
 }

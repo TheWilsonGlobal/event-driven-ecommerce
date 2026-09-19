@@ -3,7 +3,11 @@ import type { RustfsHealth, ServiceItem } from '../../types'
 import type { LiveResource } from '../../hooks/useQueueData'
 import type { CacheDriverInfo } from './cacheTypes'
 import { ConfigCard, ReadOnlyRow, type OpenSignal } from './parts'
-import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT, RUSTFS_DATA_PATH } from '../../data/serviceUrls'
+import {
+  PRODUCT_SERVICE_URL,
+  RUSTFS_CONSOLE_ENDPOINT,
+  RUSTFS_DATA_PATH,
+} from '../../data/serviceUrls'
 
 interface StorageObject {
   sizeBytes: number
@@ -77,7 +81,9 @@ export default function InfraPanel({
                   : 'Embedded (file-backed)'
                 : 'KV'}
             </span>
-            <span className={`chip ${driver.data?.backend === 'redis' ? 'chip-green' : 'chip-amber'}`}>
+            <span
+              className={`chip ${driver.data?.backend === 'redis' ? 'chip-green' : 'chip-amber'}`}
+            >
               {!driver.data
                 ? 'Probing…'
                 : driver.data.backend === 'redis'
@@ -255,8 +261,14 @@ export default function InfraPanel({
           <>
             <span>Relational Database</span>
             <span className="chip chip-blue">SQLite</span>
-            <span className={`chip ${relationalHealthy === null ? 'chip-amber' : relationalHealthy ? 'chip-green' : 'chip-red'}`}>
-              {relationalHealthy === null ? 'Probing…' : relationalHealthy ? '✓ Online' : '✗ Offline'}
+            <span
+              className={`chip ${relationalHealthy === null ? 'chip-amber' : relationalHealthy ? 'chip-green' : 'chip-red'}`}
+            >
+              {relationalHealthy === null
+                ? 'Probing…'
+                : relationalHealthy
+                  ? '✓ Online'
+                  : '✗ Offline'}
             </span>
           </>
         }
@@ -274,7 +286,10 @@ export default function InfraPanel({
       >
         <ReadOnlyRow label="Storage Driver" value="SQLite (Prisma ORM)" />
         <ReadOnlyRow label="ORM Engine" value="Prisma ^5.10.2" />
-        <ReadOnlyRow label="Connection URL" value="file:./data/db/ms-user.db, file:./data/db/ms-order.db" />
+        <ReadOnlyRow
+          label="Connection URL"
+          value="file:./data/db/ms-user.db, file:./data/db/ms-order.db"
+        />
         <div className="config-row">
           <span className="k">Target Services</span>
           <span className="v" style={{ color: 'var(--blue-light)' }}>
@@ -289,7 +304,9 @@ export default function InfraPanel({
           <>
             <span>Document Database</span>
             <span className="chip chip-blue">NeDB</span>
-            <span className={`chip ${documentHealthy === null ? 'chip-amber' : documentHealthy ? 'chip-green' : 'chip-red'}`}>
+            <span
+              className={`chip ${documentHealthy === null ? 'chip-amber' : documentHealthy ? 'chip-green' : 'chip-red'}`}
+            >
               {documentHealthy === null ? 'Probing…' : documentHealthy ? '✓ Online' : '✗ Offline'}
             </span>
           </>
