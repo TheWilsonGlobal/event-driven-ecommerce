@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ApiDocsData, ApiDocsUnreachable } from '../../hooks/useApiDocs'
 import { ConfigCard, type OpenSignal } from './parts'
-import { EmptyState, Spinner } from '../../components/ui'
+import { EmptyState, Spinner, StatChip } from '../../components/ui'
 import { ExternalLinkIcon } from '../../components/icons'
 
 /** GET/POST/PUT/DELETE first (the common cases), then anything else. OPTIONS
@@ -74,14 +74,15 @@ export default function ApiPanel({
           />
         </div>
         <div className="toolbar-right">
-          <span className="chip chip-slate">{groups.length} Services</span>
+          <StatChip value={groups.length} label="Services" />
           {data.summary.methodCounts.OPTIONS > 0 && (
             <span
-              className={`chip chip-btn method-chip method-OPTIONS${methodFilter === 'OPTIONS' ? ' chip-btn-active' : ''}`}
+              className={`chip chip-stat chip-btn method-chip method-OPTIONS${methodFilter === 'OPTIONS' ? ' chip-btn-active' : ''}`}
               onClick={() => toggleMethodFilter('OPTIONS')}
               title="Filter to OPTIONS routes"
             >
-              {data.summary.methodCounts.OPTIONS} OPTIONS
+              <span className="chip-stat-value">{data.summary.methodCounts.OPTIONS}</span>
+              <span className="chip-stat-label">OPTIONS</span>
             </span>
           )}
           {/* Same column widths/gap/order as each group row's metrics below

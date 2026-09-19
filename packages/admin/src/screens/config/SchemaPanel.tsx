@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { SchemaData, SchemaUnreachable } from '../../hooks/useSchema'
 import { ConfigCard, type OpenSignal } from './parts'
-import { EmptyState, Spinner } from '../../components/ui'
+import { EmptyState, Spinner, StatChip } from '../../components/ui'
 
 export default function SchemaPanel({
   data,
@@ -40,10 +40,10 @@ export default function SchemaPanel({
           />
         </div>
         <div className="toolbar-right">
-          <span className="chip chip-slate">Tables {data.summary.tableCount}</span>
-          <span className="chip chip-slate">Columns {data.summary.columnCount}</span>
-          <span className="chip chip-slate">Indexes {data.summary.indexCount}</span>
-          <span className="chip chip-blue">Rows {data.summary.totalRows}</span>
+          <StatChip value={data.summary.tableCount} label="Tables" />
+          <StatChip value={data.summary.columnCount} label="Columns" />
+          <StatChip value={data.summary.indexCount} label="Indexes" />
+          <StatChip value={data.summary.totalRows} label="Rows" variant="blue" />
         </div>
       </div>
 

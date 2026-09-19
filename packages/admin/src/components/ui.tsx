@@ -15,6 +15,29 @@ export function Chip({
   return <span className={`chip chip-${variant}`}>{label}</span>
 }
 
+/**
+ * A toolbar summary chip: value stacked above its label (e.g. "8" over
+ * "Tables"), rather than run together as inline text. Used for the header
+ * count strips atop the Config sub-tab panels (DB Schema, APIs, Services,
+ * Task Queues, Logs).
+ */
+export function StatChip({
+  value,
+  label,
+  variant = 'slate',
+}: {
+  value: ReactNode
+  label: string
+  variant?: 'slate' | 'blue' | 'green' | 'amber' | 'red' | 'purple'
+}) {
+  return (
+    <span className={`chip chip-stat chip-${variant}`}>
+      <span className="chip-stat-value">{value}</span>
+      <span className="chip-stat-label">{label}</span>
+    </span>
+  )
+}
+
 export function StatCard({
   label,
   value,

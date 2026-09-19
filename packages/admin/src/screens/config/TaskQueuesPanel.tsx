@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { QueueData, QueueInfo } from '../queues/queueTypes'
-import { EmptyState, OfflineBanner, Spinner } from '../../components/ui'
+import { EmptyState, OfflineBanner, Spinner, StatChip } from '../../components/ui'
 import { describeError, type FetchError } from '../../hooks/useQueueData'
 import { WorkersIcon, RetryIcon, BackoffIcon, DelayIcon } from '../../components/icons'
 
@@ -71,17 +71,17 @@ export default function TaskQueuesPanel({
           />
         </div>
         <div className="toolbar-right">
-          <span className="chip chip-slate">Queues {data ? data.summary.queueCount : '—'}</span>
-          <span className="chip chip-red">Waiting {stateCounts?.waiting ?? '—'}</span>
-          <span className="chip chip-blue">Active {stateCounts?.active ?? '—'}</span>
-          <span className="chip chip-green">Completed {stateCounts?.completed ?? '—'}</span>
-          <span
-            className={`chip ${stateCounts && stateCounts.failed > 0 ? 'chip-amber' : 'chip-slate'}`}
-          >
-            Failed {stateCounts?.failed ?? '—'}
-          </span>
-          <span className="chip chip-purple">Delayed {stateCounts?.delayed ?? '—'}</span>
-          <span className="chip chip-slate">Total {totalCount ?? '—'}</span>
+          <StatChip value={data ? data.summary.queueCount : '—'} label="Queues" />
+          <StatChip value={stateCounts?.waiting ?? '—'} label="Waiting" variant="red" />
+          <StatChip value={stateCounts?.active ?? '—'} label="Active" variant="blue" />
+          <StatChip value={stateCounts?.completed ?? '—'} label="Completed" variant="green" />
+          <StatChip
+            value={stateCounts?.failed ?? '—'}
+            label="Failed"
+            variant={stateCounts && stateCounts.failed > 0 ? 'amber' : 'slate'}
+          />
+          <StatChip value={stateCounts?.delayed ?? '—'} label="Delayed" variant="purple" />
+          <StatChip value={totalCount ?? '—'} label="Total" />
         </div>
       </div>
 

@@ -1,0 +1,162 @@
+[
+  {
+    "id": "user-admin-01",
+    "email": "admin@ecommerce.com",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Platform",
+    "lastName": "Admin",
+    "role": "ADMIN",
+    "isActive": true,
+    "isEmailVerified": true,
+    "addresses": [
+      {
+        "addressLine1": "100 Silicon Valley Way",
+        "city": "San Francisco",
+        "state": "CA",
+        "postalCode": "94105",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  },
+  {
+    "id": "user-customer-01",
+    "email": "customer@ecommerce.com",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Alex",
+    "lastName": "Morgan",
+    "role": "CUSTOMER",
+    "isActive": true,
+    "isEmailVerified": true,
+    "addresses": [
+      {
+        "addressLine1": "742 Evergreen Terrace",
+        "city": "Springfield",
+        "state": "OR",
+        "postalCode": "97477",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  },
+  {
+    "id": "user-customer-02",
+    "email": "sarah.connor@cyberdyne.com",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Sarah",
+    "lastName": "Connor",
+    "role": "CUSTOMER",
+    "isActive": true,
+    "isEmailVerified": true,
+    "addresses": [
+      {
+        "addressLine1": "214 Desert Highway",
+        "city": "Mojave",
+        "state": "CA",
+        "postalCode": "93501",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  },
+  {
+    "id": "user-customer-03",
+    "email": "priya.natarajan@example.com",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Priya",
+    "lastName": "Natarajan",
+    "role": "CUSTOMER",
+    "isActive": true,
+    "isEmailVerified": true,
+    "addresses": [
+      {
+        "addressLine1": "88 Lakeshore Drive",
+        "city": "Chicago",
+        "state": "IL",
+        "postalCode": "60601",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  },
+  {
+    "id": "user-customer-04",
+    "email": "derek.whitfield@example.com",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Derek",
+    "lastName": "Whitfield",
+    "role": "CUSTOMER",
+    "isActive": true,
+    "isEmailVerified": false,
+    "addresses": [
+      {
+        "addressLine1": "19 Birchwood Lane",
+        "city": "Portland",
+        "state": "ME",
+        "postalCode": "04101",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  },
+  {
+    "id": "user-customer-05",
+    "email": "maria.gutierrez@example.com",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Maria",
+    "lastName": "Gutierrez",
+    "role": "CUSTOMER",
+    "isActive": false,
+    "isEmailVerified": true,
+    "addresses": [
+      {
+        "addressLine1": "4520 Sunset Boulevard",
+        "city": "Miami",
+        "state": "FL",
+        "postalCode": "33139",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  },
+  {
+    "id": "user-vendor-01",
+    "email": "marcus@soundgear.io",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Marcus",
+    "lastName": "Vance",
+    "role": "VENDOR",
+    "isActive": true,
+    "isEmailVerified": true,
+    "addresses": [
+      {
+        "addressLine1": "500 Acoustic Blvd",
+        "city": "Austin",
+        "state": "TX",
+        "postalCode": "78701",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  },
+  {
+    "id": "user-vendor-02",
+    "email": "linh.tran@homegoods-collective.com",
+    "passwordHash": "$2a$10$mtbGEhr4qwZ59/gd7tpHR.6rz4wTaVJvOESWRd/vyYy.3ACOnrOPi",
+    "firstName": "Linh",
+    "lastName": "Tran",
+    "role": "VENDOR",
+    "isActive": true,
+    "isEmailVerified": true,
+    "addresses": [
+      {
+        "addressLine1": "77 Harborview Street",
+        "city": "Seattle",
+        "state": "WA",
+        "postalCode": "98101",
+        "country": "United States",
+        "isDefaultShipping": true
+      }
+    ]
+  }
+]

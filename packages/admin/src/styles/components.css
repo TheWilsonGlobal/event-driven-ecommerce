@@ -371,6 +371,28 @@ tbody tr:nth-child(even) td {
   border: 1px solid var(--red-border);
 }
 
+/* A toolbar summary chip: the count stacked above its label rather than
+   inline, so a row of these reads as a small stat strip instead of prose. */
+.chip-stat {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.3;
+  padding: 3px 10px;
+  gap: 0;
+}
+.chip-stat .chip-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+}
+.chip-stat .chip-stat-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.85;
+}
+
 /* ── Config Cards (collapsible) ──────────────────────────────────────── */
 .config-tabs {
   display: flex;

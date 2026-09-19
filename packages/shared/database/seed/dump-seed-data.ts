@@ -5,7 +5,7 @@ import { SEED_CATEGORIES, SEED_PRODUCTS, SEED_USERS, SEED_ORDERS } from '@ecomme
 // Dumps the shared seed constants (the same data each service self-seeds
 // into its own real DB on boot) to JSON files under data/ for inspection —
 // nothing in the apps reads these files back at runtime.
-export async function runSeed(outputDir: string = path.resolve(__dirname, '../../data/seed')) {
+export async function runSeed(outputDir: string = path.resolve(__dirname, '../data/seed')) {
   console.log('🚀 [Seed] Initializing E-Commerce database seed process...')
 
   if (!fs.existsSync(outputDir)) {

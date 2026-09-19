@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { LogFileSummary } from './logTypes'
 import type { LogFilesUnreachable } from '../../hooks/useLogFiles'
 import { fetchLogFileContent } from '../../hooks/useLogFiles'
-import { EmptyState, Spinner } from '../../components/ui'
+import { EmptyState, Spinner, StatChip } from '../../components/ui'
 import { DownloadIcon, FileIcon } from '../../components/icons'
 
 function formatBytes(bytes: number): string {
@@ -82,8 +82,8 @@ export default function SystemLogsPanel({
           />
         </div>
         <div className="toolbar-right">
-          <span className="chip chip-slate">Files {files.length}</span>
-          <span className="chip chip-slate">Total {formatBytes(totalBytes)}</span>
+          <StatChip value={files.length} label="Files" />
+          <StatChip value={formatBytes(totalBytes)} label="Total" />
         </div>
       </div>
 

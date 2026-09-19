@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ServiceItem } from '../../types'
-import { StatusBadge } from '../../components/ui'
+import { StatusBadge, StatChip } from '../../components/ui'
 import { EmptyState } from '../../components/ui'
 
 export default function ServicesPanel({
@@ -43,13 +43,13 @@ export default function ServicesPanel({
           />
         </div>
         <div className="toolbar-right">
-          <span className="chip chip-slate">Services {services.length}</span>
-          <span
-            className={`chip ${healthyCount === services.length ? 'chip-green' : 'chip-amber'}`}
-          >
-            {healthyCount} / {services.length} Healthy
-          </span>
-          <span className="chip chip-slate">Last Scanned {lastScanned}</span>
+          <StatChip value={services.length} label="Services" />
+          <StatChip
+            value={`${healthyCount} / ${services.length}`}
+            label="Healthy"
+            variant={healthyCount === services.length ? 'green' : 'amber'}
+          />
+          <StatChip value={lastScanned} label="Last Scanned" />
           <button className="btn btn-primary btn-sm" onClick={onRefresh}>
             Refresh Probes ↻
           </button>
