@@ -68,11 +68,13 @@
 .config-metrics > span:first-child {
   margin-left: 0;
 }
-.metric-OPTIONS {
+.config-metrics > span.metric-OPTIONS {
   /* Extra breathing room after undoc: both are "noise" columns (not a real
      HTTP verb an operator calls), so they're set apart from the GET/POST/...
-     verb columns that follow. */
-  margin-left: 24px;
+     verb columns that follow. Needs the same `.config-metrics > span`
+     specificity as the 10px default it's overriding, or the default wins
+     regardless of source order. */
+  margin-left: 64px;
 }
 .config-metrics b {
   color: var(--text-bright);

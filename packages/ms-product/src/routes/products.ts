@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import * as crypto from 'crypto'
 import type { DocumentDatabaseAdapter, ProductSearchClient } from '@ecommerce/shared-database'
 import type { ProductDoc } from '../types'
 import type { QueueManager } from '../queues'
@@ -134,7 +135,14 @@ export function registerProductRoutes(
     },
     async (req, reply) => {
       const body = req.body ?? {}
-      const id = (body.id as string | undefined) ?? `prod-${Date.now()}`
+      // `prod-${Date.now()}` used to be the fallback here: under concurrent
+      // creates, two requests landing in the same millisecond collided on
+      // that id, and NeDB's unique-key constraint turned the second insert
+      // into an unhandled 500 rather than a clean conflict response (found
+      // via packages/load-testing's queue stress test). randomUUID() is
+      // already this package's convention for generated ids (see
+      // routes/uploads.ts) and is collision-proof regardless of request rate.
+      const id = (body.id as string | undefined) ?? `prod-${crypto.randomUUID()}`
       const doc: ProductDoc = {
         id,
         title: body.title ?? 'Untitled Product',

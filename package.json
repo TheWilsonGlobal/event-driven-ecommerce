@@ -26,7 +26,8 @@
     "bootstrap": "pnpm install",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down"
+    "docker:down": "docker-compose down",
+    "stress:queues": "pnpm --filter @ecommerce/load-testing run stress"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
