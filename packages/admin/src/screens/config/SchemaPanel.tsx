@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { SchemaData, SchemaUnreachable } from '../../hooks/useSchema'
 import { ConfigCard, type OpenSignal } from './parts'
-import { EmptyState, Spinner, StatChip } from '../../components/ui'
+import { EmptyState, Pagination, Spinner, StatChip } from '../../components/ui'
+
+const PAGE_SIZE = 25
 
 export default function SchemaPanel({
   data,
@@ -15,6 +17,7 @@ export default function SchemaPanel({
   openSignal?: OpenSignal
 }) {
   const [filter, setFilter] = useState('')
+  const [page, setPage] = useState(1)
 
   const tables = useMemo(() => {
     if (!data) return []
@@ -24,6 +27,8 @@ export default function SchemaPanel({
       (t) => t.name.toLowerCase().includes(q) || t.service.toLowerCase().includes(q)
     )
   }, [data, filter])
+
+  const paginated = tables.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   if (loading && !data) return <Spinner label="Introspecting live database schema…" />
   if (!data)
@@ -37,7 +42,10 @@ export default function SchemaPanel({
             type="text"
             placeholder="Filter tables by name or service..."
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
         <div className="toolbar-right">
@@ -59,7 +67,7 @@ export default function SchemaPanel({
       {tables.length === 0 ? (
         <EmptyState message={`No tables match "${filter}"`} />
       ) : (
-        tables.map((table) => {
+        paginated.map((table) => {
           const fkCount = table.columns.filter((c) => c.references).length
           return (
             <ConfigCard
@@ -171,6 +179,16 @@ export default function SchemaPanel({
             </ConfigCard>
           )
         })
+      )}
+
+      {tables.length > 0 && (
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={tables.length}
+          onPage={setPage}
+          noun="tables"
+        />
       )}
     </>
   )

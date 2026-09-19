@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import type { ServiceItem } from '../../types'
 import { StatusBadge, StatChip } from '../../components/ui'
-import { EmptyState } from '../../components/ui'
+import { EmptyState, Pagination } from '../../components/ui'
 import type { GatewayServicesResource } from '../../hooks/useGatewayServices'
+
+const PAGE_SIZE = 25
 
 export default function ServicesPanel({
   services,
@@ -18,6 +20,7 @@ export default function ServicesPanel({
   gatewayServices: GatewayServicesResource
 }) {
   const [filter, setFilter] = useState('')
+  const [page, setPage] = useState(1)
 
   const healthyCount = services.filter((s) => s.status === 'HEALTHY').length
 
@@ -34,6 +37,8 @@ export default function ServicesPanel({
     return [...list].sort((a, b) => a.port - b.port)
   }, [services, filter])
 
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
   return (
     <>
       <div className="toolbar">
@@ -42,7 +47,10 @@ export default function ServicesPanel({
             type="text"
             placeholder="Filter services by name, role or port..."
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
         <div className="toolbar-right">
@@ -127,7 +135,7 @@ export default function ServicesPanel({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((svc) => (
+              {paginated.map((svc) => (
                 <tr key={svc.id}>
                   <td>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -157,6 +165,13 @@ export default function ServicesPanel({
               ))}
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPage={setPage}
+            noun="services"
+          />
         </div>
       )}
     </>

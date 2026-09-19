@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react'
 import type { LogFileSummary } from './logTypes'
 import type { LogFilesUnreachable } from '../../hooks/useLogFiles'
 import { fetchLogFileContent } from '../../hooks/useLogFiles'
-import { EmptyState, Spinner, StatChip } from '../../components/ui'
+import { EmptyState, Pagination, Spinner, StatChip } from '../../components/ui'
 import { DownloadIcon, FileIcon } from '../../components/icons'
+
+const PAGE_SIZE = 25
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -27,6 +29,7 @@ export default function SystemLogsPanel({
   loading: boolean
 }) {
   const [filter, setFilter] = useState('')
+  const [page, setPage] = useState(1)
   const [viewing, setViewing] = useState<LogFileSummary | null>(null)
   const [content, setContent] = useState<string | null>(null)
   const [contentError, setContentError] = useState<string | null>(null)
@@ -41,6 +44,7 @@ export default function SystemLogsPanel({
   }, [files, filter])
 
   const totalBytes = files.reduce((sum, f) => sum + f.sizeBytes, 0)
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const openFile = async (file: LogFileSummary) => {
     setViewing(file)
@@ -78,7 +82,10 @@ export default function SystemLogsPanel({
             type="text"
             placeholder="Filter by filename or service..."
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
         <div className="toolbar-right">
@@ -147,7 +154,7 @@ export default function SystemLogsPanel({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((f) => (
+              {paginated.map((f) => (
                 <tr key={`${f.service}/${f.filename}`}>
                   <td>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -178,6 +185,13 @@ export default function SystemLogsPanel({
               ))}
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPage={setPage}
+            noun="files"
+          />
         </div>
       )}
     </>

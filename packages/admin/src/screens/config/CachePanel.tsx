@@ -1,8 +1,10 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import type { CacheData, CacheTypeBreakdown } from './cacheTypes'
 import type { FetchError } from '../../hooks/useQueueData'
 import { describeError } from '../../hooks/useQueueData'
-import { EmptyState, OfflineBanner, Spinner } from '../../components/ui'
+import { EmptyState, OfflineBanner, Pagination, Spinner } from '../../components/ui'
+
+const PAGE_SIZE = 25
 
 // A truncated count is a lower bound (the SCAN hit its cap), so it is rendered
 // with a "≥" prefix rather than as an exact figure.
@@ -42,11 +44,17 @@ export default function CachePanel({
   error: FetchError | null
   onRetry: () => void
 }) {
+  const [page, setPage] = useState(1)
+
   // The `other` column only appears when a type outside the broken-out set is
   // actually present — an always-zero column is noise.
   const showOther = Boolean(
     data && (hasOther(data.types) || data.namespaces.some((ns) => hasOther(ns.types)))
   )
+  // The Total row below sums ALL namespaces regardless of page, so it must
+  // never be part of the paginated slice — it stays pinned as the table's
+  // last row on every page.
+  const paginated = data ? data.namespaces.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
 
   return (
     <>
@@ -113,7 +121,7 @@ export default function CachePanel({
               </tr>
             </thead>
             <tbody>
-              {data.namespaces.map((ns) => (
+              {paginated.map((ns) => (
                 <tr key={ns.prefix}>
                   <td className="mono">{ns.prefix}</td>
                   <td className="cell-muted">{ns.purpose}</td>
@@ -168,6 +176,13 @@ export default function CachePanel({
               </tr>
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={data.namespaces.length}
+            onPage={setPage}
+            noun="namespaces"
+          />
         </div>
       )}
 

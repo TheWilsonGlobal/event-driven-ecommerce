@@ -33,9 +33,28 @@ export const recentJobSchema = {
     status: { type: 'string', enum: [...JOB_STATES] },
     attempts: { type: 'number' },
     maxAttempts: { type: 'number' },
-    timestamp: { type: 'string', format: 'date-time' },
+    createdAt: {
+      type: 'string',
+      format: 'date-time',
+      description: 'When queue.add() created the job. Never changes after enqueue.',
+    },
+    updatedAt: {
+      type: 'string',
+      format: 'date-time',
+      description:
+        'The most recent thing that happened to the job (finished, or started ' +
+        'an attempt, or — for a job still waiting/delayed — falls back to createdAt).',
+    },
+    // MUST stay ['string', 'null'] — see cacheKeySchema's sizeBytes for why:
+    // a plain { type: 'string' } would have Fastify's serializer coerce null
+    // to "", which renders as an empty-but-present error message rather than
+    // "no error" for every non-failed job.
+    failedReason: {
+      type: ['string', 'null'],
+      description: "The thrown error's message from the job's last failed attempt. null unless status is 'failed'.",
+    },
   },
-  required: ['id', 'name', 'status', 'attempts', 'maxAttempts', 'timestamp'],
+  required: ['id', 'name', 'status', 'attempts', 'maxAttempts', 'createdAt', 'updatedAt', 'failedReason'],
 } as const
 
 export const serviceUnavailableSchema = {

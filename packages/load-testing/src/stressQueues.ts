@@ -483,9 +483,13 @@ async function drainAndReport(
   console.log(
     '\nNote: order-expiration jobs are delayed BULLMQ_ORDER_EXPIRATION_MINUTES (15 by default) ' +
       'before they even enter "waiting" — a default --drain-timeout-ms will always show them ' +
-      'sitting in "delayed" below. That is expected, not a stall; only payment-retry / ' +
-      'notification-dispatch / saga-compensation / reindex-search are realistic to see drain ' +
-      'fully within this run.'
+      'sitting in "delayed" below. That is expected, not a stall.\n' +
+      'Note: this script forces every payment-retry job to fail (outcome: "fail"), which drives ' +
+      'it through all 5 attempts of its exponential backoff (10s/20s/40s/80s/160s — definitions.ts) ' +
+      'before finally landing as "failed". That alone exceeds the default 60s drain window, so a ' +
+      "handful of payment-retry jobs still sitting in \"delayed\" (not stuck 'active') at report " +
+      'time is expected too, not a stall — only notification-dispatch / saga-compensation / ' +
+      'reindex-search are realistic to see drain fully within this run.'
   )
 
   console.log('\nAggregate queue counts (order-expiration / notification-dispatch / reindex-search')

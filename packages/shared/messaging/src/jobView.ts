@@ -7,7 +7,24 @@ export interface RecentJobView {
   status: JobState
   attempts: number
   maxAttempts: number
-  timestamp: string
+  /** When queue.add() created the job. Never changes after enqueue. */
+  createdAt: string
+  /**
+   * The most recent thing that happened to the job: finishedOn (reached
+   * completed/failed) if set, else processedOn (a worker started an attempt)
+   * if set, else falls back to createdAt for a job still waiting/delayed
+   * that a worker hasn't touched yet. Distinct from createdAt so a retried
+   * job's row reflects its latest attempt, not its original enqueue time.
+   */
+  updatedAt: string
+  /**
+   * The thrown error's message from the job's last failed attempt —
+   * job.failedReason, BullMQ's own field. null for every status except
+   * 'failed' (a job that's still retrying has attemptsMade > 0 but isn't
+   * status 'failed' yet, so this stays null until the final attempt is
+   * actually exhausted).
+   */
+  failedReason: string | null
 }
 
 /**
@@ -35,9 +52,7 @@ export async function toRecentJobView(
     return null
   }
 
-  // processedOn/finishedOn are more meaningful than enqueue time for jobs that
-  // have run; fall back to the enqueue timestamp for waiting/delayed jobs.
-  const ts = job.finishedOn ?? job.processedOn ?? job.timestamp
+  const updatedTs = job.finishedOn ?? job.processedOn ?? job.timestamp
 
   return {
     id: String(job.id ?? ''),
@@ -45,7 +60,9 @@ export async function toRecentJobView(
     status: state,
     attempts: job.attemptsMade,
     maxAttempts: job.opts.attempts ?? maxAttempts,
-    timestamp: new Date(ts).toISOString(),
+    createdAt: new Date(job.timestamp).toISOString(),
+    updatedAt: new Date(updatedTs).toISOString(),
+    failedReason: state === 'failed' ? (job.failedReason ?? null) : null,
   }
 }
 

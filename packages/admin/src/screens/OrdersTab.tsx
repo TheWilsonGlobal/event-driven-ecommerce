@@ -2,6 +2,37 @@ import { useState } from 'react'
 import type { OrderRecord } from '../types'
 import { Pagination } from '../components/ui'
 
+function fmtTime(iso: string): string {
+  const ms = new Date(iso).getTime()
+  return Number.isFinite(ms) ? new Date(ms).toLocaleString() : '—'
+}
+
+// [unit suffix, seconds per unit] — see queues/QueuesPanel.tsx's fmtAgo for
+// why this is hand-rolled instead of using an Intl.RelativeTimeFormat style
+// directly (none of "long"/"short"/"narrow" give a concise "2m ago").
+const AGO_UNITS: [string, number][] = [
+  ['y', 31536000],
+  ['mo', 2592000],
+  ['d', 86400],
+  ['h', 3600],
+  ['m', 60],
+  ['s', 1],
+]
+
+function fmtAgo(iso: string | undefined | null): string {
+  const diffSeconds = (new Date(iso ?? '').getTime() - Date.now()) / 1000
+  if (!Number.isFinite(diffSeconds)) return '—'
+  const future = diffSeconds > 0
+  const abs = Math.abs(diffSeconds)
+  for (const [suffix, secondsInUnit] of AGO_UNITS) {
+    if (abs >= secondsInUnit || suffix === 's') {
+      const n = Math.floor(abs / secondsInUnit)
+      return future ? `in ${n}${suffix}` : `${n}${suffix} ago`
+    }
+  }
+  return '0s ago'
+}
+
 interface Props {
   filteredOrders: OrderRecord[]
   orderSearch: string
@@ -89,15 +120,16 @@ export default function OrdersTab({
               <th>Items</th>
               <th>Total</th>
               <th>Payment</th>
-              <th>Workflow Status Transition</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
+              <th title="Workflow Status Transition">Status</th>
+              <th>Created</th>
+              <th>Updated</th>
             </tr>
           </thead>
           <tbody>
             {paginated.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   style={{ textAlign: 'center', padding: 32, color: 'var(--text-faint)' }}
                 >
                   No orders found matching filter criteria.
@@ -105,7 +137,12 @@ export default function OrdersTab({
               </tr>
             ) : (
               paginated.map((ord) => (
-                <tr key={ord.id}>
+                <tr
+                  key={ord.id}
+                  className="row-clickable"
+                  onClick={() => onSelectOrder(ord)}
+                  title="Click to inspect this order"
+                >
                   <td className="mono" style={{ color: 'var(--blue-light)', fontWeight: 700 }}>
                     {ord.orderNumber}
                   </td>
@@ -120,9 +157,10 @@ export default function OrdersTab({
                   <td>
                     <span className="chip chip-blue">{ord.paymentMethod}</span>
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <select
                       value={ord.status}
+                      title="Workflow Status Transition"
                       onChange={(e) =>
                         onUpdateStatus(ord.id, e.target.value as OrderRecord['status'])
                       }
@@ -143,10 +181,11 @@ export default function OrdersTab({
                       ))}
                     </select>
                   </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => onSelectOrder(ord)}>
-                      Inspect 👁️
-                    </button>
+                  <td className="cell-muted" title={fmtTime(ord.createdAt)}>
+                    {fmtAgo(ord.createdAt)}
+                  </td>
+                  <td className="cell-muted" title={fmtTime(ord.updatedAt)}>
+                    {fmtAgo(ord.updatedAt)}
                   </td>
                 </tr>
               ))

@@ -1,10 +1,23 @@
 import { useMemo, useState } from 'react'
 import type { QueueData, QueueInfo } from '../queues/queueTypes'
-import { EmptyState, OfflineBanner, Spinner, StatChip } from '../../components/ui'
+import { EmptyState, OfflineBanner, Pagination, Spinner, StatChip } from '../../components/ui'
 import { describeError, type FetchError } from '../../hooks/useQueueData'
 import { WorkersIcon, RetryIcon, BackoffIcon, DelayIcon } from '../../components/icons'
 
 const NO_QUEUES: QueueInfo[] = []
+const PAGE_SIZE = 25
+
+/**
+ * Distinct job names a queue has actually dispatched, read off its
+ * recentJobs (now covering up to the full 200-job retention ceiling per
+ * state — see shared-messaging/introspection.ts — not a small sample), so a
+ * queue that fans out to more than one task (e.g. notification-dispatch's
+ * send-confirmation + send-receipt) shows every one of them, not just
+ * whichever happened to run most recently.
+ */
+function distinctTaskNames(queue: QueueInfo): string[] {
+  return [...new Set(queue.recentJobs.map((j) => j.name))].sort((a, b) => a.localeCompare(b))
+}
 
 export default function TaskQueuesPanel({
   data,
@@ -18,6 +31,7 @@ export default function TaskQueuesPanel({
   onRetry?: () => void
 }) {
   const [filter, setFilter] = useState('')
+  const [page, setPage] = useState(1)
 
   const allQueues = data?.queues ?? NO_QUEUES
 
@@ -31,6 +45,8 @@ export default function TaskQueuesPanel({
         queue.description.toLowerCase().includes(q)
     )
   }, [allQueues, filter])
+
+  const paginated = queues.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   // Null when there is no live payload — a zero-seeded reducer would print
   // `Waiting 0 · Active 0 · …` above the offline banner, indistinguishable
@@ -67,7 +83,10 @@ export default function TaskQueuesPanel({
             type="text"
             placeholder="Filter queues by name, service or description..."
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
         <div className="toolbar-right">
@@ -105,6 +124,7 @@ export default function TaskQueuesPanel({
                 <th>Service</th>
                 <th>Queue Name</th>
                 <th>Description</th>
+                <th>Task Names</th>
                 <th className="cell-right" title="Worker Concurrency">
                   <WorkersIcon style={{ width: 14, height: 14 }} />
                 </th>
@@ -136,7 +156,7 @@ export default function TaskQueuesPanel({
               </tr>
             </thead>
             <tbody>
-              {queues.map((queue) => {
+              {paginated.map((queue) => {
                 const total =
                   queue.counts.waiting +
                   queue.counts.active +
@@ -150,6 +170,17 @@ export default function TaskQueuesPanel({
                     </td>
                     <td className="mono">{queue.name}</td>
                     <td className="cell-muted">{queue.description}</td>
+                    <td>
+                      {distinctTaskNames(queue).map((name) => (
+                        <span
+                          key={name}
+                          className="chip chip-slate"
+                          style={{ marginRight: 4, marginBottom: 2 }}
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </td>
                     <td
                       className="mono cell-right cell-muted"
                       title={`${queue.concurrency} workers`}
@@ -200,6 +231,13 @@ export default function TaskQueuesPanel({
               })}
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={queues.length}
+            onPage={setPage}
+            noun="queues"
+          />
         </div>
       )}
     </>

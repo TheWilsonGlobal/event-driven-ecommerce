@@ -105,18 +105,41 @@ export function Toggle({
   )
 }
 
+/**
+ * The page-number buttons to render around the current page: always page 1
+ * and the last page, always `page` itself and one neighbour on each side,
+ * with a `'…'` gap marker wherever that leaves a hole — the standard
+ * "1 … 4 5 6 … 42" windowing so a big result set doesn't render one button
+ * per page.
+ */
+function pageWindow(page: number, totalPages: number): (number | '…')[] {
+  const pages = new Set<number>([1, totalPages, page, page - 1, page + 1])
+  const sorted = [...pages].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b)
+  const out: (number | '…')[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) out.push('…')
+    out.push(sorted[i])
+  }
+  return out
+}
+
 export function Pagination({
   page,
   pageSize,
   total,
   onPage,
   noun = 'items',
+  pageSizeOptions,
+  onPageSize,
 }: {
   page: number
   pageSize: number
   total: number
   onPage: (page: number) => void
   noun?: string
+  /** Renders a page-size <select> when provided (e.g. [10, 25, 50, 100]). */
+  pageSizeOptions?: number[]
+  onPageSize?: (pageSize: number) => void
 }) {
   if (!total) return null
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -127,16 +150,56 @@ export function Pagination({
     <div className="pagination">
       <div className="pagination-left">
         Showing {start} to {end} of {total} {noun}
+        {pageSizeOptions && onPageSize && (
+          <label style={{ marginLeft: 12 }}>
+            {' '}
+            per page:{' '}
+            <select
+              className="page-size-select"
+              value={pageSize}
+              onChange={(e) => onPageSize(Number(e.target.value))}
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button className="page-btn" onClick={() => onPage(page - 1)} disabled={page <= 1}>
-          « Prev
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <button className="page-btn" onClick={() => onPage(1)} disabled={page <= 1}>
+          « First
         </button>
-        <span style={{ padding: '4px 8px', fontWeight: 600, color: 'var(--text-bright)' }}>
-          {page} / {totalPages}
-        </span>
+        <button className="page-btn" onClick={() => onPage(page - 1)} disabled={page <= 1}>
+          ‹ Prev
+        </button>
+        {pageWindow(page, totalPages).map((p, i) =>
+          p === '…' ? (
+            <span key={`gap-${i}`} className="page-gap">
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              className={`page-btn${p === page ? ' active' : ''}`}
+              onClick={() => onPage(p)}
+              aria-current={p === page ? 'page' : undefined}
+            >
+              {p}
+            </button>
+          )
+        )}
         <button className="page-btn" onClick={() => onPage(page + 1)} disabled={page >= totalPages}>
-          Next »
+          Next ›
+        </button>
+        <button
+          className="page-btn"
+          onClick={() => onPage(totalPages)}
+          disabled={page >= totalPages}
+        >
+          Last »
         </button>
       </div>
     </div>

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { EmptyState } from '../components/ui'
+import { EmptyState, Pagination } from '../components/ui'
 import { DownloadIcon } from '../components/icons'
 import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT } from '../data/serviceUrls'
+
+const PAGE_SIZE = 25
 
 // RustFS is a real S3-compatible object store (docker-compose `rustfs`
 // service, bind-mounted from the host path in RUSTFS_DATA_PATH, owned by the
@@ -54,6 +56,7 @@ function download(key: string) {
 
 export default function StorageTab() {
   const [filter, setFilter] = useState('')
+  const [page, setPage] = useState(1)
   const [allObjects, setAllObjects] = useState<StorageObject[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -79,6 +82,7 @@ export default function StorageTab() {
 
   const q = filter.trim().toLowerCase()
   const objects = q ? allObjects.filter((o) => o.key.toLowerCase().includes(q)) : allObjects
+  const paginated = objects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <>
@@ -105,7 +109,10 @@ export default function StorageTab() {
             type="text"
             placeholder="Filter objects by key..."
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
         <div className="toolbar-right">
@@ -138,7 +145,7 @@ export default function StorageTab() {
               </tr>
             </thead>
             <tbody>
-              {objects.map((o) => (
+              {paginated.map((o) => (
                 <tr key={o.key}>
                   <td className="mono">{o.key}</td>
                   <td className="mono cell-muted">{guessContentType(o.key)}</td>
@@ -153,6 +160,13 @@ export default function StorageTab() {
               ))}
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={objects.length}
+            onPage={setPage}
+            noun="objects"
+          />
         </div>
       )}
 

@@ -8,7 +8,12 @@ export interface RecentJob {
   status: JobState
   attempts: number
   maxAttempts: number
-  timestamp: string
+  /** When the job was enqueued. Never changes after that. */
+  createdAt: string
+  /** Finished, or last attempt started, or falls back to createdAt if neither has happened yet. */
+  updatedAt: string
+  /** The thrown error's message from the job's last failed attempt. null unless status is 'failed'. */
+  failedReason: string | null
 }
 
 export interface QueueInfo {

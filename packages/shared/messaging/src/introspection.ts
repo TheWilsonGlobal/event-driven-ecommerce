@@ -3,10 +3,29 @@ import { JOB_STATES, type QueueDefinition } from './jobState'
 import { toRecentJobView, type RecentJobView } from './jobView'
 import { toRedisUnavailable, RedisUnavailableError } from './errors'
 
-const MAX_RECENT_JOBS = 10
+/**
+ * Matches (comfortably exceeds) the retention ceiling every queue sets via
+ * `removeOnComplete: { count: 200 }` / `removeOnFail: { count: 200 }`
+ * (queueManager.ts) — so "recent jobs" is effectively "every job BullMQ is
+ * still retaining", not an arbitrary extra truncation on top of that. Was 10;
+ * raised so the admin's job table can show the full history instead of a
+ * fixed slice, with client-side pagination (QueuesPanel.tsx) handling the
+ * display in pages of 10/25/50/100 instead.
+ */
+const MAX_RECENT_JOBS = 500
 
 /** BullMQ job types we ask for when building the recentJobs list. */
 const RECENT_JOB_TYPES: JobType[] = ['active', 'waiting', 'delayed', 'completed', 'failed']
+
+/**
+ * States that must survive the final slice below even when they're
+ * low-frequency, because they're what an operator is most likely to be
+ * looking for. 'failed' in particular: a single failed job can otherwise be
+ * pushed out of a pure-recency top-10 by a burst of newer completed/delayed
+ * jobs from an unrelated high-volume queue — the admin's Failed filter chip
+ * would then show a real nonzero count with nothing behind it to inspect.
+ */
+const PRIORITY_STATES = new Set<string>(['failed', 'active'])
 
 export interface QueueSnapshotCounts extends Record<(typeof JOB_STATES)[number], number> {}
 
@@ -111,7 +130,7 @@ async function getQueueInfo<Name extends string>(
     }
   }
 
-  recentJobs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  recentJobs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 
   return {
     name: def.name,
@@ -121,6 +140,27 @@ async function getQueueInfo<Name extends string>(
     attempts: def.attempts,
     backoff: def.backoff,
     counts,
-    recentJobs: recentJobs.slice(0, MAX_RECENT_JOBS),
+    recentJobs: pickRecentJobs(recentJobs),
   }
+}
+
+/**
+ * Slices the merged, recency-sorted job list down to MAX_RECENT_JOBS without
+ * silently dropping a priority state (see PRIORITY_STATES) that a pure
+ * recency cut would otherwise squeeze out — e.g. one failed job among 200+
+ * completed ones. Priority-state jobs (already recency-sorted among
+ * themselves) are kept in full, up to the cap; the remaining slots are
+ * filled with the most recent jobs of any other state.
+ */
+function pickRecentJobs(sorted: RecentJobView[]): RecentJobView[] {
+  if (sorted.length <= MAX_RECENT_JOBS) {
+    return sorted
+  }
+
+  const priority = sorted.filter((j) => PRIORITY_STATES.has(j.status))
+  const rest = sorted.filter((j) => !PRIORITY_STATES.has(j.status))
+
+  const kept = [...priority.slice(0, MAX_RECENT_JOBS), ...rest].slice(0, MAX_RECENT_JOBS)
+  kept.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  return kept
 }

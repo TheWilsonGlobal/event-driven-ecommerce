@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import type { ApiDocsData, ApiDocsUnreachable } from '../../hooks/useApiDocs'
 import { ConfigCard, type OpenSignal } from './parts'
-import { EmptyState, Spinner, StatChip } from '../../components/ui'
+import { EmptyState, Pagination, Spinner, StatChip } from '../../components/ui'
 import { ExternalLinkIcon } from '../../components/icons'
+
+const PAGE_SIZE = 25
 
 /** OPTIONS first — CORS-preflight plumbing rather than an API verb an
  *  operator calls directly, so it's grouped with undoc as a "noise" column —
@@ -23,12 +25,20 @@ export default function ApiPanel({
   const [filter, setFilter] = useState('')
   const [methodFilter, setMethodFilter] = useState<string | null>(null)
   const [undocOnly, setUndocOnly] = useState(false)
+  const [page, setPage] = useState(1)
 
-  const toggleMethodFilter = (m: string) => setMethodFilter((prev) => (prev === m ? null : m))
-  const toggleUndocOnly = () => setUndocOnly((prev) => !prev)
+  const toggleMethodFilter = (m: string) => {
+    setMethodFilter((prev) => (prev === m ? null : m))
+    setPage(1)
+  }
+  const toggleUndocOnly = () => {
+    setUndocOnly((prev) => !prev)
+    setPage(1)
+  }
   const clearHeaderFilters = () => {
     setMethodFilter(null)
     setUndocOnly(false)
+    setPage(1)
   }
 
   const groups = useMemo(() => {
@@ -47,6 +57,8 @@ export default function ApiPanel({
       }))
       .filter((g) => g.endpoints.length > 0)
   }, [data, filter, methodFilter, undocOnly])
+
+  const paginatedGroups = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   if (loading && !data) return <Spinner label="Fetching live OpenAPI docs from each service…" />
   if (!data)
@@ -76,7 +88,10 @@ export default function ApiPanel({
             type="text"
             placeholder="Filter services, paths or methods..."
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
         <div className="toolbar-right">
@@ -118,7 +133,11 @@ export default function ApiPanel({
                 </span>
               )
             })}
-            <span className="metric-routes" onClick={clearHeaderFilters} title="Clear header filters">
+            <span
+              className="metric-routes"
+              onClick={clearHeaderFilters}
+              title="Clear header filters"
+            >
               <b>{data.summary.endpointCount}</b> routes
             </span>
           </span>
@@ -142,7 +161,7 @@ export default function ApiPanel({
           }
         />
       ) : (
-        groups.map((group) => {
+        paginatedGroups.map((group) => {
           const counts: Record<string, number> = {}
           let undoc = 0
           for (const e of group.endpoints) {
@@ -193,7 +212,10 @@ export default function ApiPanel({
                     )}
                   </span>
                   {visibleMethods.map((m) => (
-                    <span key={m} className={`metric-${m} ${counts[m] ? '' : 'metric-empty'}`.trim()}>
+                    <span
+                      key={m}
+                      className={`metric-${m} ${counts[m] ? '' : 'metric-empty'}`.trim()}
+                    >
                       {counts[m] ? (
                         <>
                           <b>{counts[m]}</b> {m}
@@ -220,6 +242,16 @@ export default function ApiPanel({
             </ConfigCard>
           )
         })
+      )}
+
+      {groups.length > 0 && (
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={groups.length}
+          onPage={setPage}
+          noun="services"
+        />
       )}
     </>
   )

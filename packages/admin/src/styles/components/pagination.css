@@ -31,3 +31,19 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+.page-gap {
+  padding: 4px 4px;
+  color: var(--text-faint);
+}
+.page-size-select {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.page-size-select:hover {
+  color: var(--text);
+}
