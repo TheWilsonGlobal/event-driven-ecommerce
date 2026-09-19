@@ -38,9 +38,7 @@ export default function QuickViewModal({ product, onClose, onAddToCart }: QuickV
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-amber-400">★</span>
                 <span className="text-xs font-bold">{product.ratings.average}</span>
-                <span className="text-xs text-slate-400">
-                  ({product.ratings.count} verified customer ratings)
-                </span>
+                <span className="text-xs text-slate-400">({product.ratings.count} ratings)</span>
               </div>
               <p className="text-xs text-slate-600 mt-4 leading-relaxed">{product.description}</p>
 

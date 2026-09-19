@@ -16,7 +16,6 @@
     "build:shared": "pnpm --filter \"@ecommerce/shared*\" run build",
     "db:generate": "pnpm --filter @ecommerce/ms-user run prisma:generate && pnpm --filter @ecommerce/ms-order run prisma:generate",
     "db:migrate": "pnpm --filter @ecommerce/ms-user run migrate && pnpm --filter @ecommerce/ms-order run migrate",
-    "db:seed": "pnpm --filter @ecommerce/shared-database run seed",
     "test": "pnpm -r run test",
     "test:watch": "pnpm -r run test:watch",
     "lint": "eslint \"packages/**/src/**/*.{ts,tsx}\"",

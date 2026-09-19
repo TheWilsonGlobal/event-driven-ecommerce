@@ -1,6 +1,10 @@
 // Thin API client for talking to backend microservices from the storefront.
+// All calls go through the API gateway, not a direct service port, so the
+// storefront keeps working if a service moves behind the gateway later.
 
-import type { CartItem } from '../app/types'
+import type { CartItem, Category, Product } from '../app/types'
+
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? 'http://localhost:5460'
 
 export interface ShippingInfo {
   fullName: string
@@ -55,8 +59,6 @@ export interface CreatedOrder {
   updatedAt: string
 }
 
-const ORDER_SERVICE_URL = 'http://localhost:5465'
-
 export class OrderApiError extends Error {
   status: number | undefined
 
@@ -100,7 +102,7 @@ export async function createOrder(
 
   let response: Response
   try {
-    response = await fetch(`${ORDER_SERVICE_URL}/api/v1/orders`, {
+    response = await fetch(`${GATEWAY_URL}/api/v1/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -125,4 +127,39 @@ export async function createOrder(
   }
 
   return (await response.json()) as CreatedOrder
+}
+
+export class ProductApiError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ProductApiError'
+  }
+}
+
+export async function getProducts(): Promise<Product[]> {
+  let response: Response
+  try {
+    response = await fetch(`${GATEWAY_URL}/api/v1/products?limit=100`)
+  } catch {
+    throw new ProductApiError('Could not reach Product Service. Please check your connection.')
+  }
+  if (!response.ok) {
+    throw new ProductApiError(`Product Service returned an error (status ${response.status}).`)
+  }
+  const body = (await response.json()) as { products: Product[] }
+  return body.products
+}
+
+export async function getCategories(): Promise<Category[]> {
+  let response: Response
+  try {
+    response = await fetch(`${GATEWAY_URL}/api/v1/categories`)
+  } catch {
+    throw new ProductApiError('Could not reach Product Service. Please check your connection.')
+  }
+  if (!response.ok) {
+    throw new ProductApiError(`Product Service returned an error (status ${response.status}).`)
+  }
+  const body = (await response.json()) as { categories: Category[] }
+  return body.categories
 }

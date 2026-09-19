@@ -17,7 +17,7 @@ export interface ServiceItem {
   healthUrl: string
   type: string
   role: string
-  status: 'HEALTHY' | 'DEGRADED' | 'OFFLINE'
+  status: 'HEALTHY' | 'DEGRADED' | 'OFFLINE' | 'UNKNOWN'
   statusCode: number
   latencyMs: number
   details?: Record<string, unknown>

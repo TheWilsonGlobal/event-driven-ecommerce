@@ -6,7 +6,6 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "seed": "ts-node ./seed/dump-seed-data.ts",
     "dev": "tsc --watch",
     "clean": "rimraf dist",
     "test": "jest --passWithNoTests",

@@ -56,24 +56,36 @@ export function useServiceProbes(autoPolling: boolean) {
       const updated = await Promise.all(
         services.map(async (svc) => {
           const startTime = Date.now()
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 1200)
           try {
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 1200)
-            await fetch(svc.healthUrl, { signal: controller.signal, mode: 'no-cors' })
+            const res = await fetch(svc.healthUrl, { signal: controller.signal })
+            clearTimeout(timeoutId)
+            const latencyMs = Date.now() - startTime
+            let details: Record<string, unknown> | undefined
+            try {
+              details = await res.clone().json()
+            } catch {
+              // non-JSON body (e.g. the frontend dev servers) — leave details unset
+            }
+            return {
+              ...svc,
+              status: res.ok ? ('HEALTHY' as const) : ('DEGRADED' as const),
+              statusCode: res.status,
+              latencyMs,
+              details,
+              error: res.ok ? undefined : `HTTP ${res.status}`,
+              lastChecked: new Date().toISOString(),
+            }
+          } catch (err) {
             clearTimeout(timeoutId)
             return {
               ...svc,
-              status: 'HEALTHY' as const,
-              statusCode: 200,
+              status: 'OFFLINE' as const,
+              statusCode: 0,
               latencyMs: Date.now() - startTime,
-              lastChecked: new Date().toISOString(),
-            }
-          } catch {
-            return {
-              ...svc,
-              status: 'HEALTHY' as const,
-              statusCode: 200,
-              latencyMs: Math.floor(4 + Math.random() * 8),
+              details: undefined,
+              error: err instanceof Error ? err.message : 'Unreachable',
               lastChecked: new Date().toISOString(),
             }
           }

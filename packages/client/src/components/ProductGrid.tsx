@@ -1,10 +1,10 @@
 ﻿'use client'
 
 import React from 'react'
-import { CATEGORIES } from '../app/data'
-import type { Product } from '../app/types'
+import type { Category, Product } from '../app/types'
 
 interface ProductGridProps {
+  categories: Category[]
   selectedCategory: string
   onCategoryChange: (id: string) => void
   sortBy: 'featured' | 'price-asc' | 'price-desc' | 'rating'
@@ -15,6 +15,7 @@ interface ProductGridProps {
 }
 
 export default function ProductGrid({
+  categories,
   selectedCategory,
   onCategoryChange,
   sortBy,
@@ -29,7 +30,7 @@ export default function ProductGrid({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200">
         {/* Category Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => onCategoryChange(cat.id)}
@@ -39,7 +40,7 @@ export default function ProductGrid({
                   : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
             >
-              <span>{cat.icon}</span>
+              {cat.icon && <span>{cat.icon}</span>}
               <span>{cat.name}</span>
             </button>
           ))}

@@ -1,15 +1,18 @@
 ﻿'use client'
 
 import React from 'react'
+import type { Product } from '../app/types'
 
 interface HeroSectionProps {
   productCount: number
+  featuredProduct: Product | null
   onScrollToCatalog: () => void
   onQuickAddFlagship: () => void
 }
 
 export default function HeroSection({
   productCount,
+  featuredProduct,
   onScrollToCatalog,
   onQuickAddFlagship,
 }: HeroSectionProps) {
@@ -42,42 +45,52 @@ export default function HeroSection({
                 >
                   Explore Catalog ({productCount} Items)
                 </button>
-                <button
-                  onClick={onQuickAddFlagship}
-                  className="bg-indigo-600/60 hover:bg-indigo-600 text-white border border-indigo-400/30 px-6 py-3 rounded-xl font-bold text-sm transition"
-                >
-                  Quick Add Flagship Headphone ($349.99)
-                </button>
+                {featuredProduct && (
+                  <button
+                    onClick={onQuickAddFlagship}
+                    className="bg-indigo-600/60 hover:bg-indigo-600 text-white border border-indigo-400/30 px-6 py-3 rounded-xl font-bold text-sm transition"
+                  >
+                    Quick Add: {featuredProduct.title} (${featuredProduct.price.toFixed(2)})
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Hero image card */}
-            <div className="lg:col-span-5 flex justify-center">
-              <div className="relative group rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 bg-slate-800/80 backdrop-blur max-w-md w-full p-4">
-                <div className="h-64 sm:h-72 w-full rounded-2xl overflow-hidden relative">
-                  <img
-                    src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80"
-                    alt="Flagship Aura Pro"
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                  />
-                  <span className="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
-                    Top Seller 🔥
-                  </span>
-                </div>
-                <div className="mt-4 flex justify-between items-end">
-                  <div>
-                    <h3 className="font-bold text-lg text-white">Aura Pro Wireless ANC</h3>
-                    <p className="text-xs text-slate-400">
-                      40h Battery · Spatial Audio · Bluetooth 5.3
-                    </p>
+            {featuredProduct && (
+              <div className="lg:col-span-5 flex justify-center">
+                <div className="relative group rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 bg-slate-800/80 backdrop-blur max-w-md w-full p-4">
+                  <div className="h-64 sm:h-72 w-full rounded-2xl overflow-hidden relative">
+                    <img
+                      src={featuredProduct.images[0]?.url}
+                      alt={featuredProduct.images[0]?.alt || featuredProduct.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                    />
+                    <span className="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                      Top Seller 🔥
+                    </span>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 line-through block">$399.99</span>
-                    <span className="text-xl font-black text-amber-400">$349.99</span>
+                  <div className="mt-4 flex justify-between items-end">
+                    <div>
+                      <h3 className="font-bold text-lg text-white">{featuredProduct.title}</h3>
+                      <p className="text-xs text-slate-400">
+                        {featuredProduct.tags.slice(0, 3).join(' · ')}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {featuredProduct.compareAtPrice > featuredProduct.price && (
+                        <span className="text-xs text-slate-400 line-through block">
+                          ${featuredProduct.compareAtPrice.toFixed(2)}
+                        </span>
+                      )}
+                      <span className="text-xl font-black text-amber-400">
+                        ${featuredProduct.price.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </section>

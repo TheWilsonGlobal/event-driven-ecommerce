@@ -1,4 +1,12 @@
-﻿// Seed product definitions aligned with shared database seed
+﻿export interface Category {
+  id: string
+  name: string
+  slug: string
+  icon?: string
+  description?: string
+  productCount?: number
+}
+
 export interface Product {
   id: string
   title: string

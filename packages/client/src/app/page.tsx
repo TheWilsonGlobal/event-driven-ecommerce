@@ -1,8 +1,7 @@
 ﻿'use client'
 
-import React, { useState, useMemo } from 'react'
-import { INITIAL_PRODUCTS } from './data'
-import type { Product, CartItem } from './types'
+import React, { useState, useMemo, useEffect } from 'react'
+import type { Product, Category, CartItem } from './types'
 import StorefrontHeader from '../components/StorefrontHeader'
 import HeroSection from '../components/HeroSection'
 import ProductGrid from '../components/ProductGrid'
@@ -10,10 +9,22 @@ import CartDrawer from '../components/CartDrawer'
 import QuickViewModal from '../components/QuickViewModal'
 import CheckoutModal from '../components/CheckoutModal'
 import StorefrontFooter from '../components/StorefrontFooter'
-import { createOrder, OrderApiError, type ShippingInfo } from '../lib/api'
+import {
+  createOrder,
+  getProducts,
+  getCategories,
+  OrderApiError,
+  ProductApiError,
+  type ShippingInfo,
+} from '../lib/api'
+
+const ALL_CATEGORY: Category = { id: 'all', name: 'All Products', icon: '✨', slug: 'all' }
 
 export default function ClientStorefront() {
-  const [products] = useState<Product[]>(INITIAL_PRODUCTS)
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [catalogLoading, setCatalogLoading] = useState<boolean>(true)
+  const [catalogError, setCatalogError] = useState<string>('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating'>(
@@ -43,6 +54,39 @@ export default function ClientStorefront() {
   })
   const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false)
   const [checkoutError, setCheckoutError] = useState<string>('')
+
+  // Load the real catalog from ms-product (via the gateway) on mount.
+  useEffect(() => {
+    let cancelled = false
+    async function loadCatalog() {
+      setCatalogLoading(true)
+      setCatalogError('')
+      try {
+        const [fetchedProducts, fetchedCategories] = await Promise.all([
+          getProducts(),
+          getCategories(),
+        ])
+        if (cancelled) return
+        setProducts(fetchedProducts)
+        setCategories(fetchedCategories)
+      } catch (err) {
+        if (cancelled) return
+        setCatalogError(
+          err instanceof ProductApiError
+            ? err.message
+            : 'Something went wrong loading the catalog. Please try again.'
+        )
+      } finally {
+        if (!cancelled) setCatalogLoading(false)
+      }
+    }
+    void loadCatalog()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const categoryTabs = useMemo(() => [ALL_CATEGORY, ...categories], [categories])
 
   // Filtered & Sorted products
   const filteredProducts = useMemo(() => {
@@ -182,6 +226,7 @@ export default function ClientStorefront() {
 
       <HeroSection
         productCount={products.length}
+        featuredProduct={products[0] ?? null}
         onScrollToCatalog={() => {
           const el = document.getElementById('catalog')
           el?.scrollIntoView({ behavior: 'smooth' })
@@ -192,15 +237,30 @@ export default function ClientStorefront() {
         }}
       />
 
-      <ProductGrid
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-        sortBy={sortBy}
-        onSortChange={setSortBy}
-        filteredProducts={filteredProducts}
-        onQuickView={setQuickViewProduct}
-        onAddToCart={(p) => addToCart(p, 1)}
-      />
+      {catalogError && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm px-4 py-3">
+            {catalogError} — is the gateway (5460) and Product Service (5464) running?
+          </div>
+        </div>
+      )}
+
+      {catalogLoading ? (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 text-center text-sm text-slate-500">
+          Loading catalog…
+        </div>
+      ) : (
+        <ProductGrid
+          categories={categoryTabs}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          filteredProducts={filteredProducts}
+          onQuickView={setQuickViewProduct}
+          onAddToCart={(p) => addToCart(p, 1)}
+        />
+      )}
 
       <CartDrawer
         isOpen={isCartOpen}
