@@ -18,7 +18,7 @@ import {
 // live state (status/statusCode/latencyMs/details) is left unset here and
 // filled in by the first real probe in useServiceProbes.ts. Rendering must
 // treat status === 'UNKNOWN' as "not probed yet", not as healthy.
-export const INITIAL_SERVICES: ServiceItem[] = [
+export const SERVICE_REGISTRY: ServiceItem[] = [
   {
     id: 'gateway',
     name: 'API Gateway',

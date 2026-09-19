@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ServiceItem, RustfsHealth } from '../types'
-import { INITIAL_SERVICES } from '../data/seedServices'
+import { SERVICE_REGISTRY } from '../data/serviceRegistry'
 import { PRODUCT_SERVICE_URL, RUSTFS_BUCKET, RUSTFS_ENDPOINT } from '../data/serviceUrls'
 
 export function useServiceProbes(autoPolling: boolean) {
-  const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES)
+  const [services, setServices] = useState<ServiceItem[]>(SERVICE_REGISTRY)
   const [lastScanned, setLastScanned] = useState<string>('')
 
   const [rustfsHealth, setRustfsHealth] = useState<RustfsHealth>({

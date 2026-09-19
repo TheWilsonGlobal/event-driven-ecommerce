@@ -273,7 +273,7 @@ export default function PersistencePanel({
         }
       >
         <ReadOnlyRow label="Storage Driver" value="SQLite (Prisma ORM)" />
-        <ReadOnlyRow label="ORM Engine" value="Prisma 5.22.0" />
+        <ReadOnlyRow label="ORM Engine" value="Prisma ^5.10.2" />
         <ReadOnlyRow label="Connection URL" value="file:./data/db/ms-user.db, file:./data/db/ms-order.db" />
         <div className="config-row">
           <span className="k">Target Services</span>
@@ -288,7 +288,7 @@ export default function PersistencePanel({
         title={
           <>
             <span>Document Database</span>
-            <span className="chip chip-blue">NeDB / MongoDB</span>
+            <span className="chip chip-blue">NeDB</span>
             <span className={`chip ${documentHealthy === null ? 'chip-amber' : documentHealthy ? 'chip-green' : 'chip-red'}`}>
               {documentHealthy === null ? 'Probing…' : documentHealthy ? '✓ Online' : '✗ Offline'}
             </span>

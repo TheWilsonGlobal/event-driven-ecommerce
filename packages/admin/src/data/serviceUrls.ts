@@ -24,10 +24,6 @@ export const RUSTFS_BUCKET = import.meta.env.VITE_RUSTFS_BUCKET
 export const RUSTFS_DATA_PATH = import.meta.env.VITE_RUSTFS_DATA_PATH
 export const RUSTFS_BUCKET_URL = `${RUSTFS_ENDPOINT}/${RUSTFS_BUCKET}`
 
-/** Primary relational database, shown read-only in the Persistence panel. */
-export const DB_HOST = import.meta.env.VITE_DB_HOST
-export const DB_PORT = import.meta.env.VITE_DB_PORT
-
 /** Port-only views, for panels that display a port rather than an origin. */
 export const ADMIN_PORT = new URL(ADMIN_URL).port
 export const GATEWAY_PORT = new URL(GATEWAY_URL).port

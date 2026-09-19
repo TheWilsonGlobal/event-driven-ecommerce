@@ -94,15 +94,15 @@ export default function Dashboard({
           </h3>
           <div className="panel-row">
             <span className="k">Relational DB</span>
-            <span className="v">PostgreSQL / SQLite</span>
+            <span className="v">SQLite (Prisma ORM)</span>
           </div>
           <div className="panel-row">
             <span className="k">Document Store</span>
-            <span className="v">NeDB / MongoDB</span>
+            <span className="v">Embedded NeDB</span>
           </div>
           <div className="panel-row">
             <span className="k">KV Cache & BullMQ</span>
-            <span className="v">Redis 7 / RocksDB</span>
+            <span className="v">Redis 7</span>
           </div>
           <div className="panel-row">
             <span className="k">Object Storage</span>
