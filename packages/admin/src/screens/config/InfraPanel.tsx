@@ -82,6 +82,7 @@ export default function InfraPanel({
     <>
       <ConfigCard
         openSignal={openSignal}
+        count={6}
         title={
           <>
             <span>KV Cache</span>
@@ -111,7 +112,7 @@ export default function InfraPanel({
               driver.refetch()
             }}
           >
-            Probe KV Cache ↻
+            ↻ Probe
           </button>
         }
       >
@@ -169,6 +170,7 @@ export default function InfraPanel({
 
       <ConfigCard
         openSignal={openSignal}
+        count={14}
         title={
           <>
             <span>S3 Storage</span>
@@ -192,7 +194,7 @@ export default function InfraPanel({
               handleProbeStorage()
             }}
           >
-            Probe Storage ↻
+            ↻ Probe
           </button>
         }
       >
@@ -268,6 +270,7 @@ export default function InfraPanel({
 
       <ConfigCard
         openSignal={openSignal}
+        count={4}
         title={
           <>
             <span>Relational Database</span>
@@ -291,7 +294,7 @@ export default function InfraPanel({
               onRefreshServices()
             }}
           >
-            Probe Database ↻
+            ↻ Probe
           </button>
         }
       >
@@ -311,6 +314,7 @@ export default function InfraPanel({
 
       <ConfigCard
         openSignal={openSignal}
+        count={4}
         title={
           <>
             <span>Document Database</span>
@@ -330,7 +334,7 @@ export default function InfraPanel({
               onRefreshServices()
             }}
           >
-            Probe Database ↻
+            ↻ Probe
           </button>
         }
       >
@@ -355,6 +359,7 @@ export default function InfraPanel({
           route rather than assuming a status, same as every card above. */}
       <ConfigCard
         openSignal={openSignal}
+        count={3}
         title={
           <>
             <span>Prometheus</span>
@@ -378,7 +383,7 @@ export default function InfraPanel({
               onProbeObservability()
             }}
           >
-            Probe ↻
+            ↻ Probe
           </button>
         }
       >
@@ -406,6 +411,7 @@ export default function InfraPanel({
 
       <ConfigCard
         openSignal={openSignal}
+        count={4}
         title={
           <>
             <span>Elasticsearch</span>
@@ -432,7 +438,7 @@ export default function InfraPanel({
               onProbeObservability()
             }}
           >
-            Probe ↻
+            ↻ Probe
           </button>
         }
       >
@@ -460,6 +466,7 @@ export default function InfraPanel({
 
       <ConfigCard
         openSignal={openSignal}
+        count={4}
         title={
           <>
             <span>Loki</span>
@@ -482,7 +489,7 @@ export default function InfraPanel({
               onProbeObservability()
             }}
           >
-            Probe ↻
+            ↻ Probe
           </button>
         }
       >
@@ -506,14 +513,15 @@ export default function InfraPanel({
         </div>
         {loki.error && !loki.healthy && (
           <div className="warn-banner" style={{ marginTop: 8 }}>
-            {loki.error} — not part of this repo's own docker-compose; provisioned by infra-hub.
-            Set LOKI_ENABLED=false in .env to silence shipping errors until it's running.
+            {loki.error} — not part of this repo's own docker-compose; provisioned by infra-hub. Set
+            LOKI_ENABLED=false in .env to silence shipping errors until it's running.
           </div>
         )}
       </ConfigCard>
 
       <ConfigCard
         openSignal={openSignal}
+        count={4}
         title={
           <>
             <span>Grafana</span>
@@ -542,7 +550,10 @@ export default function InfraPanel({
           label="Datasources"
           value="Prometheus, Loki, Elasticsearch — provisioned automatically on start"
         />
-        <ReadOnlyRow label="Provisioned By" value="infra-hub (docker compose --profile monitoring)" />
+        <ReadOnlyRow
+          label="Provisioned By"
+          value="infra-hub (docker compose --profile monitoring)"
+        />
         <div className="config-row">
           <span className="k">Measured Latency</span>
           <span

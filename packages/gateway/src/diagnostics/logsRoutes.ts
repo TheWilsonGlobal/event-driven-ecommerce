@@ -45,7 +45,7 @@ export function registerLogRoutes(server: FastifyInstance): void {
       },
     },
     async () => {
-      const files = listLogFiles(SERVICE)
+      const files = await listLogFiles(SERVICE)
       return { files, total: files.length }
     }
   )
@@ -81,7 +81,7 @@ export function registerLogRoutes(server: FastifyInstance): void {
     },
     async (request: FastifyRequest<{ Params: { filename: string } }>, reply: FastifyReply) => {
       const { filename } = request.params
-      const result = readLogFile(SERVICE, filename)
+      const result = await readLogFile(SERVICE, filename)
 
       if (!result.ok) {
         if (result.reason === 'invalid_filename') {

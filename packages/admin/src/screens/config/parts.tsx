@@ -56,11 +56,12 @@ export function ConfigCard({
     <div className="config-card">
       <div className="config-card-head" onClick={() => setOpen((o) => !o)}>
         <ChevronRightIcon className={`chevron${open ? ' open' : ''}`} />
-        <span className="title">
-          {title}
-          {count !== undefined && <span className="count-badge">{count}</span>}
-        </span>
+        <span className="title">{title}</span>
         <span className="spacer" />
+        {/* The count badge sits beside the action on the right, not among the
+            title's status chips on the left — it summarizes the same section
+            the action operates on, so the two read as a pair. */}
+        {count !== undefined && <span className="count-badge">{count}</span>}
         {/* Metrics stay visible while collapsed — the figures are the reason
             to open the card, so hiding them defeats the summary. */}
         {metrics && <span className="config-metrics">{metrics}</span>}

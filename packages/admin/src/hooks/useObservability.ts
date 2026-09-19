@@ -28,7 +28,11 @@ async function probe(url: string): Promise<{ ok: boolean; latencyMs: number; err
   try {
     const res = await fetch(url, { signal: controller.signal })
     clearTimeout(timeoutId)
-    return { ok: res.ok, latencyMs: Date.now() - start, error: res.ok ? undefined : `HTTP ${res.status}` }
+    return {
+      ok: res.ok,
+      latencyMs: Date.now() - start,
+      error: res.ok ? undefined : `HTTP ${res.status}`,
+    }
   } catch (err) {
     clearTimeout(timeoutId)
     return {

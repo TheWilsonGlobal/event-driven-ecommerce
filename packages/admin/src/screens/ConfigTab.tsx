@@ -82,15 +82,17 @@ export default function ConfigTab({
               ] as [ConfigSubTab, string][]
             ).map(([key, label]) => {
               const count =
-                key === 'services'
-                  ? services.length
-                  : key === 'queues'
-                    ? queueData.data?.summary.queueCount
-                    : key === 'api'
-                      ? apiDocs.data?.summary.endpointCount
-                      : key === 'logs'
-                        ? logFiles.data?.total
-                        : undefined
+                key === 'general'
+                  ? 3
+                  : key === 'services'
+                    ? services.length
+                    : key === 'queues'
+                      ? queueData.data?.summary.queueCount
+                      : key === 'api'
+                        ? apiDocs.data?.summary.endpointCount
+                        : key === 'logs'
+                          ? logFiles.data?.total
+                          : undefined
               return (
                 <button
                   key={key}

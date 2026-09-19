@@ -77,11 +77,13 @@ export default function InfraTab({
               // loading, or when a service is unreachable, the badge is
               // omitted rather than showing a stale or invented number.
               const count =
-                key === 'cache'
-                  ? cache.data?.namespaces.length
-                  : key === 'schema'
-                    ? schema.data?.summary.tableCount
-                    : undefined
+                key === 'overview'
+                  ? 8
+                  : key === 'cache'
+                    ? cache.data?.namespaces.length
+                    : key === 'schema'
+                      ? schema.data?.summary.tableCount
+                      : undefined
               return (
                 <button
                   key={key}
