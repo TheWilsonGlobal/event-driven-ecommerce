@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import type { ApiEndpointData } from './configTypes'
+import type { ApiDocsData, ApiDocsUnreachable } from '../../hooks/useApiDocs'
 import { ConfigCard, type OpenSignal } from './parts'
-import { EmptyState } from '../../components/ui'
+import { EmptyState, Spinner } from '../../components/ui'
 import { ExternalLinkIcon } from '../../components/icons'
 
 /** GET/POST/PUT/DELETE first (the common cases), then anything else. */
@@ -20,9 +20,13 @@ function orderMethods(counts: Record<string, number>): [string, number][] {
 
 export default function ApiPanel({
   data,
+  unreachable,
+  loading,
   openSignal,
 }: {
-  data: ApiEndpointData | null
+  data: ApiDocsData | null
+  unreachable: ApiDocsUnreachable[]
+  loading: boolean
   openSignal?: OpenSignal
 }) {
   const [filter, setFilter] = useState('')
@@ -43,7 +47,8 @@ export default function ApiPanel({
       .filter((g) => g.endpoints.length > 0)
   }, [data, filter])
 
-  if (!data) return <EmptyState message="Endpoint inventory unavailable." />
+  if (loading && !data) return <Spinner label="Fetching live OpenAPI docs from each service…" />
+  if (!data) return <EmptyState message="No service is currently reachable for endpoint inventory." />
 
   const undocumented = data.summary.endpointCount - data.summary.documentedCount
 
@@ -70,10 +75,19 @@ export default function ApiPanel({
         </div>
       </div>
 
+      {unreachable.length > 0 && (
+        <div className="warn-banner">
+          {unreachable.map((u) => u.service).join(', ')}{' '}
+          {unreachable.length === 1 ? 'is' : 'are'} unreachable — its live route inventory could not
+          be fetched, so its routes are omitted below rather than shown from a stale copy.
+        </div>
+      )}
+
       {undocumented > 0 && (
         <div className="warn-banner">
-          {undocumented} of {data.summary.endpointCount} routes are gateway-proxied passthroughs,
-          documented in each upstream service's own Swagger UI rather than the gateway's.
+          {undocumented} of {data.summary.endpointCount} routes carry no route-level description —
+          mostly the gateway's proxy routes and Swagger's own static UI routes, which have no schema
+          of their own to describe them, documented in each upstream service's own Swagger UI instead.
         </div>
       )}
 
@@ -128,21 +142,19 @@ export default function ApiPanel({
                 </>
               }
             >
-              {group.docsUrl && (
-                <div className="config-row">
-                  <span className="k">Swagger / OpenAPI docs</span>
-                  <span className="config-control">
-                    <a
-                      className="btn btn-ghost btn-sm"
-                      href={group.docsUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open /api-docs <ExternalLinkIcon style={{ width: 12, height: 12 }} />
-                    </a>
-                  </span>
-                </div>
-              )}
+              <div className="config-row">
+                <span className="k">Swagger / OpenAPI docs</span>
+                <span className="config-control">
+                  <a
+                    className="btn btn-ghost btn-sm"
+                    href={group.docsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open /api-docs <ExternalLinkIcon style={{ width: 12, height: 12 }} />
+                  </a>
+                </span>
+              </div>
               {group.endpoints.map((e) => (
                 <div key={`${e.method} ${e.path}`} className="endpoint-row">
                   <span className={`method-chip method-${e.method}`}>{e.method}</span>

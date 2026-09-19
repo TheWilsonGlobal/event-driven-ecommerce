@@ -9,7 +9,13 @@ import * as path from 'path'
 import * as bcrypt from 'bcryptjs'
 import { PrismaClient } from '../node_modules/.prisma-ms-user/client'
 import { loadDatabaseConfig, SEED_USERS } from '@ecommerce/shared-database'
-import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
+import {
+  registerMetrics,
+  buildLoggerOptions,
+  createRouteRegistry,
+  registerEndpointsRoute,
+} from '@ecommerce/shared-utils'
+import { registerSchemaRoutes, registerLogRoutes } from './diagnostics'
 
 // Load ms-user's own .env first (takes precedence: dotenv does not
 // override already-set keys). It supplies the SQLite DATABASE_URL used by
@@ -116,6 +122,10 @@ async function bootstrap() {
   // Before every other plugin, so the onResponse hook sees all traffic.
   registerMetrics(server, { service: 'ms-user' })
 
+  // Before any route registration below — onRoute only fires for routes
+  // registered after this hook is attached.
+  const routeRegistry = createRouteRegistry(server)
+
   await server.register(cors, { origin: '*' })
   await server.register(helmet)
 
@@ -132,6 +142,9 @@ async function bootstrap() {
         { name: 'health', description: 'Service health and status' },
         { name: 'users', description: 'User account management' },
         { name: 'auth', description: 'Registration and authentication' },
+        { name: 'schema', description: 'Live database schema introspection' },
+        { name: 'logs', description: 'Real log file listing and reading' },
+        { name: 'endpoints', description: 'Live registered-route inventory' },
       ],
     },
   })
@@ -539,6 +552,10 @@ async function bootstrap() {
       }
     }
   )
+
+  registerSchemaRoutes(server, prisma)
+  registerLogRoutes(server)
+  registerEndpointsRoute(server, routeRegistry, 'ms-user')
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

@@ -8,13 +8,14 @@ import {
   USER_SERVICE_PORT,
 } from '../data/serviceUrls'
 import type { ServiceItem } from '../types'
-import { ConfigCard, ReadOnlyRow, type OpenSignal } from './config/parts'
-import ApiPanel from './config/ApiPanel'
-import SystemLogsPanel from './config/SystemLogsPanel'
+import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './config/parts'
 import ServicesPanel from './config/ServicesPanel'
-import { API_ENDPOINT_DATA, LOG_FILES } from './config/configSeed'
+import TaskQueuesPanel from './config/TaskQueuesPanel'
+import ApiPanel from './config/ApiPanel'
+import { useCacheDriver, useQueueData } from '../hooks/useQueueData'
+import { useApiDocs } from '../hooks/useApiDocs'
 
-type ConfigSubTab = 'general' | 'services' | 'api' | 'logs'
+type ConfigSubTab = 'general' | 'services' | 'queues' | 'api'
 
 export default function ConfigTab({
   services,
@@ -29,15 +30,36 @@ export default function ConfigTab({
 }) {
   const [tab, setTab] = useState<ConfigSubTab>('general')
 
+  const queueData = useQueueData()
+  const driver = useCacheDriver()
+  const apiDocs = useApiDocs()
+
   // Broadcast to every ConfigCard on the active tab. The nonce is what the
   // cards react to, so pressing the same button twice still re-applies after
   // individual cards have been toggled by hand.
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
 
-  // The logs and services tabs own a plain table, not collapsible cards, so
+  // The services and queues tabs own a plain table, not collapsible cards, so
   // the expand/collapse pair would be inert there.
-  const hasCards = tab !== 'logs' && tab !== 'services'
+  const hasCards = tab !== 'services' && tab !== 'queues'
+
+  const reloading =
+    (tab === 'queues' && queueData.loading) ||
+    (tab === 'general' && driver.loading) ||
+    (tab === 'api' && apiDocs.loading)
+  const handleReload = () => {
+    if (tab === 'queues') {
+      queueData.refetch()
+    } else if (tab === 'general') {
+      driver.refetch()
+      queueData.refetch()
+    } else if (tab === 'services') {
+      onRefreshServices()
+    } else if (tab === 'api') {
+      apiDocs.refetch()
+    }
+  }
 
   return (
     <>
@@ -48,17 +70,17 @@ export default function ConfigTab({
               [
                 ['general', 'General'],
                 ['services', 'Services'],
-                ['api', 'API Endpoints'],
-                ['logs', 'System Logs'],
+                ['queues', 'Task Queues'],
+                ['api', 'APIs'],
               ] as [ConfigSubTab, string][]
             ).map(([key, label]) => {
               const count =
                 key === 'services'
                   ? services.length
-                  : key === 'api'
-                    ? API_ENDPOINT_DATA.summary.endpointCount
-                    : key === 'logs'
-                      ? LOG_FILES.length
+                  : key === 'queues'
+                    ? queueData.data?.summary.queueCount
+                    : key === 'api'
+                      ? apiDocs.data?.summary.endpointCount
                       : undefined
               return (
                 <button
@@ -84,8 +106,13 @@ export default function ConfigTab({
               </button>
             </>
           )}
-          <button className="btn btn-ghost btn-sm" onClick={() => window.location.reload()}>
-            Reload
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={handleReload}
+            disabled={reloading}
+            aria-busy={reloading}
+          >
+            {reloading ? 'Reloading…' : 'Reload'}
           </button>
         </div>
       </div>
@@ -105,16 +132,16 @@ export default function ConfigTab({
             openSignal={openSignal}
           >
             <ReadOnlyRow label="API Gateway Ingress" value={GATEWAY_PORT} />
-            <ReadOnlyRow label="User Microservice" value={USER_SERVICE_PORT} />
-            <ReadOnlyRow label="Product Microservice" value={PRODUCT_SERVICE_PORT} />
-            <ReadOnlyRow label="Order Microservice" value={ORDER_SERVICE_PORT} />
-            <ReadOnlyRow label="Customer Storefront (Next.js)" value={CLIENT_PORT} />
             <div className="config-row">
               <span className="k">Admin Cockpit (Active)</span>
               <span className="v" style={{ color: 'var(--blue-light)' }}>
                 {ADMIN_PORT}
               </span>
             </div>
+            <ReadOnlyRow label="Customer Storefront (Next.js)" value={CLIENT_PORT} />
+            <ReadOnlyRow label="User Microservice" value={USER_SERVICE_PORT} />
+            <ReadOnlyRow label="Product Microservice" value={PRODUCT_SERVICE_PORT} />
+            <ReadOnlyRow label="Order Microservice" value={ORDER_SERVICE_PORT} />
           </ConfigCard>
 
           <ConfigCard
@@ -147,13 +174,49 @@ export default function ConfigTab({
                 </span>
               </>
             }
-            count={4}
+            count={6}
             openSignal={openSignal}
           >
-            <ReadOnlyRow label="Message Broker" value="Redis 7 / BullMQ" />
-            <ReadOnlyRow label="Worker Concurrency" value="10 workers" />
+            <ReadOnlyRow
+              label="Queue Driver"
+              value={
+                driver.data
+                  ? driver.data.queuesAvailable
+                    ? 'BullMQ over Redis'
+                    : `Unavailable — KV driver is "${driver.data.driver}", BullMQ requires Redis`
+                  : '—'
+              }
+            />
+            <ReadOnlyRow label="Worker Concurrency" value="5–10 workers per queue" />
+            <ReadOnlyRow
+              label="Registered Queues"
+              value={
+                queueData.data
+                  ? `${queueData.data.summary.queueCount} queues`
+                  : queueData.loading
+                    ? 'Loading…'
+                    : 'Unavailable — Redis unreachable'
+              }
+            />
             <ReadOnlyRow label="Order Expiration Timeout" value="15 minutes" />
             <ReadOnlyRow label="Saga Max Retries" value="5 attempts" />
+            <MultiFieldRow
+              fields={[
+                {
+                  label: 'Client',
+                  value: driver.data?.queuesAvailable ? 'ioredis (BullMQ client)' : '—',
+                },
+                {
+                  label: 'Backing Store',
+                  value: driver.data
+                    ? driver.data.queuesAvailable
+                      ? 'Redis 7 (DB 0)'
+                      : 'None — queues disabled'
+                    : '—',
+                },
+                { label: 'Retry Policy', value: 'per-queue backoff, 3–5 attempts' },
+              ]}
+            />
           </ConfigCard>
         </>
       )}
@@ -166,8 +229,22 @@ export default function ConfigTab({
           onRefresh={onRefreshServices}
         />
       )}
-      {tab === 'api' && <ApiPanel data={API_ENDPOINT_DATA} openSignal={openSignal} />}
-      {tab === 'logs' && <SystemLogsPanel files={LOG_FILES} />}
+      {tab === 'queues' && (
+        <TaskQueuesPanel
+          data={queueData.data}
+          loading={queueData.loading}
+          error={queueData.error}
+          onRetry={queueData.refetch}
+        />
+      )}
+      {tab === 'api' && (
+        <ApiPanel
+          data={apiDocs.data}
+          unreachable={apiDocs.unreachable}
+          loading={apiDocs.loading}
+          openSignal={openSignal}
+        />
+      )}
     </>
   )
 }

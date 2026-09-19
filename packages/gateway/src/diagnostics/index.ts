@@ -1,0 +1,1 @@
+export { registerLogRoutes } from './logsRoutes'

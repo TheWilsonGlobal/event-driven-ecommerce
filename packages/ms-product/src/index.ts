@@ -15,9 +15,16 @@ import {
   createSearchClient,
   SEED_PRODUCTS,
   SEED_CATEGORIES,
+  type DocumentDatabaseAdapter,
 } from '@ecommerce/shared-database'
-import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
+import {
+  registerMetrics,
+  buildLoggerOptions,
+  createRouteRegistry,
+  registerEndpointsRoute,
+} from '@ecommerce/shared-utils'
 import type { ProductDoc, CategoryDoc } from './types'
+import { registerSchemaRoutes, registerLogRoutes } from './diagnostics'
 
 const REPO_ROOT = path.resolve(__dirname, '../../../')
 dotenv.config({ path: path.join(REPO_ROOT, '.env') })
@@ -58,6 +65,10 @@ async function bootstrap() {
   // Before every other plugin, so the onResponse hook sees all traffic.
   registerMetrics(server, { service: 'ms-product' })
 
+  // Before any route registration below — onRoute only fires for routes
+  // registered after this hook is attached.
+  const routeRegistry = createRouteRegistry(server)
+
   await server.register(cors, { origin: '*' })
   await server.register(helmet)
   await server.register(multipart, {
@@ -80,6 +91,9 @@ async function bootstrap() {
         { name: 'storage', description: 'RustFS object storage status' },
         { name: 'products', description: 'Product catalog' },
         { name: 'categories', description: 'Product categories' },
+        { name: 'schema', description: 'Live database schema introspection' },
+        { name: 'logs', description: 'Real log file listing and reading' },
+        { name: 'endpoints', description: 'Live registered-route inventory' },
       ],
     },
   })
@@ -698,6 +712,19 @@ async function bootstrap() {
       }
     }
   )
+
+  registerSchemaRoutes(server, [
+    {
+      name: 'products',
+      store: productsStore as unknown as DocumentDatabaseAdapter<Record<string, unknown>>,
+    },
+    {
+      name: 'categories',
+      store: categoriesStore as unknown as DocumentDatabaseAdapter<Record<string, unknown>>,
+    },
+  ])
+  registerLogRoutes(server)
+  registerEndpointsRoute(server, routeRegistry, 'ms-product')
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

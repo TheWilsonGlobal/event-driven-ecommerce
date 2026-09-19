@@ -1,61 +1,44 @@
-import { useMemo, useState } from 'react'
-import type { RustfsHealth, UserRecord, OrderRecord } from '../types'
+import { useState } from 'react'
+import type { RustfsHealth, ServiceItem } from '../types'
 import { type OpenSignal } from './config/parts'
 import PersistencePanel from './config/PersistencePanel'
-import TaskQueuesPanel from './config/TaskQueuesPanel'
 import CachePanel from './config/CachePanel'
-import SchemaPanel from './config/SchemaPanel'
-import { withLiveRowCounts } from './config/configSeed'
-import { useCacheDriver, useCacheNamespaces, useQueueData } from '../hooks/useQueueData'
+import { useCacheDriver, useCacheNamespaces } from '../hooks/useQueueData'
 
-type PersistenceSubTab = 'overview' | 'queues' | 'cache' | 'schema'
+type PersistenceSubTab = 'overview' | 'cache'
 
 export default function PersistenceTab({
   rustfsHealth,
   onPingRustFS,
-  users,
-  orders,
+  services,
+  onRefreshServices,
 }: {
   rustfsHealth: RustfsHealth
   onPingRustFS: () => void
-  users: UserRecord[]
-  orders: OrderRecord[]
+  services: ServiceItem[]
+  onRefreshServices: () => void
 }) {
   const [tab, setTab] = useState<PersistenceSubTab>('overview')
 
-  const queues = useQueueData()
   const cache = useCacheNamespaces()
   const driver = useCacheDriver()
 
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
 
-  const hasCards = tab !== 'queues' && tab !== 'cache'
+  const hasCards = tab !== 'cache'
 
-  // The live sub-tabs refetch in place; the static ones have nothing to fetch,
-  // so a full page reload remains the only meaningful "reload" there.
-  const reloading = (tab === 'queues' && queues.loading) || (tab === 'cache' && cache.loading)
+  // The live sub-tabs refetch in place.
+  const reloading = (tab === 'cache' && cache.loading) || (tab === 'overview' && driver.loading)
   const handleReload = () => {
-    if (tab === 'queues') {
-      queues.refetch()
-    } else if (tab === 'cache') {
+    if (tab === 'cache') {
       cache.refetch()
     } else {
-      window.location.reload()
+      driver.refetch()
+      onPingRustFS()
+      onRefreshServices()
     }
   }
-
-  const schemaData = useMemo(
-    () =>
-      withLiveRowCounts({
-        users: users.length,
-        addresses: users.reduce((sum, u) => sum + u.addresses.length, 0),
-        orders: orders.length,
-        orderItems: orders.reduce((sum, o) => sum + o.items.length, 0),
-        payments: orders.filter((o) => Boolean(o.transactionId)).length,
-      }),
-    [users, orders]
-  )
 
   return (
     <>
@@ -65,22 +48,13 @@ export default function PersistenceTab({
             {(
               [
                 ['overview', 'Overview'],
-                ['queues', 'Task Queues'],
                 ['cache', 'KV Cache'],
-                ['schema', 'DB Schema'],
               ] as [PersistenceSubTab, string][]
             ).map(([key, label]) => {
               // Badges show a live count only when live data exists. While
               // loading, or when Redis/ms-order is unreachable, the badge is
               // omitted rather than showing a stale or invented number.
-              const count =
-                key === 'schema'
-                  ? schemaData.summary.tableCount
-                  : key === 'queues'
-                    ? queues.data?.summary.queueCount
-                    : key === 'cache'
-                      ? cache.data?.namespaces.length
-                      : undefined
+              const count = key === 'cache' ? cache.data?.namespaces.length : undefined
               return (
                 <button
                   key={key}
@@ -121,16 +95,9 @@ export default function PersistenceTab({
           rustfsHealth={rustfsHealth}
           openSignal={openSignal}
           onPingRustFS={onPingRustFS}
-          queueData={queues}
           driver={driver}
-        />
-      )}
-      {tab === 'queues' && (
-        <TaskQueuesPanel
-          data={queues.data}
-          loading={queues.loading}
-          error={queues.error}
-          onRetry={queues.refetch}
+          services={services}
+          onRefreshServices={onRefreshServices}
         />
       )}
       {tab === 'cache' && (
@@ -141,7 +108,6 @@ export default function PersistenceTab({
           onRetry={cache.refetch}
         />
       )}
-      {tab === 'schema' && <SchemaPanel schema={schemaData} openSignal={openSignal} />}
     </>
   )
 }

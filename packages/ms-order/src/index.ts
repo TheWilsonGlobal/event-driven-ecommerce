@@ -15,7 +15,13 @@ import {
   paymentStatusToPaymentRowStatus,
 } from './seedOrders'
 import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS, redisEnabled } from './queues'
-import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
+import {
+  registerMetrics,
+  buildLoggerOptions,
+  createRouteRegistry,
+  registerEndpointsRoute,
+} from '@ecommerce/shared-utils'
+import { registerSchemaRoutes, registerLogRoutes } from './diagnostics'
 
 /** Workspace root — this service's cwd is packages/ms-order. */
 const REPO_ROOT = path.resolve(__dirname, '../../../')
@@ -184,6 +190,10 @@ async function bootstrap() {
   // Before every other plugin, so the onResponse hook sees all traffic.
   registerMetrics(server, { service: 'ms-order' })
 
+  // Before any route registration below — onRoute only fires for routes
+  // registered after this hook is attached.
+  const routeRegistry = createRouteRegistry(server)
+
   await server.register(cors, { origin: '*' })
   await server.register(helmet)
 
@@ -203,6 +213,9 @@ async function bootstrap() {
         { name: 'payments', description: 'Payment capture and retry' },
         { name: 'queues', description: 'BullMQ queue introspection' },
         { name: 'cache', description: 'Redis keyspace introspection' },
+        { name: 'schema', description: 'Live database schema introspection' },
+        { name: 'logs', description: 'Real log file listing and reading' },
+        { name: 'endpoints', description: 'Live registered-route inventory' },
       ],
     },
   })
@@ -868,6 +881,8 @@ async function bootstrap() {
   )
 
   registerQueueRoutes(server, queueManager)
+  registerSchemaRoutes(server, prisma)
+  registerLogRoutes(server)
 
   server.get(
     '/api/v1/cart',
@@ -921,6 +936,8 @@ async function bootstrap() {
       `[Order Service] BullMQ workers started for: ${QUEUE_DEFINITIONS.map((q) => q.name).join(', ')}`
     )
   }
+
+  registerEndpointsRoute(server, routeRegistry, 'ms-order')
 
   registerShutdownHandlers()
 

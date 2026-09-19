@@ -20,13 +20,15 @@ export default function ServicesPanel({
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    if (!q) return services
-    return services.filter(
-      (svc) =>
-        svc.name.toLowerCase().includes(q) ||
-        svc.role.toLowerCase().includes(q) ||
-        String(svc.port).includes(q)
-    )
+    const list = q
+      ? services.filter(
+          (svc) =>
+            svc.name.toLowerCase().includes(q) ||
+            svc.role.toLowerCase().includes(q) ||
+            String(svc.port).includes(q)
+        )
+      : services
+    return [...list].sort((a, b) => a.port - b.port)
   }, [services, filter])
 
   return (

@@ -94,14 +94,23 @@ export function ReadOnlyRow({ label, value }: { label: string; value: unknown })
  */
 export function MultiFieldRow({ fields }: { fields: { label: string; value: ReactNode }[] }) {
   return (
-    <div className="config-row">
+    <div className="config-row" style={{ paddingTop: 8, paddingBottom: 8 }}>
       <span />
       <span
         className="v"
-        style={{ display: 'flex', gap: 24, justifyContent: 'flex-end', flexWrap: 'wrap' }}
+        style={{
+          display: 'flex',
+          gap: 24,
+          rowGap: 8,
+          justifyContent: 'flex-start',
+          flexWrap: 'wrap',
+        }}
       >
         {fields.map((f) => (
-          <span key={f.label} style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
+          <span
+            key={f.label}
+            style={{ display: 'inline-flex', gap: 6, alignItems: 'baseline', whiteSpace: 'nowrap' }}
+          >
             <span
               className="k"
               style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}

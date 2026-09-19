@@ -18,6 +18,8 @@
 
 import type { FastifyLoggerOptions } from 'fastify'
 import type { PinoLoggerOptions } from 'fastify/types/logger'
+import * as fs from 'fs'
+import * as path from 'path'
 
 /**
  * The logger config shape Fastify accepts for a default (HTTP/1) server.
@@ -29,6 +31,25 @@ import type { PinoLoggerOptions } from 'fastify/types/logger'
  * options branch alone keeps the default overload selected.
  */
 type PinoLoggerConfig = FastifyLoggerOptions & PinoLoggerOptions
+
+/**
+ * Repo-root `logs/` directory, resolved the same way regardless of which
+ * package's `dist/` this runs from (mirrors how each service resolves its own
+ * `.env`/data paths relative to `__dirname`, not the process cwd).
+ *
+ * Every service's dist output lives at `packages/<name>/dist/index.js`
+ * (services) or `packages/shared/utils/dist/logger.js` (here) — three levels
+ * up from either lands at the repo root.
+ */
+export function getLogsDir(): string {
+  return path.resolve(__dirname, '../../../../logs')
+}
+
+/** Absolute path to today's log file for a given service, e.g. `ms-user-2026-09-19.log`. */
+export function getLogFilePath(service: string, date: Date = new Date()): string {
+  const day = date.toISOString().slice(0, 10) // YYYY-MM-DD
+  return path.join(getLogsDir(), `${service}-${day}.log`)
+}
 
 export interface LoggerOptions {
   /** Value of the `service` label on every log line, e.g. "ms-product". */
@@ -61,17 +82,32 @@ export function buildLoggerOptions(options: LoggerOptions): PinoLoggerConfig {
     options: { colorize: true },
   }
 
+  // Real, rotate-by-day log file under <repo-root>/logs, read back by each
+  // service's own GET /api/v1/logs* routes. `pino/file` does not create its
+  // parent directory, so it is ensured here rather than left to fail silently
+  // on first write. NDJSON (pino's default), never pino-pretty's formatted
+  // text — the log-listing routes scan for `"level":50/40` substrings, which
+  // only holds for the raw JSON form.
+  const logFilePath = getLogFilePath(options.service)
+  fs.mkdirSync(path.dirname(logFilePath), { recursive: true })
+  const fileTarget = {
+    target: 'pino/file',
+    options: { destination: logFilePath, mkdir: true },
+  }
+
   if (!lokiEnabled) {
-    return { level, transport: prettyTarget }
+    return { level, transport: { targets: [prettyTarget, fileTarget] } }
   }
 
   return {
     level,
     transport: {
-      // Both targets receive every line. pino runs transports in a worker
-      // thread, so a slow or unreachable Loki does not block request handling.
+      // All targets receive every line. pino runs transports in a worker
+      // thread, so a slow disk or unreachable Loki does not block request
+      // handling.
       targets: [
         prettyTarget,
+        fileTarget,
         {
           target: 'pino-loki',
           options: {

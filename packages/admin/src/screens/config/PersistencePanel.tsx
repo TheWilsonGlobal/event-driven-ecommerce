@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { RustfsHealth } from '../../types'
+import type { RustfsHealth, ServiceItem } from '../../types'
 import type { LiveResource } from '../../hooks/useQueueData'
-import type { QueueData } from '../queues/queueTypes'
 import type { CacheDriverInfo } from './cacheTypes'
-import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './parts'
-import {
-  DB_HOST,
-  DB_PORT,
-  PRODUCT_SERVICE_URL,
-  RUSTFS_CONSOLE_ENDPOINT,
-  RUSTFS_DATA_PATH,
-} from '../../data/serviceUrls'
+import { ConfigCard, ReadOnlyRow, type OpenSignal } from './parts'
+import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT, RUSTFS_DATA_PATH } from '../../data/serviceUrls'
 
 interface StorageObject {
   sizeBytes: number
@@ -20,20 +13,30 @@ export default function PersistencePanel({
   rustfsHealth,
   openSignal,
   onPingRustFS,
-  queueData,
   driver,
+  services,
+  onRefreshServices,
 }: {
   rustfsHealth: RustfsHealth
   openSignal?: OpenSignal
   onPingRustFS: () => void
-  /** Shared with the Task Queues sub-tab; this panel does not fetch its own. */
-  queueData: LiveResource<QueueData>
   /** The KV backend ms-order actually resolved at boot. */
   driver: LiveResource<CacheDriverInfo>
+  services: ServiceItem[]
+  onRefreshServices: () => void
 }) {
   const [objectCount, setObjectCount] = useState(0)
   const [totalSizeMb, setTotalSizeMb] = useState(0)
   const [objectsLoadError, setObjectsLoadError] = useState(false)
+
+  // Neither store has its own health endpoint — Prisma/NeDB connectivity is
+  // reported as part of each owning service's own /health check.
+  const userSvc = services.find((s) => s.id === 'ms-user')
+  const orderSvc = services.find((s) => s.id === 'ms-order')
+  const productSvc = services.find((s) => s.id === 'ms-product')
+  const relationalHealthy =
+    userSvc && orderSvc ? userSvc.status === 'HEALTHY' && orderSvc.status === 'HEALTHY' : null
+  const documentHealthy = productSvc ? productSvc.status === 'HEALTHY' : null
 
   const loadObjectSummary = useCallback(async () => {
     try {
@@ -66,64 +69,33 @@ export default function PersistencePanel({
         openSignal={openSignal}
         title={
           <>
-            <span>Task Queues</span>
-            <span className="chip chip-purple">BullMQ</span>
-          </>
-        }
-      >
-        <ReadOnlyRow
-          label="Queue Driver"
-          value={
-            driver.data
-              ? driver.data.queuesAvailable
-                ? 'BullMQ over Redis'
-                : `Unavailable — KV driver is "${driver.data.driver}", BullMQ requires Redis`
-              : '—'
-          }
-        />
-        <ReadOnlyRow label="Worker Concurrency" value="5–10 workers per queue" />
-        <ReadOnlyRow
-          label="Registered Queues"
-          value={
-            queueData.data
-              ? `${queueData.data.summary.queueCount} queues`
-              : queueData.loading
-                ? 'Loading…'
-                : 'Unavailable — Redis unreachable'
-          }
-        />
-        <MultiFieldRow
-          fields={[
-            {
-              label: 'Client',
-              value: driver.data?.queuesAvailable ? 'ioredis (BullMQ client)' : '—',
-            },
-            {
-              label: 'Backing Store',
-              value: driver.data
-                ? driver.data.queuesAvailable
-                  ? 'Redis 7 (DB 0)'
-                  : 'None — queues disabled'
-                : '—',
-            },
-            { label: 'Retry Policy', value: 'per-queue backoff, 3–5 attempts' },
-          ]}
-        />
-      </ConfigCard>
-
-      <ConfigCard
-        openSignal={openSignal}
-        title={
-          <>
             <span>KV Cache</span>
-            <span className="chip chip-purple">
+            <span className="chip chip-blue">
               {driver.data
                 ? driver.data.backend === 'redis'
                   ? 'Redis 7'
                   : 'Embedded (file-backed)'
                 : 'KV'}
             </span>
+            <span className={`chip ${driver.data?.backend === 'redis' ? 'chip-green' : 'chip-amber'}`}>
+              {!driver.data
+                ? 'Probing…'
+                : driver.data.backend === 'redis'
+                  ? '✓ Online'
+                  : '◐ Embedded'}
+            </span>
           </>
+        }
+        metrics={
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              driver.refetch()
+            }}
+          >
+            Probe KV Cache ↻
+          </button>
         }
       >
         {/* Every value here is reported by GET /api/v1/cache/driver rather than
@@ -138,31 +110,31 @@ export default function PersistencePanel({
           value={driver.data ? (driver.data.host ?? driver.data.dataPath ?? 'in-memory') : '—'}
         />
         <ReadOnlyRow label="Client" value={driver.data?.label ?? '—'} />
-        <MultiFieldRow
-          fields={[
-            {
-              label: 'Image',
-              value: driver.data?.backend === 'redis' ? 'redis:7-alpine' : 'n/a (in-process)',
-            },
-            {
-              label: driver.data?.backend === 'embedded' ? 'Persistence' : 'DB Index',
-              value: driver.data
-                ? driver.data.backend === 'embedded'
-                  ? driver.data.inMemory
-                    ? 'in-memory (not persisted)'
-                    : 'file-backed JSON snapshot'
-                  : '0'
-                : '—',
-            },
-            {
-              label: 'Fallback',
-              value: driver.data
-                ? driver.data.backend === 'embedded'
-                  ? 'active — embedded (file-backed)'
-                  : 'embedded (file-backed) via KV_CACHE_DRIVER'
-                : '—',
-            },
-          ]}
+        <ReadOnlyRow
+          label="Image"
+          value={driver.data?.backend === 'redis' ? 'redis:7-alpine' : 'n/a (in-process)'}
+        />
+        <ReadOnlyRow
+          label={driver.data?.backend === 'embedded' ? 'Persistence' : 'DB Index'}
+          value={
+            driver.data
+              ? driver.data.backend === 'embedded'
+                ? driver.data.inMemory
+                  ? 'in-memory (not persisted)'
+                  : 'file-backed JSON snapshot'
+                : '0'
+              : '—'
+          }
+        />
+        <ReadOnlyRow
+          label="Fallback"
+          value={
+            driver.data
+              ? driver.data.backend === 'embedded'
+                ? 'active — embedded (file-backed)'
+                : 'embedded (file-backed) via KV_CACHE_DRIVER'
+              : '—'
+          }
         />
         {driver.data?.loadError && (
           <div className="warn-banner" style={{ marginTop: 8 }}>
@@ -182,12 +154,15 @@ export default function PersistencePanel({
         openSignal={openSignal}
         title={
           <>
-            <span>Object Storage (S3-API)</span>
-            <span className={`chip ${rustfsHealth.healthy ? 'chip-green' : 'chip-red'}`}>
+            <span>S3 Storage</span>
+            <span className="chip chip-blue">RustFS</span>
+            <span
+              className={`chip ${rustfsHealth.healthy === null ? 'chip-amber' : rustfsHealth.healthy ? 'chip-green' : 'chip-red'}`}
+            >
               {rustfsHealth.healthy === null
                 ? 'Probing…'
                 : rustfsHealth.healthy
-                  ? '✓ RustFS Online'
+                  ? '✓ Online'
                   : '✗ Offline'}
             </span>
           </>
@@ -216,45 +191,36 @@ export default function PersistencePanel({
             {rustfsHealth.latencyMs > 0 ? `${rustfsHealth.latencyMs} ms` : '—'}
           </span>
         </div>
-        <MultiFieldRow
-          fields={[
-            { label: 'Image', value: 'rustfs/rustfs:latest' },
-            { label: 'S3 API Port', value: '9000' },
-            { label: 'Console Port', value: '9001' },
-          ]}
-        />
-        <MultiFieldRow
-          fields={[
-            { label: 'Host Path', value: RUSTFS_DATA_PATH },
-            { label: 'Container Path', value: '/data' },
-            { label: 'Mount Type', value: 'bind' },
-          ]}
-        />
-
-        <MultiFieldRow
-          fields={[
-            {
-              label: 'Objects',
-              value: <span style={{ color: 'var(--blue-light)' }}>{objectCount}</span>,
-            },
-            {
-              label: 'Total Size',
-              value: <span style={{ color: 'var(--purple)' }}>{totalSizeMb} MB</span>,
-            },
-            {
-              label: 'Region',
-              value: <span style={{ color: 'var(--green-light)' }}>us-east-1</span>,
-            },
-            {
-              label: 'Listing',
-              value: (
-                <span style={{ color: 'var(--amber-light)' }}>
-                  {objectsLoadError ? 'Failed' : 'Live'}
-                </span>
-              ),
-            },
-          ]}
-        />
+        <ReadOnlyRow label="Image" value="rustfs/rustfs:latest" />
+        <ReadOnlyRow label="S3 API Port" value="9000" />
+        <ReadOnlyRow label="Console Port" value="9001" />
+        <ReadOnlyRow label="Host Path" value={RUSTFS_DATA_PATH} />
+        <ReadOnlyRow label="Container Path" value="/data" />
+        <ReadOnlyRow label="Mount Type" value="bind" />
+        <div className="config-row">
+          <span className="k">Objects</span>
+          <span className="v" style={{ color: 'var(--blue-light)' }}>
+            {objectCount}
+          </span>
+        </div>
+        <div className="config-row">
+          <span className="k">Total Size</span>
+          <span className="v" style={{ color: 'var(--purple)' }}>
+            {totalSizeMb} MB
+          </span>
+        </div>
+        <div className="config-row">
+          <span className="k">Region</span>
+          <span className="v" style={{ color: 'var(--green-light)' }}>
+            us-east-1
+          </span>
+        </div>
+        <div className="config-row">
+          <span className="k">Listing</span>
+          <span className="v" style={{ color: 'var(--amber-light)' }}>
+            {objectsLoadError ? 'Failed' : 'Live'}
+          </span>
+        </div>
 
         <div className="panel-row" style={{ marginTop: 6 }}>
           <span className="cell-muted" style={{ fontSize: 12 }}>
@@ -289,12 +255,32 @@ export default function PersistencePanel({
           <>
             <span>Relational Database</span>
             <span className="chip chip-blue">PostgreSQL / SQLite</span>
+            <span className={`chip ${relationalHealthy === null ? 'chip-amber' : relationalHealthy ? 'chip-green' : 'chip-red'}`}>
+              {relationalHealthy === null ? 'Probing…' : relationalHealthy ? '✓ Online' : '✗ Offline'}
+            </span>
           </>
         }
+        metrics={
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRefreshServices()
+            }}
+          >
+            Probe Database ↻
+          </button>
+        }
       >
+        <ReadOnlyRow label="Storage Driver" value="SQLite (Prisma ORM)" />
         <ReadOnlyRow label="ORM Engine" value="Prisma 5.22.0" />
-        <ReadOnlyRow label="Connection URL" value={`postgresql://***@${DB_HOST}:${DB_PORT}`} />
-        <ReadOnlyRow label="Target Services" value="ms-user, ms-order" />
+        <ReadOnlyRow label="Connection URL" value="file:./data/db/ms-user.db, file:./data/db/ms-order.db" />
+        <div className="config-row">
+          <span className="k">Target Services</span>
+          <span className="v" style={{ color: 'var(--blue-light)' }}>
+            ms-user, ms-order
+          </span>
+        </div>
       </ConfigCard>
 
       <ConfigCard
@@ -302,13 +288,36 @@ export default function PersistencePanel({
         title={
           <>
             <span>Document Database</span>
-            <span className="chip chip-green">NeDB / MongoDB</span>
+            <span className="chip chip-blue">NeDB / MongoDB</span>
+            <span className={`chip ${documentHealthy === null ? 'chip-amber' : documentHealthy ? 'chip-green' : 'chip-red'}`}>
+              {documentHealthy === null ? 'Probing…' : documentHealthy ? '✓ Online' : '✗ Offline'}
+            </span>
           </>
+        }
+        metrics={
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRefreshServices()
+            }}
+          >
+            Probe Database ↻
+          </button>
         }
       >
         <ReadOnlyRow label="Storage Driver" value="Embedded NeDB" />
-        <ReadOnlyRow label="Local Data Path" value="./data/nedb" />
-        <ReadOnlyRow label="Target Services" value="ms-product" />
+        <ReadOnlyRow label="Engine" value="NeDB 1.8.0" />
+        <ReadOnlyRow
+          label="Connection URL"
+          value="file:./data/db/products.db, file:./data/db/categories.db"
+        />
+        <div className="config-row">
+          <span className="k">Target Services</span>
+          <span className="v" style={{ color: 'var(--blue-light)' }}>
+            ms-product
+          </span>
+        </div>
       </ConfigCard>
     </>
   )

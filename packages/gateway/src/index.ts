@@ -8,7 +8,13 @@ import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
-import { registerMetrics, buildLoggerOptions } from '@ecommerce/shared-utils'
+import {
+  registerMetrics,
+  buildLoggerOptions,
+  createRouteRegistry,
+  registerEndpointsRoute,
+} from '@ecommerce/shared-utils'
+import { registerLogRoutes } from './diagnostics'
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
@@ -25,6 +31,11 @@ const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:546
 async function bootstrap() {
   // Before every other plugin, so the onResponse hook sees all traffic.
   registerMetrics(server, { service: 'gateway' })
+
+  // Before any route registration below — onRoute only fires for routes
+  // registered after this hook is attached, and this must see the proxy
+  // routes @fastify/http-proxy installs further down too.
+  const routeRegistry = createRouteRegistry(server)
 
   await server.register(cors, {
     origin: '*',
@@ -52,7 +63,11 @@ async function bootstrap() {
         version: '1.0.0',
       },
       servers: [{ url: `http://localhost:${PORT}` }],
-      tags: [{ name: 'health', description: 'Gateway health and status' }],
+      tags: [
+        { name: 'health', description: 'Gateway health and status' },
+        { name: 'logs', description: 'Real log file listing and reading' },
+        { name: 'endpoints', description: 'Live registered-route inventory' },
+      ],
     },
   })
 
@@ -111,6 +126,8 @@ async function bootstrap() {
     }
   )
 
+  registerLogRoutes(server)
+
   // Proxy user and auth routes
   await server.register(httpProxy, {
     upstream: USER_SERVICE_URL,
@@ -155,6 +172,8 @@ async function bootstrap() {
     prefix: '/api/v1/payments',
     rewritePrefix: '/api/v1/payments',
   })
+
+  registerEndpointsRoute(server, routeRegistry, 'gateway')
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

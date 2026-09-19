@@ -73,19 +73,21 @@ export default function App() {
     { key: 'users', label: 'Users & Roles', Icon: UsersIcon, count: data.users.length },
   ]
 
-  const PERSISTENCE: NavEntry[] = [
-    { key: 'persistence', label: 'Persistence', Icon: PersistenceIcon },
+  const INFRA: NavEntry[] = [
+    { key: 'persistence', label: 'Infra', Icon: PersistenceIcon },
+    { key: 'kv-keys', label: 'KV Cache', Icon: CacheIcon, count: cacheKeyData.data?.totalKeys },
+    { key: 'storage', label: 'S3 Storage', Icon: StorageIcon, count: data.objectCount },
+  ]
+
+  const SYSTEM: NavEntry[] = [
+    { key: 'config', label: 'Configuration', Icon: ConfigIcon },
     {
       key: 'task-queues',
       label: 'Task Queues',
       Icon: QueueIcon,
       count: queueData.data?.summary.totalJobs,
     },
-    { key: 'kv-keys', label: 'KV Cache', Icon: CacheIcon, count: cacheKeyData.data?.totalKeys },
-    { key: 'storage', label: 'Storage', Icon: StorageIcon, count: data.objectCount },
   ]
-
-  const SYSTEM: NavEntry[] = [{ key: 'config', label: 'Configuration', Icon: ConfigIcon }]
 
   const renderNavItem = ({ key, label, Icon, count }: NavEntry) => (
     <button
@@ -138,11 +140,11 @@ export default function App() {
           <div className="nav-section">Access & Roles</div>
           {ACCESS.map(renderNavItem)}
 
-          <div className="nav-section">Persistence</div>
-          {PERSISTENCE.map(renderNavItem)}
-
           <div className="nav-section">System</div>
           {SYSTEM.map(renderNavItem)}
+
+          <div className="nav-section">Infra</div>
+          {INFRA.map(renderNavItem)}
         </nav>
 
         <div className="sidebar-footer">
@@ -249,8 +251,8 @@ export default function App() {
           <PersistenceTab
             rustfsHealth={data.rustfsHealth}
             onPingRustFS={data.pingRustFS}
-            users={data.users}
-            orders={data.orders}
+            services={data.services}
+            onRefreshServices={data.pingServices}
           />
         )}
 
