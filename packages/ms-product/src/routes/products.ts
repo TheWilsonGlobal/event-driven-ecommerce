@@ -1,16 +1,18 @@
 import type { FastifyInstance } from 'fastify'
 import type { DocumentDatabaseAdapter, ProductSearchClient } from '@ecommerce/shared-database'
 import type { ProductDoc } from '../types'
+import type { QueueManager } from '../queues'
 
 interface ProductRouteDeps {
   productsStore: DocumentDatabaseAdapter<ProductDoc>
   search: ProductSearchClient
+  queueManager: QueueManager
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────
 export function registerProductRoutes(
   server: FastifyInstance,
-  { productsStore, search }: ProductRouteDeps
+  { productsStore, search, queueManager }: ProductRouteDeps
 ): void {
   server.get<{
     Querystring: { page?: string; limit?: string; category?: string; search?: string }
@@ -151,10 +153,26 @@ export function registerProductRoutes(
         ratings: body.ratings ?? { average: 0, count: 0 },
       }
       const created = await productsStore.insert(doc)
-      // Mirror into the search index. Awaited so a create followed immediately
-      // by a search finds the product; best-effort, so a down cluster cannot
-      // fail a write that NeDB already committed.
-      await search.indexProduct(created)
+      // Mirror into the search index via the reindex-search queue rather than
+      // an inline call: this gets automatic retry (5 attempts, exponential
+      // backoff) if Elasticsearch is briefly down, instead of the product
+      // silently staying unindexed until the next full-service restart
+      // re-runs seedAndIndex()'s bulk backfill. Fire-and-forget — a Redis
+      // outage (or the embedded KV driver being active) must not fail a write
+      // NeDB already committed; tryEnqueue logs and swallows that case.
+      //
+      // NOTE: this means a create immediately followed by a ?search= may not
+      // find the product yet (the old inline `await search.indexProduct()`
+      // guaranteed that). Falling back to indexing inline when the queue is
+      // unavailable at least keeps that guarantee on the embedded-KV/no-Redis
+      // path, which is this repo's default.
+      if (queueManager.queuesAvailable) {
+        await queueManager.tryEnqueue('reindex-product', () =>
+          queueManager.enqueueReindexProduct({ productId: created.id ?? (created._id as string) })
+        )
+      } else {
+        await search.indexProduct(created)
+      }
       return reply.status(201).send(created)
     }
   )
@@ -184,7 +202,13 @@ export function registerProductRoutes(
       }
       const updated = await productsStore.findOne({ id: req.params.id })
       if (updated) {
-        await search.indexProduct(updated)
+        if (queueManager.queuesAvailable) {
+          await queueManager.tryEnqueue('reindex-product', () =>
+            queueManager.enqueueReindexProduct({ productId: updated.id ?? (updated._id as string) })
+          )
+        } else {
+          await search.indexProduct(updated)
+        }
       }
       return updated
     }
@@ -212,7 +236,13 @@ export function registerProductRoutes(
       if (numRemoved === 0) {
         return reply.status(404).send({ error: 'Product not found' })
       }
-      await search.removeProduct(req.params.id)
+      if (queueManager.queuesAvailable) {
+        await queueManager.tryEnqueue('remove-from-index', () =>
+          queueManager.enqueueRemoveFromIndex({ productId: req.params.id })
+        )
+      } else {
+        await search.removeProduct(req.params.id)
+      }
       return { success: true }
     }
   )

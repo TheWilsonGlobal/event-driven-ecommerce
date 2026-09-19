@@ -17,6 +17,8 @@
     "@ecommerce/shared-types": "workspace:*",
     "@ecommerce/shared-utils": "workspace:*",
     "@ecommerce/shared-database": "workspace:*",
+    "@ecommerce/shared-messaging": "workspace:*",
+    "bullmq": "^4.11.4",
     "fastify": "^4.24.3",
     "@fastify/cors": "^8.5.0",
     "@fastify/helmet": "^11.1.1",

@@ -31,6 +31,8 @@ import {
   registerUploadRoutes,
 } from './routes'
 import { seedAndIndex } from './seed'
+import { QueueManager } from './queues'
+import { registerShutdownHandlers } from './shutdown'
 
 const REPO_ROOT = path.resolve(__dirname, '../../../')
 dotenv.config({ path: path.join(REPO_ROOT, '.env') })
@@ -61,6 +63,11 @@ const search = createSearchClient(process.env)
 // the configured data path (e.g. data/db/products.db, data/db/categories.db).
 const productsStore = createDocumentStore<ProductDoc>('products', dbConfig)
 const categoriesStore = createDocumentStore<CategoryDoc>('categories', dbConfig)
+
+// BullMQ reindex-search queue. Constructs no Redis connection at all when
+// KV_CACHE_DRIVER selects the embedded store (this repo's default,
+// DB_MODE=embedded) — see QueueManager's constructor doc.
+const queueManager = new QueueManager()
 
 // Checked once at boot, before the logger (and its Loki transport) is even
 // constructed — an unreachable Loki then produces one quiet line here
@@ -128,9 +135,13 @@ async function bootstrap() {
 
   registerHealthRoutes(server, { dbConfig, search })
   registerStorageRoutes(server, { rustfs })
-  registerProductRoutes(server, { productsStore, search })
+  registerProductRoutes(server, { productsStore, search, queueManager })
   registerCategoryRoutes(server, { categoriesStore })
   registerUploadRoutes(server, { rustfs })
+
+  // Started after routes are registered, same ordering ms-order uses: the
+  // worker begins pulling jobs only once the service is otherwise ready.
+  queueManager.startWorker(productsStore, search)
 
   registerSchemaRoutes(server, [
     {
@@ -144,6 +155,8 @@ async function bootstrap() {
   ])
   registerLogRoutes(server)
   registerEndpointsRoute(server, routeRegistry, 'ms-product')
+
+  registerShutdownHandlers({ server, queueManager })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

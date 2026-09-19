@@ -9,6 +9,7 @@
   "references": [
     { "path": "../shared/types" },
     { "path": "../shared/utils" },
-    { "path": "../shared/database" }
+    { "path": "../shared/database" },
+    { "path": "../shared/messaging" }
   ]
 }

@@ -5,20 +5,20 @@
  * the values reported by GET /api/v1/queues. The admin panel previously
  * hardcoded its own copy of this table; it should now read it from the API so
  * the two cannot drift.
+ *
+ * The JobState/JOB_STATES 5-state contract and the generic QueueDefinition
+ * shape moved to @ecommerce/shared-messaging 2026-09-19 (ms-product needed
+ * the same contract for its own queue) — re-exported here so existing
+ * imports from './definitions' keep working unchanged.
  */
 
-export type JobState = 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'
-
-export type BackoffType = 'exponential' | 'fixed'
-
-/** The five states the admin contract enumerates, in display order. */
-export const JOB_STATES: readonly JobState[] = [
-  'waiting',
-  'active',
-  'completed',
-  'failed',
-  'delayed',
-] as const
+export {
+  JOB_STATES,
+  type JobState,
+  type BackoffType,
+  type QueueDefinition as GenericQueueDefinition,
+} from '@ecommerce/shared-messaging'
+import type { BackoffType } from '@ecommerce/shared-messaging'
 
 export type QueueName =
   'order-expiration' | 'payment-retry' | 'notification-dispatch' | 'saga-compensation'
