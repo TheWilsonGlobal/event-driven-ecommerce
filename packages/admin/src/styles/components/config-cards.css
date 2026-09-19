@@ -68,6 +68,12 @@
 .config-metrics > span:first-child {
   margin-left: 0;
 }
+.metric-OPTIONS {
+  /* Extra breathing room after undoc: both are "noise" columns (not a real
+     HTTP verb an operator calls), so they're set apart from the GET/POST/...
+     verb columns that follow. */
+  margin-left: 24px;
+}
 .config-metrics b {
   color: var(--text-bright);
 }

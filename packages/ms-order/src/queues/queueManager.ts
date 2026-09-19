@@ -166,27 +166,42 @@ export class QueueManager {
   }
 
   async enqueueRetryCapture(data: RetryCaptureJob): Promise<string | undefined> {
-    const job = await this.queue('payment-retry').add(JOB_NAMES.retryCapture, data)
+    const job = await this.queue('payment-retry').add(JOB_NAMES.retryCapture, data, {
+      // Not idempotent like expire-order/reindex-search — a payment can
+      // legitimately be retried more than once, so the id must stay unique
+      // per enqueue rather than per order, or a second retry would be
+      // silently dropped by BullMQ's existing-jobId dedupe. The suffix only
+      // needs to disambiguate; it isn't a correctness key anywhere.
+      jobId: `retry-${data.orderId}-${Date.now()}`,
+    })
     return job.id
   }
 
   async enqueueSendConfirmation(data: SendConfirmationJob): Promise<string | undefined> {
-    const job = await this.queue('notification-dispatch').add(JOB_NAMES.sendConfirmation, data)
+    const job = await this.queue('notification-dispatch').add(JOB_NAMES.sendConfirmation, data, {
+      jobId: `confirm-${data.orderId}-${Date.now()}`,
+    })
     return job.id
   }
 
   async enqueueSendReceipt(data: SendReceiptJob): Promise<string | undefined> {
-    const job = await this.queue('notification-dispatch').add(JOB_NAMES.sendReceipt, data)
+    const job = await this.queue('notification-dispatch').add(JOB_NAMES.sendReceipt, data, {
+      jobId: `receipt-${data.orderId}-${Date.now()}`,
+    })
     return job.id
   }
 
   async enqueueReleaseInventory(data: ReleaseInventoryJob): Promise<string | undefined> {
-    const job = await this.queue('saga-compensation').add(JOB_NAMES.releaseInventory, data)
+    const job = await this.queue('saga-compensation').add(JOB_NAMES.releaseInventory, data, {
+      jobId: `release-${data.orderId}-${Date.now()}`,
+    })
     return job.id
   }
 
   async enqueueRefundPayment(data: RefundPaymentJob): Promise<string | undefined> {
-    const job = await this.queue('saga-compensation').add(JOB_NAMES.refundPayment, data)
+    const job = await this.queue('saga-compensation').add(JOB_NAMES.refundPayment, data, {
+      jobId: `refund-${data.orderId}-${Date.now()}`,
+    })
     return job.id
   }
 
