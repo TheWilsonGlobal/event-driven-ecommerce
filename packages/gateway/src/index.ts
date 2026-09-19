@@ -15,7 +15,7 @@ import {
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
-import { registerLogRoutes } from './diagnostics'
+import { registerLogRoutes, registerServicesRoute } from './diagnostics'
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
@@ -75,6 +75,7 @@ async function bootstrap() {
       tags: [
         { name: 'health', description: 'Gateway health and status' },
         { name: 'logs', description: 'Real log file listing and reading' },
+        { name: 'services', description: 'Server-side health rollup of upstream services' },
         { name: 'endpoints', description: 'Live registered-route inventory' },
       ],
     },
@@ -136,6 +137,12 @@ async function bootstrap() {
   )
 
   registerLogRoutes(server)
+
+  registerServicesRoute(server, [
+    { name: 'ms-user', url: USER_SERVICE_URL },
+    { name: 'ms-product', url: PRODUCT_SERVICE_URL },
+    { name: 'ms-order', url: ORDER_SERVICE_URL },
+  ])
 
   // Proxy user and auth routes
   await server.register(httpProxy, {

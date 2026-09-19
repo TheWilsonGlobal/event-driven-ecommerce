@@ -72,13 +72,13 @@ export default function TaskQueuesPanel({
         </div>
         <div className="toolbar-right">
           <StatChip value={data ? data.summary.queueCount : '—'} label="Queues" />
-          <StatChip value={stateCounts?.waiting ?? '—'} label="Waiting" variant="red" />
+          <StatChip value={stateCounts?.waiting ?? '—'} label="Waiting" variant="amber" />
           <StatChip value={stateCounts?.active ?? '—'} label="Active" variant="blue" />
           <StatChip value={stateCounts?.completed ?? '—'} label="Completed" variant="green" />
           <StatChip
             value={stateCounts?.failed ?? '—'}
             label="Failed"
-            variant={stateCounts && stateCounts.failed > 0 ? 'amber' : 'slate'}
+            variant={stateCounts && stateCounts.failed > 0 ? 'red' : 'slate'}
           />
           <StatChip value={stateCounts?.delayed ?? '—'} label="Delayed" variant="purple" />
           <StatChip value={totalCount ?? '—'} label="Total" />
@@ -121,7 +121,7 @@ export default function TaskQueuesPanel({
                 <th className="cell-right" title="Base Delay">
                   <DelayIcon style={{ width: 14, height: 14 }} />
                 </th>
-                <th className="cell-right" style={{ color: 'var(--red-light)' }}>
+                <th className="cell-right" style={{ color: 'var(--amber-light)' }}>
                   Waiting
                 </th>
                 <th className="cell-right" style={{ color: 'var(--blue-light)' }}>
@@ -130,7 +130,7 @@ export default function TaskQueuesPanel({
                 <th className="cell-right" style={{ color: 'var(--green-light)' }}>
                   Completed
                 </th>
-                <th className="cell-right" style={{ color: 'var(--amber-light)' }}>
+                <th className="cell-right" style={{ color: 'var(--red-light)' }}>
                   Failed
                 </th>
                 <th className="cell-right" style={{ color: 'var(--purple)' }}>
@@ -176,7 +176,7 @@ export default function TaskQueuesPanel({
                     >
                       {queue.backoff.delayMs.toLocaleString()}
                     </td>
-                    <td className="mono cell-right" style={{ color: 'var(--red-light)' }}>
+                    <td className="mono cell-right" style={{ color: 'var(--amber-light)' }}>
                       {queue.counts.waiting}
                     </td>
                     <td className="mono cell-right" style={{ color: 'var(--blue-light)' }}>
@@ -188,7 +188,7 @@ export default function TaskQueuesPanel({
                     <td
                       className="mono cell-right"
                       style={{
-                        color: queue.counts.failed > 0 ? 'var(--amber-light)' : 'var(--text-faint)',
+                        color: queue.counts.failed > 0 ? 'var(--red-light)' : 'var(--text-faint)',
                       }}
                     >
                       {queue.counts.failed}

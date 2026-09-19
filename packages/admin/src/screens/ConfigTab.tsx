@@ -17,6 +17,7 @@ import { useCacheDriver, useMergedQueueData, describeSourceError } from '../hook
 import { OfflineBanner } from '../components/ui'
 import { useApiDocs } from '../hooks/useApiDocs'
 import { useLogFiles } from '../hooks/useLogFiles'
+import { useGatewayServices } from '../hooks/useGatewayServices'
 
 type ConfigSubTab = 'general' | 'services' | 'queues' | 'api' | 'logs'
 
@@ -37,6 +38,7 @@ export default function ConfigTab({
   const driver = useCacheDriver()
   const apiDocs = useApiDocs()
   const logFiles = useLogFiles()
+  const gatewayServices = useGatewayServices()
 
   // Broadcast to every ConfigCard on the active tab. The nonce is what the
   // cards react to, so pressing the same button twice still re-applies after
@@ -61,6 +63,7 @@ export default function ConfigTab({
       queueData.refetch()
     } else if (tab === 'services') {
       onRefreshServices()
+      gatewayServices.refetch()
     } else if (tab === 'api') {
       apiDocs.refetch()
     } else if (tab === 'logs') {
@@ -240,6 +243,7 @@ export default function ConfigTab({
           lastScanned={lastScanned}
           onSelectService={onSelectService}
           onRefresh={onRefreshServices}
+          gatewayServices={gatewayServices}
         />
       )}
       {tab === 'queues' && (

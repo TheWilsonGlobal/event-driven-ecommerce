@@ -6,10 +6,10 @@ import { describeError, type FetchError } from '../../hooks/useQueueData'
 const NO_QUEUES: QueueInfo[] = []
 
 const STATE_CHIPS: { state: JobState; label: string; tone: string }[] = [
-  { state: 'waiting', label: 'Waiting', tone: 'chip-red' },
+  { state: 'waiting', label: 'Waiting', tone: 'chip-amber' },
   { state: 'active', label: 'Active', tone: 'chip-blue' },
   { state: 'completed', label: 'Completed', tone: 'chip-green' },
-  { state: 'failed', label: 'Failed', tone: 'chip-amber' },
+  { state: 'failed', label: 'Failed', tone: 'chip-red' },
   { state: 'delayed', label: 'Delayed', tone: 'chip-purple' },
 ]
 
@@ -22,10 +22,10 @@ function stateStatus(state: JobState): string {
     case 'delayed':
       return 'status-delayed'
     case 'failed':
-      return 'status-warning'
+      return 'status-failed'
     case 'waiting':
     default:
-      return 'status-waiting'
+      return 'status-warning'
   }
 }
 

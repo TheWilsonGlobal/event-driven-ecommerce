@@ -2,17 +2,20 @@ import { useMemo, useState } from 'react'
 import type { ServiceItem } from '../../types'
 import { StatusBadge, StatChip } from '../../components/ui'
 import { EmptyState } from '../../components/ui'
+import type { GatewayServicesResource } from '../../hooks/useGatewayServices'
 
 export default function ServicesPanel({
   services,
   lastScanned,
   onSelectService,
   onRefresh,
+  gatewayServices,
 }: {
   services: ServiceItem[]
   lastScanned: string
   onSelectService: (svc: ServiceItem) => void
   onRefresh: () => void
+  gatewayServices: GatewayServicesResource
 }) {
   const [filter, setFilter] = useState('')
 
@@ -54,6 +57,57 @@ export default function ServicesPanel({
             Refresh Probes ↻
           </button>
         </div>
+      </div>
+
+      <div className="table-wrapper" style={{ marginBottom: 16 }}>
+        <table>
+          <thead>
+            <tr>
+              <th colSpan={4}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  As Seen By The Gateway
+                  <span className="chip chip-blue">server-side</span>
+                </span>
+              </th>
+            </tr>
+            <tr>
+              <th>Service</th>
+              <th>Status</th>
+              <th className="cell-right">Latency</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {gatewayServices.unreachable ? (
+              <tr>
+                <td colSpan={4} className="cell-muted">
+                  Gateway unreachable — {gatewayServices.unreachable}
+                </td>
+              </tr>
+            ) : gatewayServices.loading && !gatewayServices.data ? (
+              <tr>
+                <td colSpan={4} className="cell-muted">
+                  Loading…
+                </td>
+              </tr>
+            ) : gatewayServices.data ? (
+              gatewayServices.data.services.map((svc) => (
+                <tr key={svc.name}>
+                  <td style={{ fontWeight: 600, color: 'var(--text-bright)' }}>{svc.name}</td>
+                  <td>
+                    <StatusBadge status={svc.status} />
+                  </td>
+                  <td className="mono cell-right" style={{ color: 'var(--green-light)' }}>
+                    {svc.latencyMs} ms
+                  </td>
+                  <td className="cell-muted mono" style={{ fontSize: 12 }}>
+                    {svc.error ?? svc.url}
+                  </td>
+                </tr>
+              ))
+            ) : null}
+          </tbody>
+        </table>
       </div>
 
       {filtered.length === 0 ? (
