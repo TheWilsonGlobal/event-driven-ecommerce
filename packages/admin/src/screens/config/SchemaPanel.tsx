@@ -42,6 +42,7 @@ export default function SchemaPanel({
         <div className="toolbar-right">
           <StatChip value={data.summary.tableCount} label="Tables" />
           <StatChip value={data.summary.columnCount} label="Columns" />
+          <StatChip value={data.summary.fkCount} label="FKs" variant="amber" />
           <StatChip value={data.summary.indexCount} label="Indexes" />
           <StatChip value={data.summary.totalRows} label="Rows" variant="blue" />
         </div>

@@ -25,7 +25,7 @@ import OrdersTab from './screens/OrdersTab'
 import UsersTab from './screens/UsersTab'
 import TaskQueuesTab from './screens/TaskQueuesTab'
 import StorageTab from './screens/StorageTab'
-import PersistenceTab from './screens/PersistenceTab'
+import InfraTab from './screens/InfraTab'
 import KvKeysTab from './screens/KvKeysTab'
 import ConfigTab from './screens/ConfigTab'
 import { useCacheKeys, useQueueData } from './hooks/useQueueData'
@@ -248,7 +248,7 @@ export default function App() {
         {app.tab === 'storage' && <StorageTab />}
 
         {app.tab === 'persistence' && (
-          <PersistenceTab
+          <InfraTab
             rustfsHealth={data.rustfsHealth}
             onPingRustFS={data.pingRustFS}
             services={data.services}

@@ -9,7 +9,7 @@ interface StorageObject {
   sizeBytes: number
 }
 
-export default function PersistencePanel({
+export default function InfraPanel({
   rustfsHealth,
   openSignal,
   onPingRustFS,

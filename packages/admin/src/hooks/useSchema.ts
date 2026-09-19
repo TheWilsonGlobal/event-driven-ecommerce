@@ -20,6 +20,7 @@ export interface SchemaData {
   summary: {
     tableCount: number
     columnCount: number
+    fkCount: number
     indexCount: number
     totalRows: number
   }
@@ -76,6 +77,10 @@ export function useSchema(): SchemaResource {
     const summary = {
       tableCount: tables.length,
       columnCount: tables.reduce((sum, t) => sum + t.columns.length, 0),
+      fkCount: tables.reduce(
+        (sum, t) => sum + t.columns.filter((c) => c.references).length,
+        0
+      ),
       indexCount: tables.reduce((sum, t) => sum + t.indexes.length, 0),
       totalRows: tables.reduce((sum, t) => sum + t.rowCount, 0),
     }

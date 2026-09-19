@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import type { RustfsHealth, ServiceItem } from '../types'
 import { type OpenSignal } from './config/parts'
-import PersistencePanel from './config/PersistencePanel'
+import InfraPanel from './config/InfraPanel'
 import CachePanel from './config/CachePanel'
 import SchemaPanel from './config/SchemaPanel'
 import { useCacheDriver, useCacheNamespaces } from '../hooks/useQueueData'
 import { useSchema } from '../hooks/useSchema'
 
-type PersistenceSubTab = 'overview' | 'cache' | 'schema'
+type InfraSubTab = 'overview' | 'cache' | 'schema'
 
-export default function PersistenceTab({
+export default function InfraTab({
   rustfsHealth,
   onPingRustFS,
   services,
@@ -20,7 +20,7 @@ export default function PersistenceTab({
   services: ServiceItem[]
   onRefreshServices: () => void
 }) {
-  const [tab, setTab] = useState<PersistenceSubTab>('overview')
+  const [tab, setTab] = useState<InfraSubTab>('overview')
 
   const cache = useCacheNamespaces()
   const driver = useCacheDriver()
@@ -58,7 +58,7 @@ export default function PersistenceTab({
                 ['overview', 'Overview'],
                 ['cache', 'KV Cache'],
                 ['schema', 'DB Schema'],
-              ] as [PersistenceSubTab, string][]
+              ] as [InfraSubTab, string][]
             ).map(([key, label]) => {
               // Badges show a live count only when live data exists. While
               // loading, or when a service is unreachable, the badge is
@@ -105,7 +105,7 @@ export default function PersistenceTab({
       </div>
 
       {tab === 'overview' && (
-        <PersistencePanel
+        <InfraPanel
           rustfsHealth={rustfsHealth}
           openSignal={openSignal}
           onPingRustFS={onPingRustFS}
