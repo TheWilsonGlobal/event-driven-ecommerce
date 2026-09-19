@@ -12,10 +12,12 @@ import { ConfigCard, ReadOnlyRow, MultiFieldRow, type OpenSignal } from './confi
 import ServicesPanel from './config/ServicesPanel'
 import TaskQueuesPanel from './config/TaskQueuesPanel'
 import ApiPanel from './config/ApiPanel'
+import SystemLogsPanel from './config/SystemLogsPanel'
 import { useCacheDriver, useQueueData } from '../hooks/useQueueData'
 import { useApiDocs } from '../hooks/useApiDocs'
+import { useLogFiles } from '../hooks/useLogFiles'
 
-type ConfigSubTab = 'general' | 'services' | 'queues' | 'api'
+type ConfigSubTab = 'general' | 'services' | 'queues' | 'api' | 'logs'
 
 export default function ConfigTab({
   services,
@@ -33,6 +35,7 @@ export default function ConfigTab({
   const queueData = useQueueData()
   const driver = useCacheDriver()
   const apiDocs = useApiDocs()
+  const logFiles = useLogFiles()
 
   // Broadcast to every ConfigCard on the active tab. The nonce is what the
   // cards react to, so pressing the same button twice still re-applies after
@@ -40,14 +43,15 @@ export default function ConfigTab({
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
 
-  // The services and queues tabs own a plain table, not collapsible cards, so
-  // the expand/collapse pair would be inert there.
-  const hasCards = tab !== 'services' && tab !== 'queues'
+  // The services, queues and logs tabs own a plain table, not collapsible
+  // cards, so the expand/collapse pair would be inert there.
+  const hasCards = tab !== 'services' && tab !== 'queues' && tab !== 'logs'
 
   const reloading =
     (tab === 'queues' && queueData.loading) ||
     (tab === 'general' && driver.loading) ||
-    (tab === 'api' && apiDocs.loading)
+    (tab === 'api' && apiDocs.loading) ||
+    (tab === 'logs' && logFiles.loading)
   const handleReload = () => {
     if (tab === 'queues') {
       queueData.refetch()
@@ -58,6 +62,8 @@ export default function ConfigTab({
       onRefreshServices()
     } else if (tab === 'api') {
       apiDocs.refetch()
+    } else if (tab === 'logs') {
+      logFiles.refetch()
     }
   }
 
@@ -72,6 +78,7 @@ export default function ConfigTab({
                 ['services', 'Services'],
                 ['queues', 'Task Queues'],
                 ['api', 'APIs'],
+                ['logs', 'Logs'],
               ] as [ConfigSubTab, string][]
             ).map(([key, label]) => {
               const count =
@@ -81,7 +88,9 @@ export default function ConfigTab({
                     ? queueData.data?.summary.queueCount
                     : key === 'api'
                       ? apiDocs.data?.summary.endpointCount
-                      : undefined
+                      : key === 'logs'
+                        ? logFiles.data?.total
+                        : undefined
               return (
                 <button
                   key={key}
@@ -243,6 +252,13 @@ export default function ConfigTab({
           unreachable={apiDocs.unreachable}
           loading={apiDocs.loading}
           openSignal={openSignal}
+        />
+      )}
+      {tab === 'logs' && (
+        <SystemLogsPanel
+          files={logFiles.data?.files ?? []}
+          unreachable={logFiles.unreachable}
+          loading={logFiles.loading}
         />
       )}
     </>

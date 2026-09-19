@@ -3,9 +3,11 @@ import type { RustfsHealth, ServiceItem } from '../types'
 import { type OpenSignal } from './config/parts'
 import PersistencePanel from './config/PersistencePanel'
 import CachePanel from './config/CachePanel'
+import SchemaPanel from './config/SchemaPanel'
 import { useCacheDriver, useCacheNamespaces } from '../hooks/useQueueData'
+import { useSchema } from '../hooks/useSchema'
 
-type PersistenceSubTab = 'overview' | 'cache'
+type PersistenceSubTab = 'overview' | 'cache' | 'schema'
 
 export default function PersistenceTab({
   rustfsHealth,
@@ -22,6 +24,7 @@ export default function PersistenceTab({
 
   const cache = useCacheNamespaces()
   const driver = useCacheDriver()
+  const schema = useSchema()
 
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
@@ -29,10 +32,15 @@ export default function PersistenceTab({
   const hasCards = tab !== 'cache'
 
   // The live sub-tabs refetch in place.
-  const reloading = (tab === 'cache' && cache.loading) || (tab === 'overview' && driver.loading)
+  const reloading =
+    (tab === 'cache' && cache.loading) ||
+    (tab === 'overview' && driver.loading) ||
+    (tab === 'schema' && schema.loading)
   const handleReload = () => {
     if (tab === 'cache') {
       cache.refetch()
+    } else if (tab === 'schema') {
+      schema.refetch()
     } else {
       driver.refetch()
       onPingRustFS()
@@ -49,12 +57,18 @@ export default function PersistenceTab({
               [
                 ['overview', 'Overview'],
                 ['cache', 'KV Cache'],
+                ['schema', 'DB Schema'],
               ] as [PersistenceSubTab, string][]
             ).map(([key, label]) => {
               // Badges show a live count only when live data exists. While
-              // loading, or when Redis/ms-order is unreachable, the badge is
+              // loading, or when a service is unreachable, the badge is
               // omitted rather than showing a stale or invented number.
-              const count = key === 'cache' ? cache.data?.namespaces.length : undefined
+              const count =
+                key === 'cache'
+                  ? cache.data?.namespaces.length
+                  : key === 'schema'
+                    ? schema.data?.summary.tableCount
+                    : undefined
               return (
                 <button
                   key={key}
@@ -106,6 +120,14 @@ export default function PersistenceTab({
           loading={cache.loading}
           error={cache.error}
           onRetry={cache.refetch}
+        />
+      )}
+      {tab === 'schema' && (
+        <SchemaPanel
+          data={schema.data}
+          unreachable={schema.unreachable}
+          loading={schema.loading}
+          openSignal={openSignal}
         />
       )}
     </>
