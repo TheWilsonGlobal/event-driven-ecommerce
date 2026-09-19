@@ -11,6 +11,7 @@ import * as path from 'path'
 import {
   registerMetrics,
   buildLoggerOptions,
+  probeLokiReachable,
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
@@ -18,10 +19,10 @@ import { registerLogRoutes } from './diagnostics'
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
-const server: FastifyInstance = fastify({
-  // Pretty terminal output, plus shipping to Loki when it is reachable.
-  logger: buildLoggerOptions({ service: 'gateway' }),
-})
+// Checked once at boot, before the logger (and its Loki transport) is even
+// constructed — an unreachable Loki then produces one quiet line here
+// instead of a stack trace per log line for the life of the process.
+let server: FastifyInstance
 
 const PORT = parseInt(process.env.API_GATEWAY_PORT || process.env.PORT || '5460', 10)
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://127.0.0.1:5463'
@@ -29,6 +30,14 @@ const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1
 const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5465'
 
 async function bootstrap() {
+  const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
+  const lokiReachable =
+    process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
+
+  server = fastify({
+    logger: buildLoggerOptions({ service: 'gateway', lokiReachable }),
+  })
+
   // Before every other plugin, so the onResponse hook sees all traffic.
   registerMetrics(server, { service: 'gateway' })
 

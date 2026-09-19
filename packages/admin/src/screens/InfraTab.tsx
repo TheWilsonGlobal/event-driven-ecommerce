@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { RustfsHealth, ServiceItem } from '../types'
 import { type OpenSignal } from './config/parts'
 import InfraPanel from './config/InfraPanel'
@@ -6,6 +6,7 @@ import CachePanel from './config/CachePanel'
 import SchemaPanel from './config/SchemaPanel'
 import { useCacheDriver, useCacheNamespaces } from '../hooks/useQueueData'
 import { useSchema } from '../hooks/useSchema'
+import { useObservability } from '../hooks/useObservability'
 
 type InfraSubTab = 'overview' | 'cache' | 'schema'
 
@@ -25,6 +26,17 @@ export default function InfraTab({
   const cache = useCacheNamespaces()
   const driver = useCacheDriver()
   const schema = useSchema()
+  const {
+    prometheus,
+    elasticsearch,
+    loki,
+    grafana,
+    probeAll: probeObservability,
+  } = useObservability()
+
+  useEffect(() => {
+    probeObservability()
+  }, [])
 
   const [openSignal, setOpenSignal] = useState<OpenSignal>({ open: false, nonce: 0 })
   const broadcast = (open: boolean) => setOpenSignal((prev) => ({ open, nonce: prev.nonce + 1 }))
@@ -45,6 +57,7 @@ export default function InfraTab({
       driver.refetch()
       onPingRustFS()
       onRefreshServices()
+      probeObservability()
     }
   }
 
@@ -112,6 +125,11 @@ export default function InfraTab({
           driver={driver}
           services={services}
           onRefreshServices={onRefreshServices}
+          prometheus={prometheus}
+          elasticsearch={elasticsearch}
+          loki={loki}
+          grafana={grafana}
+          onProbeObservability={probeObservability}
         />
       )}
       {tab === 'cache' && (

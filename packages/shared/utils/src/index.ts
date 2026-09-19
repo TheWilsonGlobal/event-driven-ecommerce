@@ -1,5 +1,11 @@
 export { registerMetrics, type MetricsOptions, type ServiceMetrics } from './metrics'
-export { buildLoggerOptions, getLogsDir, getLogFilePath, type LoggerOptions } from './logger'
+export {
+  buildLoggerOptions,
+  probeLokiReachable,
+  getLogsDir,
+  getLogFilePath,
+  type LoggerOptions,
+} from './logger'
 export {
   listLogFiles,
   readLogFile,

@@ -20,6 +20,7 @@ import {
 import {
   registerMetrics,
   buildLoggerOptions,
+  probeLokiReachable,
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
@@ -56,12 +57,20 @@ const search = createSearchClient(process.env)
 const productsStore = createDocumentStore<ProductDoc>('products', dbConfig)
 const categoriesStore = createDocumentStore<CategoryDoc>('categories', dbConfig)
 
-const server: FastifyInstance = fastify({
-  // Pretty terminal output, plus shipping to Loki when it is reachable.
-  logger: buildLoggerOptions({ service: 'ms-product' }),
-})
+// Checked once at boot, before the logger (and its Loki transport) is even
+// constructed — an unreachable Loki then produces one quiet line here
+// instead of a stack trace per log line for the life of the process.
+let server: FastifyInstance
 
 async function bootstrap() {
+  const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
+  const lokiReachable =
+    process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
+
+  server = fastify({
+    logger: buildLoggerOptions({ service: 'ms-product', lokiReachable }),
+  })
+
   // Before every other plugin, so the onResponse hook sees all traffic.
   registerMetrics(server, { service: 'ms-product' })
 

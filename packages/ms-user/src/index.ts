@@ -12,6 +12,7 @@ import { loadDatabaseConfig, SEED_USERS } from '@ecommerce/shared-database'
 import {
   registerMetrics,
   buildLoggerOptions,
+  probeLokiReachable,
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
@@ -29,10 +30,10 @@ const PORT = parseInt(process.env.USER_SERVICE_PORT || '5463', 10)
 
 const prisma = new PrismaClient()
 
-const server: FastifyInstance = fastify({
-  // Pretty terminal output, plus shipping to Loki when it is reachable.
-  logger: buildLoggerOptions({ service: 'ms-user' }),
-})
+// Checked once at boot, before the logger (and its Loki transport) is even
+// constructed — an unreachable Loki then produces one quiet line here
+// instead of a stack trace per log line for the life of the process.
+let server: FastifyInstance
 
 // Placeholder dev password hash used for users created ad hoc via the admin
 // "Add User" flow, where no real credential is collected yet. Same approach
@@ -117,6 +118,14 @@ function toPublicUser(user: UserWithAddresses) {
 }
 
 async function bootstrap() {
+  const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
+  const lokiReachable =
+    process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
+
+  server = fastify({
+    logger: buildLoggerOptions({ service: 'ms-user', lokiReachable }),
+  })
+
   await seedIfEmpty()
 
   // Before every other plugin, so the onResponse hook sees all traffic.

@@ -24,6 +24,22 @@ export const RUSTFS_BUCKET = import.meta.env.VITE_RUSTFS_BUCKET
 export const RUSTFS_DATA_PATH = import.meta.env.VITE_RUSTFS_DATA_PATH
 export const RUSTFS_BUCKET_URL = `${RUSTFS_ENDPOINT}/${RUSTFS_BUCKET}`
 
+/**
+ * Observability backends. None of these run in this repo's own
+ * docker-compose — Prometheus/Loki/Grafana are provisioned by the
+ * infra-hub repo, Elasticsearch is optional (search falls back to an
+ * in-memory scan in ms-product when it's unreachable). Every service
+ * still exposes real endpoints for these regardless of whether the
+ * backend itself is currently running, so cards can probe honestly.
+ */
+export const PROMETHEUS_URL = import.meta.env.VITE_PROMETHEUS_URL
+export const ELASTICSEARCH_HOST = import.meta.env.VITE_ELASTICSEARCH_HOST
+export const ELASTICSEARCH_ENABLED = import.meta.env.VITE_ELASTICSEARCH_ENABLED === 'true'
+export const LOKI_HOST = import.meta.env.VITE_LOKI_HOST
+export const LOKI_ENABLED = import.meta.env.VITE_LOKI_ENABLED === 'true'
+/** Dashboards for the three backends above. Owned by infra-hub (host 3005 by default). */
+export const GRAFANA_URL = import.meta.env.VITE_GRAFANA_URL
+
 /** Port-only views, for panels that display a port rather than an origin. */
 export const ADMIN_PORT = new URL(ADMIN_URL).port
 export const GATEWAY_PORT = new URL(GATEWAY_URL).port

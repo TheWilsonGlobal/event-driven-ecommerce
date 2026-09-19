@@ -19,6 +19,7 @@
 import type { FastifyLoggerOptions } from 'fastify'
 import type { PinoLoggerOptions } from 'fastify/types/logger'
 import * as fs from 'fs'
+import * as net from 'net'
 import * as path from 'path'
 
 /**
@@ -58,6 +59,48 @@ export interface LoggerOptions {
   level?: string
   /** Environment to read configuration from. Defaults to process.env. */
   env?: NodeJS.ProcessEnv
+  /**
+   * Result of a pre-flight reachability check against Loki's `/ready`
+   * endpoint (see `probeLokiReachable` below), run once at boot before
+   * `fastify()` is constructed. When `false`, the Loki transport target is
+   * skipped entirely — console/file logging is unaffected either way.
+   *
+   * Omit this (or pass `true`) to keep the old always-attach behavior.
+   * Passed explicitly by every service's bootstrap so a downed Loki produces
+   * one quiet log line at boot instead of a per-log-line ECONNREFUSED stack
+   * trace for the life of the process.
+   */
+  lokiReachable?: boolean
+}
+
+/**
+ * Quick TCP-level reachability check for Loki, run once at boot. Not a full
+ * HTTP GET /ready — a raw connect is enough to know "is anything listening
+ * here", and avoids pulling in a fetch/AbortController round trip before the
+ * server has even started.
+ */
+export function probeLokiReachable(lokiHost: string, timeoutMs = 500): Promise<boolean> {
+  return new Promise((resolve) => {
+    let url: URL
+    try {
+      url = new URL(lokiHost)
+    } catch {
+      resolve(false)
+      return
+    }
+    const socket = net.createConnection({
+      host: url.hostname,
+      port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
+      timeout: timeoutMs,
+    })
+    const finish = (ok: boolean) => {
+      socket.destroy()
+      resolve(ok)
+    }
+    socket.once('connect', () => finish(true))
+    socket.once('timeout', () => finish(false))
+    socket.once('error', () => finish(false))
+  })
 }
 
 /**
@@ -72,10 +115,19 @@ export function buildLoggerOptions(options: LoggerOptions): PinoLoggerConfig {
 
   // Explicit opt-OUT rather than opt-in: a developer who starts the logging
   // profile should get logs in Grafana without also having to discover a flag.
-  // Transport construction below is failure-tolerant, so leaving this on when
-  // Loki is down costs nothing.
-  const lokiEnabled = env.LOKI_ENABLED !== 'false'
+  const lokiEnabled = env.LOKI_ENABLED !== 'false' && options.lokiReachable !== false
   const lokiHost = env.LOKI_HOST || 'http://localhost:3100'
+
+  // Printed once at boot (never per log line) so an unreachable Loki is
+  // still discoverable without the ECONNREFUSED spam a downed target used
+  // to produce for the life of the process.
+  if (env.LOKI_ENABLED !== 'false' && options.lokiReachable === false) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[${options.service}] Loki unreachable at ${lokiHost} — shipping skipped for this run. ` +
+        'Console + file logging are unaffected. Start it with: cd ../infra-hub && docker compose --profile logging up -d'
+    )
+  }
 
   const prettyTarget = {
     target: 'pino-pretty',

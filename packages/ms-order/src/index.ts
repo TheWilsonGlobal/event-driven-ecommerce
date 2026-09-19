@@ -18,6 +18,7 @@ import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS, redisEnabled } fr
 import {
   registerMetrics,
   buildLoggerOptions,
+  probeLokiReachable,
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
@@ -181,12 +182,20 @@ async function generateUniqueOrderNumber(): Promise<string> {
   throw new Error('Failed to generate a unique order number after 5 attempts')
 }
 
-const server: FastifyInstance = fastify({
-  // Pretty terminal output, plus shipping to Loki when it is reachable.
-  logger: buildLoggerOptions({ service: 'ms-order' }),
-})
+// Checked once at boot, before the logger (and its Loki transport) is even
+// constructed — an unreachable Loki then produces one quiet line here
+// instead of a stack trace per log line for the life of the process.
+let server: FastifyInstance
 
 async function bootstrap() {
+  const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
+  const lokiReachable =
+    process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
+
+  server = fastify({
+    logger: buildLoggerOptions({ service: 'ms-order', lokiReachable }),
+  })
+
   // Before every other plugin, so the onResponse hook sees all traffic.
   registerMetrics(server, { service: 'ms-order' })
 

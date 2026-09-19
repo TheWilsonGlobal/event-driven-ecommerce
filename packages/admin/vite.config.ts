@@ -42,6 +42,17 @@ export default defineConfig(({ mode }) => {
     VITE_RUSTFS_CONSOLE_ENDPOINT: env.RUSTFS_CONSOLE_ENDPOINT || 'http://localhost:9001',
     VITE_RUSTFS_BUCKET: env.RUSTFS_BUCKET || 'ecommerce-uploads',
     VITE_RUSTFS_DATA_PATH: env.RUSTFS_DATA_PATH || 'C:\\Hub\\RustFS',
+    VITE_PROMETHEUS_URL: `http://${host}:${port('PROMETHEUS_PORT', '9090')}`,
+    VITE_ELASTICSEARCH_HOST: env.ELASTICSEARCH_HOST || 'http://localhost:9200',
+    VITE_ELASTICSEARCH_ENABLED: String(env.ELASTICSEARCH_ENABLED !== 'false'),
+    VITE_LOKI_HOST: env.LOKI_HOST || 'http://localhost:3100',
+    VITE_LOKI_ENABLED: String(env.LOKI_ENABLED !== 'false'),
+    // Grafana itself is not configured in this repo's own .env — it's owned
+    // by the infra-hub repo, whose docker-compose.yml maps host 3005 ->
+    // container 3000 by default (GRAFANA_PORT there overrides it). Read
+    // from an optional GRAFANA_PORT here too, so setting it in this repo's
+    // own .env (to match a customized infra-hub) still works.
+    VITE_GRAFANA_URL: `http://${host}:${port('GRAFANA_PORT', '3005')}`,
   })
 
   return {
