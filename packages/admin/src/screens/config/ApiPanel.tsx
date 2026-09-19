@@ -4,11 +4,10 @@ import { ConfigCard, type OpenSignal } from './parts'
 import { EmptyState, Spinner, StatChip } from '../../components/ui'
 import { ExternalLinkIcon } from '../../components/icons'
 
-/** GET/POST/PUT/DELETE first (the common cases), then anything else. OPTIONS
- *  is shown as its own summary chip next to Services rather than mixed in
- *  here, since it is CORS-preflight plumbing rather than an API verb an
- *  operator calls directly. */
-const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'ANY']
+/** OPTIONS first — CORS-preflight plumbing rather than an API verb an
+ *  operator calls directly, so it's grouped with undoc as a "noise" column —
+ *  then GET/POST/PUT/DELETE (the common cases), then anything else. */
+const METHOD_ORDER = ['OPTIONS', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'ANY']
 
 export default function ApiPanel({
   data,
@@ -54,6 +53,11 @@ export default function ApiPanel({
     return <EmptyState message="No service is currently reachable for endpoint inventory." />
 
   const undocumented = data.summary.endpointCount - data.summary.documentedCount
+  // Drop columns no route anywhere uses (in practice just ANY, a rare
+  // catch-all) instead of reserving a permanently-empty 70px slot for them —
+  // unlike GET/POST/etc, which stay even when a single service has none, so
+  // that service's row still lines up under the header.
+  const visibleMethods = METHOD_ORDER.filter((m) => (data.summary.methodCounts[m] ?? 0) > 0)
 
   return (
     <>
@@ -77,16 +81,6 @@ export default function ApiPanel({
         </div>
         <div className="toolbar-right">
           <StatChip value={groups.length} label="Services" />
-          {data.summary.methodCounts.OPTIONS > 0 && (
-            <span
-              className={`chip chip-stat chip-btn method-chip method-OPTIONS${methodFilter === 'OPTIONS' ? ' chip-btn-active' : ''}`}
-              onClick={() => toggleMethodFilter('OPTIONS')}
-              title="Filter to OPTIONS routes"
-            >
-              <span className="chip-stat-value">{data.summary.methodCounts.OPTIONS}</span>
-              <span className="chip-stat-label">OPTIONS</span>
-            </span>
-          )}
           {/* Same column widths/gap/order as each group row's metrics below
               (.config-metrics, shared with ConfigCard's own metrics slot), so
               this summary lines up as the header of one shared table rather
@@ -96,23 +90,6 @@ export default function ApiPanel({
               toolbar has no padding of its own to eat into. Each column also
               doubles as a filter trigger for the endpoint list below. */}
           <span className="config-metrics clickable" style={{ paddingRight: 14 }}>
-            {METHOD_ORDER.map((m) => {
-              const count = data.summary.methodCounts[m] ?? 0
-              return (
-                <span
-                  key={m}
-                  className={`${count ? '' : 'metric-empty'} ${methodFilter === m ? 'metric-active' : ''}`.trim()}
-                  onClick={count > 0 ? () => toggleMethodFilter(m) : undefined}
-                  title={count > 0 ? `Filter to ${m} routes` : undefined}
-                >
-                  {count > 0 && (
-                    <>
-                      <b>{count}</b> {m}
-                    </>
-                  )}
-                </span>
-              )
-            })}
             <span
               className={`${undocumented > 0 ? '' : 'metric-empty'} ${undocOnly ? 'metric-active' : ''}`.trim()}
               onClick={undocumented > 0 ? toggleUndocOnly : undefined}
@@ -124,7 +101,24 @@ export default function ApiPanel({
                 </>
               )}
             </span>
-            <span onClick={clearHeaderFilters} title="Clear header filters">
+            {visibleMethods.map((m) => {
+              const count = data.summary.methodCounts[m] ?? 0
+              return (
+                <span
+                  key={m}
+                  className={`metric-${m} ${count ? '' : 'metric-empty'} ${methodFilter === m ? 'metric-active' : ''}`.trim()}
+                  onClick={count > 0 ? () => toggleMethodFilter(m) : undefined}
+                  title={count > 0 ? `Filter to ${m} routes` : undefined}
+                >
+                  {count > 0 && (
+                    <>
+                      <b>{count}</b> {m}
+                    </>
+                  )}
+                </span>
+              )
+            })}
+            <span className="metric-routes" onClick={clearHeaderFilters} title="Clear header filters">
               <b>{data.summary.endpointCount}</b> routes
             </span>
           </span>
@@ -189,17 +183,6 @@ export default function ApiPanel({
               defaultOpen={false}
               metrics={
                 <>
-                  {METHOD_ORDER.map((m) => (
-                    <span key={m} className={counts[m] ? undefined : 'metric-empty'}>
-                      {counts[m] ? (
-                        <>
-                          <b>{counts[m]}</b> {m}
-                        </>
-                      ) : (
-                        ''
-                      )}
-                    </span>
-                  ))}
                   <span className={undoc > 0 ? undefined : 'metric-empty'}>
                     {undoc > 0 ? (
                       <>
@@ -209,7 +192,18 @@ export default function ApiPanel({
                       ''
                     )}
                   </span>
-                  <span>
+                  {visibleMethods.map((m) => (
+                    <span key={m} className={`metric-${m} ${counts[m] ? '' : 'metric-empty'}`.trim()}>
+                      {counts[m] ? (
+                        <>
+                          <b>{counts[m]}</b> {m}
+                        </>
+                      ) : (
+                        ''
+                      )}
+                    </span>
+                  ))}
+                  <span className="metric-routes">
                     <b>{group.endpoints.length}</b> routes
                   </span>
                 </>

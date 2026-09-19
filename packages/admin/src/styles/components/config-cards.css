@@ -55,7 +55,6 @@
 .config-metrics {
   display: flex;
   align-items: center;
-  gap: 10px;
   font-size: 12px;
   color: var(--text-dim);
 }
@@ -64,6 +63,10 @@
   width: 70px;
   text-align: right;
   white-space: nowrap;
+  margin-left: 10px;
+}
+.config-metrics > span:first-child {
+  margin-left: 0;
 }
 .config-metrics b {
   color: var(--text-bright);
@@ -73,6 +76,40 @@
      leaves a blank gap in place rather than collapsing the column and
      shifting every metric after it leftward. */
   width: 70px;
+}
+/* Same verb→color mapping as .method-chip (schema-endpoints.css), applied to
+   just the count here since this row is plain text, not chips. */
+.metric-GET b {
+  color: var(--blue-light);
+}
+.metric-POST b {
+  color: var(--green-light);
+}
+.metric-PUT b,
+.metric-PATCH b {
+  color: var(--amber-light);
+}
+.metric-DELETE b {
+  color: var(--red-light);
+}
+.metric-ANY b {
+  color: var(--purple);
+}
+.config-metrics.clickable > span.metric-active.metric-GET b,
+.config-metrics.clickable > span.metric-active.metric-POST b,
+.config-metrics.clickable > span.metric-active.metric-PUT b,
+.config-metrics.clickable > span.metric-active.metric-PATCH b,
+.config-metrics.clickable > span.metric-active.metric-DELETE b,
+.config-metrics.clickable > span.metric-active.metric-ANY b {
+  /* Active/filtered state still wins over the verb color. */
+  color: var(--blue-light);
+}
+/* Routes stays the same fixed 70px column as every other metric (so its
+   text lines up vertically row to row), but drops the 10px gap that
+   precedes every other column — it always has a value, so it never needs
+   the breathing room that separates the (sometimes-empty) method columns. */
+.metric-routes {
+  margin-left: 0;
 }
 .config-metrics.clickable > span {
   cursor: pointer;
