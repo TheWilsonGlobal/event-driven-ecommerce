@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '../../node_modules/.prisma-ms-user/client'
+import { USER_ROLES } from '@ecommerce/shared-types'
 import { PLACEHOLDER_PASSWORD_HASH } from '../seed'
 import { toPublicUser } from '../userMapping'
 
@@ -70,7 +71,7 @@ export function registerUserRoutes(server: FastifyInstance, { prisma }: { prisma
             email: { type: 'string' },
             firstName: { type: 'string' },
             lastName: { type: 'string' },
-            role: { type: 'string' },
+            role: { type: 'string', enum: [...USER_ROLES] },
             isActive: { type: 'boolean' },
             addressLine1: { type: 'string' },
             city: { type: 'string' },
@@ -155,7 +156,7 @@ export function registerUserRoutes(server: FastifyInstance, { prisma }: { prisma
           type: 'object',
           properties: {
             isActive: { type: 'boolean' },
-            role: { type: 'string' },
+            role: { type: 'string', enum: [...USER_ROLES] },
             firstName: { type: 'string' },
             lastName: { type: 'string' },
           },

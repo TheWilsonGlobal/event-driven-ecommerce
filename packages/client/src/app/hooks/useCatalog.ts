@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Product, Category } from '../types'
 import { getProducts, getCategories, ProductApiError } from '../../lib/api'
 
-const ALL_CATEGORY: Category = { id: 'all', name: 'All Products', icon: '✨', slug: 'all' }
+// Synthetic pseudo-category for the "show everything" tab — not a real
+// category from ms-product, so description/productCount are placeholders.
+const ALL_CATEGORY: Category = {
+  id: 'all',
+  name: 'All Products',
+  icon: '✨',
+  slug: 'all',
+  description: 'Every product in the catalog',
+  productCount: 0,
+}
 
 export function useCatalog() {
   const [products, setProducts] = useState<Product[]>([])

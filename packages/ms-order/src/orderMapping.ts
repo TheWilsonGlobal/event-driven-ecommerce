@@ -1,13 +1,14 @@
 import { Prisma, PrismaClient } from '../node_modules/.prisma-ms-order/client'
+import {
+  ORDER_STATUSES,
+  type Order,
+  type OrderAddress,
+  type OrderStatus,
+  type PaymentMethod,
+  type PaymentStatus,
+} from '@ecommerce/shared-types'
 
-export const ORDER_STATUSES = [
-  'PENDING',
-  'CONFIRMED',
-  'PROCESSING',
-  'SHIPPED',
-  'DELIVERED',
-  'CANCELLED',
-] as const
+export { ORDER_STATUSES }
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
   include: { items: true; payments: true }
@@ -15,9 +16,7 @@ export type OrderWithRelations = Prisma.OrderGetPayload<{
 
 // Inverse of paymentStatusToPaymentRowStatus (see src/seedOrders.ts) — must be
 // kept consistent with that mapping so paymentStatus round-trips through the API.
-export function paymentRowStatusToPaymentStatus(
-  status: string
-): 'PAID' | 'PENDING' | 'FAILED' | 'REFUNDED' {
+export function paymentRowStatusToPaymentStatus(status: string): PaymentStatus {
   switch (status) {
     case 'COMPLETED':
       return 'PAID'
@@ -31,18 +30,12 @@ export function paymentRowStatusToPaymentStatus(
   }
 }
 
-export function toOrderRecord(order: OrderWithRelations) {
+export function toOrderRecord(order: OrderWithRelations): Order {
   const latestPayment = [...order.payments].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )[0]
 
-  const shippingAddress = JSON.parse(order.shippingAddress) as {
-    addressLine1: string
-    city: string
-    state: string
-    postalCode: string
-    country: string
-  }
+  const shippingAddress = JSON.parse(order.shippingAddress) as OrderAddress
 
   return {
     id: order.id,
@@ -50,14 +43,17 @@ export function toOrderRecord(order: OrderWithRelations) {
     customerId: order.userId,
     customerName: order.customerName,
     customerEmail: order.customerEmail,
-    status: order.status,
+    // order.status/payment.paymentMethod are untyped Prisma String columns —
+    // this mapping is the trusted boundary where they're asserted into the
+    // OrderStatus/PaymentMethod contract the rest of the app relies on.
+    status: order.status as OrderStatus,
     subtotal: Number(order.subtotal),
     taxAmount: Number(order.taxAmount),
     shippingAmount: Number(order.shippingAmount),
     discountAmount: Number(order.discountAmount),
     totalAmount: Number(order.totalAmount),
     currency: order.currency,
-    paymentMethod: latestPayment ? latestPayment.paymentMethod : 'MOCK',
+    paymentMethod: latestPayment ? (latestPayment.paymentMethod as PaymentMethod) : 'MOCK',
     paymentStatus: latestPayment
       ? paymentRowStatusToPaymentStatus(latestPayment.status)
       : 'PENDING',
@@ -76,42 +72,7 @@ export function toOrderRecord(order: OrderWithRelations) {
   }
 }
 
-export interface CreateOrderBody {
-  userId?: string
-  /**
-   * Whether the caller already captured payment before calling this endpoint.
-   *
-   * The existing client checkout captures client-side and so omits this (or
-   * sends true), producing a CONFIRMED order exactly as before — this field is
-   * backwards-compatible by default. Sending `false` models the other real
-   * branch of the flow: an order awaiting payment, created as PENDING, which
-   * is what makes the order-expiration queue reachable.
-   */
-  paymentPreCaptured?: boolean
-  customerName: string
-  customerEmail: string
-  items: {
-    productId: string
-    sku: string
-    title: string
-    unitPrice: number
-    quantity: number
-  }[]
-  shippingAddress: {
-    addressLine1: string
-    city: string
-    state: string
-    postalCode: string
-    country: string
-  }
-  paymentMethod: string
-  subtotal: number
-  taxAmount?: number
-  shippingAmount?: number
-  discountAmount?: number
-  totalAmount: number
-  currency?: string
-}
+export type { CreateOrderBody } from '@ecommerce/shared-types'
 
 export async function generateUniqueOrderNumber(prisma: PrismaClient): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
