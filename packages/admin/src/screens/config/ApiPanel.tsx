@@ -4,19 +4,11 @@ import { ConfigCard, type OpenSignal } from './parts'
 import { EmptyState, Spinner } from '../../components/ui'
 import { ExternalLinkIcon } from '../../components/icons'
 
-/** GET/POST/PUT/DELETE first (the common cases), then anything else. */
+/** GET/POST/PUT/DELETE first (the common cases), then anything else. OPTIONS
+ *  is shown as its own summary chip next to Services rather than mixed in
+ *  here, since it is CORS-preflight plumbing rather than an API verb an
+ *  operator calls directly. */
 const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'ANY']
-
-function orderMethods(counts: Record<string, number>): [string, number][] {
-  return Object.entries(counts).sort(([a], [b]) => {
-    const ia = METHOD_ORDER.indexOf(a)
-    const ib = METHOD_ORDER.indexOf(b)
-    if (ia !== -1 && ib !== -1) return ia - ib
-    if (ia !== -1) return -1
-    if (ib !== -1) return 1
-    return a.localeCompare(b)
-  })
-}
 
 export default function ApiPanel({
   data,
@@ -30,22 +22,32 @@ export default function ApiPanel({
   openSignal?: OpenSignal
 }) {
   const [filter, setFilter] = useState('')
+  const [methodFilter, setMethodFilter] = useState<string | null>(null)
+  const [undocOnly, setUndocOnly] = useState(false)
+
+  const toggleMethodFilter = (m: string) => setMethodFilter((prev) => (prev === m ? null : m))
+  const toggleUndocOnly = () => setUndocOnly((prev) => !prev)
+  const clearHeaderFilters = () => {
+    setMethodFilter(null)
+    setUndocOnly(false)
+  }
 
   const groups = useMemo(() => {
     if (!data) return []
     const q = filter.trim().toLowerCase()
-    if (!q) return data.groups
     return data.groups
       .map((g) => ({
         ...g,
-        endpoints: g.name.toLowerCase().includes(q)
-          ? g.endpoints
-          : g.endpoints.filter(
-              (e) => e.path.toLowerCase().includes(q) || e.method.toLowerCase().includes(q)
-            ),
+        endpoints: g.endpoints.filter((e) => {
+          if (methodFilter && e.method !== methodFilter) return false
+          if (undocOnly && e.documented) return false
+          if (!q) return true
+          if (g.name.toLowerCase().includes(q)) return true
+          return e.path.toLowerCase().includes(q) || e.method.toLowerCase().includes(q)
+        }),
       }))
       .filter((g) => g.endpoints.length > 0)
-  }, [data, filter])
+  }, [data, filter, methodFilter, undocOnly])
 
   if (loading && !data) return <Spinner label="Fetching live OpenAPI docs from each service…" />
   if (!data) return <EmptyState message="No service is currently reachable for endpoint inventory." />
@@ -54,6 +56,14 @@ export default function ApiPanel({
 
   return (
     <>
+      {undocumented > 0 && (
+        <div className="warn-banner">
+          {undocumented} of {data.summary.endpointCount} routes carry no route-level description —
+          mostly the gateway's proxy routes and Swagger's own static UI routes, which have no schema
+          of their own to describe them, documented in each upstream service's own Swagger UI instead.
+        </div>
+      )}
+
       <div className="toolbar">
         <div className="toolbar-left">
           <input
@@ -64,14 +74,57 @@ export default function ApiPanel({
           />
         </div>
         <div className="toolbar-right">
-          <span className="chip chip-slate">Services {groups.length}</span>
-          {orderMethods(data.summary.methodCounts).map(([method, count]) => (
-            <span key={method} className={`chip method-chip method-${method}`}>
-              {method} {count}
+          <span className="chip chip-slate">{groups.length} Services</span>
+          {data.summary.methodCounts.OPTIONS > 0 && (
+            <span
+              className={`chip chip-btn method-chip method-OPTIONS${methodFilter === 'OPTIONS' ? ' chip-btn-active' : ''}`}
+              onClick={() => toggleMethodFilter('OPTIONS')}
+              title="Filter to OPTIONS routes"
+            >
+              {data.summary.methodCounts.OPTIONS} OPTIONS
             </span>
-          ))}
-          {undocumented > 0 && <span className="chip chip-slate">Undoc {undocumented}</span>}
-          <span className="chip chip-slate">Routes {data.summary.endpointCount}</span>
+          )}
+          {/* Same column widths/gap/order as each group row's metrics below
+              (.config-metrics, shared with ConfigCard's own metrics slot), so
+              this summary lines up as the header of one shared table rather
+              than being an independently-sized row. The 14px right padding
+              matches .config-card-head's own padding — without it this row's
+              right edge sits 14px further right than every card's, since the
+              toolbar has no padding of its own to eat into. Each column also
+              doubles as a filter trigger for the endpoint list below. */}
+          <span className="config-metrics clickable" style={{ paddingRight: 14 }}>
+            {METHOD_ORDER.map((m) => {
+              const count = data.summary.methodCounts[m] ?? 0
+              return (
+                <span
+                  key={m}
+                  className={`${count ? '' : 'metric-empty'} ${methodFilter === m ? 'metric-active' : ''}`.trim()}
+                  onClick={count > 0 ? () => toggleMethodFilter(m) : undefined}
+                  title={count > 0 ? `Filter to ${m} routes` : undefined}
+                >
+                  {count > 0 && (
+                    <>
+                      <b>{count}</b> {m}
+                    </>
+                  )}
+                </span>
+              )
+            })}
+            <span
+              className={`${undocumented > 0 ? '' : 'metric-empty'} ${undocOnly ? 'metric-active' : ''}`.trim()}
+              onClick={undocumented > 0 ? toggleUndocOnly : undefined}
+              title={undocumented > 0 ? 'Filter to undocumented routes' : undefined}
+            >
+              {undocumented > 0 && (
+                <>
+                  <b>{undocumented}</b> undoc
+                </>
+              )}
+            </span>
+            <span onClick={clearHeaderFilters} title="Clear header filters">
+              <b>{data.summary.endpointCount}</b> routes
+            </span>
+          </span>
         </div>
       </div>
 
@@ -83,16 +136,14 @@ export default function ApiPanel({
         </div>
       )}
 
-      {undocumented > 0 && (
-        <div className="warn-banner">
-          {undocumented} of {data.summary.endpointCount} routes carry no route-level description —
-          mostly the gateway's proxy routes and Swagger's own static UI routes, which have no schema
-          of their own to describe them, documented in each upstream service's own Swagger UI instead.
-        </div>
-      )}
-
       {groups.length === 0 ? (
-        <EmptyState message={`No endpoints match "${filter}"`} />
+        <EmptyState
+          message={
+            filter
+              ? `No endpoints match "${filter}"`
+              : 'No endpoints match the active header filter.'
+          }
+        />
       ) : (
         groups.map((group) => {
           const counts: Record<string, number> = {}
@@ -106,12 +157,31 @@ export default function ApiPanel({
               key={group.name}
               openSignal={openSignal}
               title={
-                <>
-                  <span className="mono">{group.name}</span>
-                  <span className="chip chip-slate" style={{ marginLeft: 8 }}>
+                <span style={{ display: 'flex', alignItems: 'center' }}>
+                  <span className="mono" style={{ display: 'inline-block', width: 90 }}>
+                    {group.name}
+                  </span>
+                  <span
+                    className="chip chip-slate"
+                    style={{ width: 50, textAlign: 'center', marginRight: 8 }}
+                  >
                     {group.port}
                   </span>
-                </>
+                  <a
+                    href={group.docsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: 'var(--blue-light)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {group.docsUrl} <ExternalLinkIcon style={{ width: 10, height: 10 }} />
+                  </a>
+                </span>
               }
               defaultOpen={false}
               metrics={
@@ -142,19 +212,6 @@ export default function ApiPanel({
                 </>
               }
             >
-              <div className="config-row">
-                <span className="k">Swagger / OpenAPI docs</span>
-                <span className="config-control">
-                  <a
-                    className="btn btn-ghost btn-sm"
-                    href={group.docsUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open /api-docs <ExternalLinkIcon style={{ width: 12, height: 12 }} />
-                  </a>
-                </span>
-              </div>
               {group.endpoints.map((e) => (
                 <div key={`${e.method} ${e.path}`} className="endpoint-row">
                   <span className={`method-chip method-${e.method}`}>{e.method}</span>

@@ -428,20 +428,39 @@ tbody tr:nth-child(even) td {
 .config-metrics {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   font-size: 12px;
   color: var(--text-dim);
 }
 .config-metrics > span {
   display: inline-block;
-  width: 64px;
+  width: 60px;
   text-align: right;
 }
 .config-metrics b {
   color: var(--text-bright);
 }
 .metric-empty {
-  min-width: 1px;
+  /* Keeps the same column width as a populated metric so a zero count
+     leaves a blank gap in place rather than collapsing the column and
+     shifting every metric after it leftward. */
+  width: 60px;
+}
+.config-metrics.clickable > span {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+.config-metrics.clickable > span:not(.metric-empty):hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-bright);
+}
+.config-metrics.clickable > span.metric-active {
+  background: var(--blue-bg);
+  color: var(--blue-light);
+}
+.config-metrics.clickable > span.metric-active b {
+  color: var(--blue-light);
 }
 .config-card-body {
   padding: 4px 14px 12px;
@@ -563,6 +582,11 @@ tbody tr:nth-child(even) td {
   background: var(--purple-bg);
   color: var(--purple);
   border: 1px solid var(--purple-border);
+}
+.method-OPTIONS {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
 }
 
 .schema-table {
