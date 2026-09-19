@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ms-user
-          image: microservices-ecommerce/ms-user:latest
+          image: micro-services/ms-user:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5463

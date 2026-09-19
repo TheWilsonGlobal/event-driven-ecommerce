@@ -1,5 +1,5 @@
 {
-  "name": "microservices-ecommerce",
+  "name": "micro-services",
   "version": "1.0.0",
   "description": "A scalable microservices e-commerce platform built with Node.js, TypeScript, and React",
   "private": true,
@@ -48,7 +48,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/microservices-ecommerce.git"
+    "url": "https://github.com/your-username/micro-services.git"
   },
   "author": "Your Name",
   "license": "MIT",

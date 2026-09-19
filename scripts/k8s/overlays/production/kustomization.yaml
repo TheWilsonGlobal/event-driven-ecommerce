@@ -11,13 +11,13 @@ patches:
   - path: patch-resources.yaml
 
 images:
-  - name: microservices-ecommerce/api-gateway
+  - name: micro-services/api-gateway
     newTag: latest
-  - name: microservices-ecommerce/ms-user
+  - name: micro-services/ms-user
     newTag: latest
-  - name: microservices-ecommerce/ms-product
+  - name: micro-services/ms-product
     newTag: latest
-  - name: microservices-ecommerce/ms-order
+  - name: micro-services/ms-order
     newTag: latest
-  - name: microservices-ecommerce/frontend
+  - name: micro-services/frontend
     newTag: latest

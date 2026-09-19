@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ms-order
-          image: microservices-ecommerce/ms-order:latest
+          image: micro-services/ms-order:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5465

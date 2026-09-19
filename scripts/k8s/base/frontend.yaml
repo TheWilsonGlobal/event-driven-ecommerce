@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: microservices-ecommerce/frontend:latest
+          image: micro-services/frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5462

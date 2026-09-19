@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ms-product
-          image: microservices-ecommerce/ms-product:latest
+          image: micro-services/ms-product:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5464

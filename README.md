@@ -37,8 +37,8 @@ This monorepo contains the following services:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/microservices-ecommerce.git
-cd microservices-ecommerce
+git clone https://github.com/your-username/micro-services.git
+cd micro-services
 ```
 
 2. Copy environment variables:

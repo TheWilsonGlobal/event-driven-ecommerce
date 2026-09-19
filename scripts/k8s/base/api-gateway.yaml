@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: microservices-ecommerce/api-gateway:latest
+          image: micro-services/api-gateway:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5460

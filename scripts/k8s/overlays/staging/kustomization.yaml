@@ -10,13 +10,13 @@ resources:
 namePrefix: staging-
 
 images:
-  - name: microservices-ecommerce/api-gateway
+  - name: micro-services/api-gateway
     newTag: staging
-  - name: microservices-ecommerce/ms-user
+  - name: micro-services/ms-user
     newTag: staging
-  - name: microservices-ecommerce/ms-product
+  - name: micro-services/ms-product
     newTag: staging
-  - name: microservices-ecommerce/ms-order
+  - name: micro-services/ms-order
     newTag: staging
-  - name: microservices-ecommerce/frontend
+  - name: micro-services/frontend
     newTag: staging
