@@ -1,0 +1,58 @@
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.btn {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--blue);
+  color: white;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--blue-hover);
+}
+.btn-danger {
+  background: var(--red);
+  color: white;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+.btn-success {
+  background: var(--green);
+  color: #052e16;
+}
+.btn-success:hover:not(:disabled) {
+  background: #16a34a;
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--border);
+  color: var(--text);
+}
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 5px;
+}
+.btn-sidebar {
+  padding: 5px 8px;
+  font-size: 12px;
+  flex: 1;
+  justify-content: center;
+}

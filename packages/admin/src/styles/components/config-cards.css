@@ -1,0 +1,135 @@
+/* ── Config Cards (collapsible) ──────────────────────────────────────── */
+.config-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.config-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.config-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.config-card-head:hover {
+  background: var(--panel-alt);
+}
+.config-card-head .chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.config-card-head .chevron.open {
+  transform: rotate(0deg);
+}
+.config-card-head .title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.config-card-head .spacer {
+  flex: 1;
+}
+.count-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--text-dim);
+}
+.config-metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.config-metrics > span {
+  display: inline-block;
+  width: 70px;
+  text-align: right;
+  white-space: nowrap;
+}
+.config-metrics b {
+  color: var(--text-bright);
+}
+.metric-empty {
+  /* Keeps the same column width as a populated metric so a zero count
+     leaves a blank gap in place rather than collapsing the column and
+     shifting every metric after it leftward. */
+  width: 70px;
+}
+.config-metrics.clickable > span {
+  cursor: pointer;
+  border-radius: 4px;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.config-metrics.clickable > span:not(.metric-empty):hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-bright);
+}
+.config-metrics.clickable > span.metric-active {
+  background: var(--blue-bg);
+  color: var(--blue-light);
+}
+.config-metrics.clickable > span.metric-active b {
+  color: var(--blue-light);
+}
+.config-card-body {
+  padding: 4px 14px 12px;
+  border-top: 1px solid var(--border);
+}
+.config-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 320px) 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 10px;
+  margin: 0 -10px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+}
+.config-row:last-child {
+  border-bottom: none;
+}
+.config-row:nth-child(even) {
+  background: var(--row-even);
+}
+.config-row .k {
+  color: var(--text-dim);
+}
+.config-row .v {
+  font-weight: 600;
+  color: var(--text-bright);
+  text-align: left;
+  justify-self: start;
+}
+.config-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+}
+.config-row .v.bool-true {
+  color: var(--green-light);
+}
+.config-row .v.bool-false {
+  color: var(--text-faint);
+}

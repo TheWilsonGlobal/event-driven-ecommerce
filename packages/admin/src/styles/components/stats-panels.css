@@ -1,0 +1,96 @@
+/* ── Stat Cards ───────────────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+.stat-card .label {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.stat-card .value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-bright);
+}
+.stat-card .value.blue {
+  color: var(--blue-light);
+}
+.stat-card .value.green {
+  color: var(--green-light);
+}
+.stat-card .value.yellow {
+  color: var(--amber-light);
+}
+.stat-card .value.red {
+  color: var(--red-light);
+}
+.stat-card .value.purple {
+  color: var(--purple);
+}
+
+/* ── Panels & Grids ───────────────────────────────────────────────────── */
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.panel h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-bright);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 4px 8px;
+  margin: 0 -8px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+}
+.panel-row:last-child {
+  border-bottom: none;
+}
+.panel-row:nth-child(even) {
+  background: var(--row-even);
+}
+.panel-row .k {
+  color: var(--text-dim);
+}
+.panel-row .v {
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--text-bright);
+}

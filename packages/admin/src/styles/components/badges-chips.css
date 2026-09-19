@@ -1,0 +1,127 @@
+/* ── Status Badges & Chips ────────────────────────────────────────────── */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.status-healthy,
+.status-delivered,
+.status-active,
+.status-paid {
+  background: var(--green-bg);
+  color: var(--green-light);
+  border: 1px solid var(--green-border);
+}
+.status-pending,
+.status-processing,
+.status-shipped {
+  background: var(--blue-bg);
+  color: var(--blue-light);
+  border: 1px solid var(--blue-border);
+}
+.status-warning,
+.status-degraded {
+  background: var(--amber-bg);
+  color: var(--amber-light);
+  border: 1px solid var(--amber-border);
+}
+.status-offline,
+.status-cancelled,
+.status-failed,
+.status-inactive {
+  background: var(--red-bg);
+  color: var(--red-light);
+  border: 1px solid var(--red-border);
+}
+.status-delayed {
+  background: var(--purple-bg);
+  color: var(--purple);
+  border: 1px solid var(--purple-border);
+}
+.status-waiting {
+  background: var(--red-bg);
+  color: var(--red-light);
+  border: 1px solid var(--red-border);
+}
+.status-unknown {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: monospace;
+}
+.chip-btn {
+  cursor: pointer;
+  outline: none;
+  transition:
+    filter 0.15s,
+    box-shadow 0.15s;
+}
+.chip-btn:hover {
+  filter: brightness(1.25);
+}
+.chip-btn-active {
+  box-shadow: 0 0 0 2px var(--text-bright);
+}
+.chip-blue {
+  background: var(--blue-bg);
+  color: var(--blue-light);
+  border: 1px solid var(--blue-border);
+}
+.chip-green {
+  background: var(--green-bg);
+  color: var(--green-light);
+  border: 1px solid var(--green-border);
+}
+.chip-purple {
+  background: var(--purple-bg);
+  color: var(--purple);
+  border: 1px solid var(--purple-border);
+}
+.chip-amber {
+  background: var(--amber-bg);
+  color: var(--amber-light);
+  border: 1px solid var(--amber-border);
+}
+.chip-red {
+  background: var(--red-bg);
+  color: var(--red-light);
+  border: 1px solid var(--red-border);
+}
+
+/* A toolbar summary chip: the count and its label side by side on one line,
+   so a row of these reads as a small stat strip instead of wrapping at
+   narrow widths. */
+.chip-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.chip-stat .chip-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+}
+.chip-stat .chip-stat-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.85;
+}

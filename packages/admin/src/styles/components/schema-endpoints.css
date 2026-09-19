@@ -1,0 +1,157 @@
+/* ── Endpoint & Schema tables (Config: API / DB Schema tabs) ────────────── */
+.warn-banner {
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  color: var(--amber-light);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.endpoint-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  margin: 0 -10px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+}
+.endpoint-row:last-child {
+  border-bottom: none;
+}
+.endpoint-row:nth-child(even) {
+  background: var(--row-even);
+}
+.endpoint-path {
+  font-family: monospace;
+  color: var(--text-bright);
+}
+.endpoint-summary {
+  color: var(--text-dim);
+}
+.endpoint-summary.grow {
+  flex: 1;
+}
+.undoc-tag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--amber-bg);
+  color: var(--amber-light);
+  border: 1px solid var(--amber-border);
+}
+.method-chip {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: monospace;
+  min-width: 44px;
+  text-align: center;
+}
+.method-GET {
+  background: var(--blue-bg);
+  color: var(--blue-light);
+  border: 1px solid var(--blue-border);
+}
+.method-POST {
+  background: var(--green-bg);
+  color: var(--green-light);
+  border: 1px solid var(--green-border);
+}
+.method-PUT,
+.method-PATCH {
+  background: var(--amber-bg);
+  color: var(--amber-light);
+  border: 1px solid var(--amber-border);
+}
+.method-DELETE {
+  background: var(--red-bg);
+  color: var(--red-light);
+  border: 1px solid var(--red-border);
+}
+.method-ANY {
+  background: var(--purple-bg);
+  color: var(--purple);
+  border: 1px solid var(--purple-border);
+}
+.method-OPTIONS {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.schema-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+.schema-table .c-column {
+  width: 22%;
+}
+.schema-table .c-type {
+  width: 22%;
+}
+.schema-table .c-key {
+  width: 12%;
+}
+.schema-table .c-refs {
+  width: 18%;
+}
+.schema-table .c-null {
+  width: 10%;
+}
+.schema-table .c-default {
+  width: 16%;
+}
+.schema-table th {
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+.cell-muted {
+  color: var(--text-faint);
+}
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.section-title.spaced {
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+.schema-index {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+.schema-index .k {
+  font-family: monospace;
+  color: var(--text-bright);
+}
+.schema-index .v {
+  font-family: monospace;
+  color: var(--text-dim);
+}
+
+.chip-mono {
+  font-family: monospace;
+}
+.chip-slate {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.empty-state {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12px;
+}

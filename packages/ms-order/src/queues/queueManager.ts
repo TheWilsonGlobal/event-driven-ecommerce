@@ -1,15 +1,8 @@
-import { Queue, Worker } from 'bullmq'
-import type { Job, JobType } from 'bullmq'
+import { Queue } from 'bullmq'
+import type { Worker } from 'bullmq'
 import type IORedis from 'ioredis'
 import type { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
-import {
-  QUEUE_DEFINITIONS,
-  JOB_STATES,
-  orderExpirationDelayMs,
-  type JobState,
-  type QueueName,
-  type QueueDefinition,
-} from './definitions'
+import { QUEUE_DEFINITIONS, orderExpirationDelayMs, type QueueName } from './definitions'
 import {
   JOB_NAMES,
   type ExpireOrderJob,
@@ -19,23 +12,22 @@ import {
   type ReleaseInventoryJob,
   type RefundPaymentJob,
 } from './jobTypes'
-import type { EmbeddedKeyValueStore, KeyValueStoreAdapter } from '@ecommerce/shared-database'
-import type { KeyspaceBackend, KeyspaceInspector } from './keyspaceInspector'
+import type { KeyValueStoreAdapter } from '@ecommerce/shared-database'
+import type { KeyspaceInspector } from './keyspaceInspector'
 import { EmbeddedKeyspaceInspector, RedisKeyspaceInspector } from './keyspaceInspector'
-import {
-  createRedisConnection,
-  closeAllRedisConnections,
-  getLastRedisError,
-  isConnectionUsable,
-  keyValueDriver,
-} from './redisConnection'
+import { createRedisConnection, closeAllRedisConnections } from './redisConnection'
 import { describeError } from './describeError'
+import { startWorkers as startWorkerPool } from './workerLifecycle'
+import type { RedisUnavailableError } from './errors'
 import {
-  makeExpireOrderProcessor,
-  makeRetryCaptureProcessor,
-  makeNotificationProcessor,
-  makeSagaCompensationProcessor,
-} from './workers'
+  checkRedis as checkRedisConnection,
+  checkKeyspace as checkKeyspaceReadiness,
+} from './health'
+import { buildQueueData } from './introspection'
+import { describeKeyValueBackend, type KeyValueInfo } from './driverInfo'
+import type { QueueDataView } from './queueViews'
+
+export type { QueueSnapshotCounts, QueueInfoView, QueueDataView } from './queueViews'
 
 /**
  * Constructs and owns ms-order's four BullMQ queues and their workers.
@@ -54,54 +46,6 @@ import {
  * synchronous and lazy at the protocol level; commands fail later and are
  * translated into a 503 by the route layer.
  */
-
-export interface QueueSnapshotCounts extends Record<JobState, number> {}
-
-export interface RecentJobView {
-  id: string
-  name: string
-  status: JobState
-  attempts: number
-  maxAttempts: number
-  timestamp: string
-}
-
-export interface QueueInfoView {
-  name: string
-  service: string
-  description: string
-  concurrency: number
-  attempts: number
-  backoff: { type: 'exponential' | 'fixed'; delayMs: number }
-  counts: QueueSnapshotCounts
-  recentJobs: RecentJobView[]
-}
-
-export interface QueueDataView {
-  queues: QueueInfoView[]
-  summary: {
-    queueCount: number
-    totalJobs: number
-    failedCount: number
-    activeCount: number
-  }
-}
-
-/** Thrown when Redis cannot serve a request; mapped to HTTP 503 by the routes. */
-export class RedisUnavailableError extends Error {
-  public readonly reason: string
-
-  constructor(reason: string, message: string) {
-    super(message)
-    this.name = 'RedisUnavailableError'
-    this.reason = reason
-  }
-}
-
-const MAX_RECENT_JOBS = 10
-
-/** BullMQ job types we ask for when building the recentJobs list. */
-const RECENT_JOB_TYPES: JobType[] = ['active', 'waiting', 'delayed', 'completed', 'failed']
 
 export class QueueManager {
   private readonly queues = new Map<QueueName, Queue>()
@@ -184,36 +128,8 @@ export class QueueManager {
    * environment requested, so the admin can never show a driver that is not
    * the one in use.
    */
-  keyValueInfo(): {
-    backend: KeyspaceBackend
-    label: string
-    dataPath: string | null
-    inMemory: boolean
-    loadError: string | null
-  } {
-    if (this.redisEnabled) {
-      return {
-        backend: 'redis',
-        label: 'Redis 7 (ioredis)',
-        dataPath: null,
-        inMemory: false,
-        loadError: null,
-      }
-    }
-
-    // The embedded store is the only non-Redis implementation; the extra
-    // accessors are optional so a future adapter without them still works.
-    const store = this.kvStore as EmbeddedKeyValueStore | undefined
-    const persistent = store?.isPersistent?.() ?? false
-    return {
-      backend: 'embedded',
-      // Never "RocksDB": this is a JSON snapshot, and naming it otherwise
-      // would reintroduce exactly the misreporting this work removed.
-      label: persistent ? 'Embedded (file-backed JSON)' : 'Embedded (in-memory)',
-      dataPath: store?.getFilePath?.() ?? null,
-      inMemory: !persistent,
-      loadError: store?.getLastLoadError?.()?.message ?? null,
-    }
+  keyValueInfo(): KeyValueInfo {
+    return describeKeyValueBackend(this.redisEnabled, this.kvStore)
   }
 
   private queue(name: QueueName): Queue {
@@ -226,61 +142,8 @@ export class QueueManager {
 
   /** Starts one Worker per queue, each on its own dedicated connection. */
   startWorkers(): void {
-    const expireOrder = makeExpireOrderProcessor(this.prisma)
-    const retryCapture = makeRetryCaptureProcessor({
-      prisma: this.prisma,
-      onRetriesExhausted: async (job) => {
-        // Real hand-off: an exhausted capture triggers a real refund
-        // compensation on the saga-compensation queue.
-        await this.enqueueRefundPayment({
-          orderId: job.data.orderId,
-          orderNumber: job.data.orderNumber,
-          paymentId: job.data.paymentId,
-          failedStep: 'payment-capture',
-          reason: `capture failed after ${job.opts.attempts ?? 1} attempts`,
-          amount: job.data.amount,
-          currency: job.data.currency,
-        })
-      },
-    })
-    const notification = makeNotificationProcessor(this.prisma)
-    const sagaCompensation = makeSagaCompensationProcessor(this.prisma)
-
-    const processors: Record<QueueName, (job: Job) => Promise<unknown>> = {
-      'order-expiration': expireOrder as (job: Job) => Promise<unknown>,
-      'payment-retry': retryCapture as (job: Job) => Promise<unknown>,
-      'notification-dispatch': notification as (job: Job) => Promise<unknown>,
-      'saga-compensation': sagaCompensation as (job: Job) => Promise<unknown>,
-    }
-
-    for (const def of QUEUE_DEFINITIONS) {
-      // Dedicated connection per worker: blocking commands must not share.
-      const connection = createRedisConnection('worker', `bullmq-worker-${def.name}`)
-
-      const worker = new Worker(def.name, processors[def.name], {
-        connection,
-        concurrency: def.concurrency,
-      })
-
-      // A Worker emits 'error' for connection-level problems. Without a
-      // listener this is an unhandled 'error' event on an EventEmitter, which
-      // is a process-killing exception — the exact failure mode we must avoid
-      // when Redis is down.
-      worker.on('error', (err) => {
-        // eslint-disable-next-line no-console
-        console.warn(`[Order Service] Worker "${def.name}" error: ${describeError(err)}`)
-      })
-
-      worker.on('failed', (job, err) => {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[Order Service] Job ${job?.id ?? '?'} on "${def.name}" failed ` +
-            `(attempt ${job?.attemptsMade ?? 0}/${def.attempts}): ${err.message}`
-        )
-      })
-
-      this.workers.push(worker)
-    }
+    const started = startWorkerPool(this.prisma, (data) => this.enqueueRefundPayment(data))
+    this.workers.push(...started)
   }
 
   // -------------------------------------------------------------------------
@@ -360,82 +223,7 @@ export class QueueManager {
    * indistinguishable from a genuinely empty queue.
    */
   async getQueueData(): Promise<QueueDataView> {
-    if (this.closed) {
-      throw new RedisUnavailableError('queues_closed', 'Queue manager has been shut down')
-    }
-
-    const queues: QueueInfoView[] = []
-
-    try {
-      for (const def of QUEUE_DEFINITIONS) {
-        queues.push(await this.getQueueInfo(def))
-      }
-    } catch (err) {
-      throw toRedisUnavailable(err)
-    }
-
-    let totalJobs = 0
-    let failedCount = 0
-    let activeCount = 0
-    for (const q of queues) {
-      for (const state of JOB_STATES) {
-        totalJobs += q.counts[state]
-      }
-      failedCount += q.counts.failed
-      activeCount += q.counts.active
-    }
-
-    return {
-      queues,
-      summary: {
-        queueCount: queues.length,
-        totalJobs,
-        failedCount,
-        activeCount,
-      },
-    }
-  }
-
-  private async getQueueInfo(def: QueueDefinition): Promise<QueueInfoView> {
-    const queue = this.queue(def.name)
-
-    const [rawCounts, jobs] = await Promise.all([
-      queue.getJobCounts(),
-      queue.getJobs(RECENT_JOB_TYPES, 0, MAX_RECENT_JOBS - 1, false),
-    ])
-
-    // getJobCounts() also returns 'paused', 'waiting-children' and
-    // 'prioritized'. The admin contract is exactly the five JobStates, and
-    // every one of them must be present as a number even when zero.
-    const counts = JOB_STATES.reduce((acc, state) => {
-      const value = rawCounts[state]
-      acc[state] = typeof value === 'number' ? value : 0
-      return acc
-    }, {} as QueueSnapshotCounts)
-
-    const recentJobs: RecentJobView[] = []
-    for (const job of jobs) {
-      if (!job) {
-        continue
-      }
-      const view = await toRecentJobView(job, def.attempts)
-      if (view) {
-        recentJobs.push(view)
-      }
-    }
-
-    recentJobs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-
-    return {
-      name: def.name,
-      service: def.service,
-      description: def.description,
-      concurrency: def.concurrency,
-      attempts: def.attempts,
-      backoff: def.backoff,
-      counts,
-      recentJobs: recentJobs.slice(0, MAX_RECENT_JOBS),
-    }
+    return buildQueueData(QUEUE_DEFINITIONS, (name) => this.queue(name), this.closed)
   }
 
   /**
@@ -443,34 +231,7 @@ export class QueueManager {
    * Returns null when healthy, or a RedisUnavailableError when not.
    */
   async checkRedis(): Promise<RedisUnavailableError | null> {
-    if (this.closed) {
-      return new RedisUnavailableError('queues_closed', 'Queue manager has been shut down')
-    }
-    if (!this.redisEnabled || !this.producerConnection) {
-      return new RedisUnavailableError(
-        'kv_driver_not_redis',
-        `ms-order is configured with KV_CACHE_DRIVER=${keyValueDriver}; BullMQ requires Redis.`
-      )
-    }
-    if (!isConnectionUsable(this.producerConnection)) {
-      const last = getLastRedisError()
-      // Classify via the last connection error where we have one, so the
-      // reason code is specific (redis_connection_refused) rather than the
-      // generic redis_unavailable.
-      if (last) {
-        return toRedisUnavailable(last)
-      }
-      return new RedisUnavailableError(
-        'redis_unavailable',
-        `Redis is unreachable (connection status: ${this.producerConnection.status})`
-      )
-    }
-    try {
-      await this.producerConnection.ping()
-      return null
-    } catch (err) {
-      return toRedisUnavailable(err)
-    }
+    return checkRedisConnection(this.closed, this.redisEnabled, this.producerConnection)
   }
 
   /**
@@ -480,13 +241,7 @@ export class QueueManager {
    * available on that driver even though the queue endpoints do not.
    */
   async checkKeyspace(): Promise<RedisUnavailableError | null> {
-    if (this.closed) {
-      return new RedisUnavailableError('queues_closed', 'Queue manager has been shut down')
-    }
-    if (!this.redisEnabled) {
-      return null
-    }
-    return this.checkRedis()
+    return checkKeyspaceReadiness(this.closed, this.redisEnabled, this.producerConnection)
   }
 
   // -------------------------------------------------------------------------
@@ -522,76 +277,4 @@ export class QueueManager {
 
     await closeAllRedisConnections()
   }
-}
-
-/**
- * Maps a BullMQ Job onto the admin's RecentJob shape.
- * `job.getState()` is the authoritative state; anything outside the contract's
- * five states (e.g. 'waiting-children', 'prioritized', 'unknown') is dropped
- * rather than coerced into a lie.
- */
-async function toRecentJobView(job: Job, maxAttempts: number): Promise<RecentJobView | null> {
-  let state: string
-  try {
-    state = await job.getState()
-  } catch {
-    return null
-  }
-
-  if (!isContractJobState(state)) {
-    return null
-  }
-
-  // processedOn/finishedOn are more meaningful than enqueue time for jobs that
-  // have run; fall back to the enqueue timestamp for waiting/delayed jobs.
-  const ts = job.finishedOn ?? job.processedOn ?? job.timestamp
-
-  return {
-    id: String(job.id ?? ''),
-    name: job.name,
-    status: state,
-    attempts: job.attemptsMade,
-    maxAttempts: job.opts.attempts ?? maxAttempts,
-    timestamp: new Date(ts).toISOString(),
-  }
-}
-
-function isContractJobState(state: string): state is JobState {
-  return (JOB_STATES as readonly string[]).includes(state)
-}
-
-/** Normalises any thrown error into a RedisUnavailableError with a reason code. */
-export function toRedisUnavailable(err: unknown): RedisUnavailableError {
-  if (err instanceof RedisUnavailableError) {
-    return err
-  }
-  const message = describeError(err)
-
-  // ioredis surfaces a dead server in a few distinct ways; give each a
-  // machine-readable reason so the admin can distinguish them.
-  if (/ECONNREFUSED/i.test(message)) {
-    return new RedisUnavailableError(
-      'redis_connection_refused',
-      `Redis refused the connection: ${message}`
-    )
-  }
-  if (/ETIMEDOUT|Command timed out|connect ETIMEDOUT/i.test(message)) {
-    return new RedisUnavailableError('redis_timeout', `Redis command timed out: ${message}`)
-  }
-  if (/ENOTFOUND|EAI_AGAIN/i.test(message)) {
-    return new RedisUnavailableError(
-      'redis_dns_failure',
-      `Redis host could not be resolved: ${message}`
-    )
-  }
-  if (/Stream isn't writeable|enableOfflineQueue/i.test(message)) {
-    return new RedisUnavailableError('redis_unavailable', `Redis is not connected: ${message}`)
-  }
-  if (/NOAUTH|WRONGPASS|ERR Client sent AUTH/i.test(message)) {
-    return new RedisUnavailableError(
-      'redis_auth_failure',
-      `Redis authentication failed: ${message}`
-    )
-  }
-  return new RedisUnavailableError('redis_error', message)
 }

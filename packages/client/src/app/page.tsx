@@ -1,7 +1,6 @@
-﻿'use client'
+'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
-import type { Product, Category, CartItem } from './types'
+import React from 'react'
 import StorefrontHeader from '../components/StorefrontHeader'
 import HeroSection from '../components/HeroSection'
 import ProductGrid from '../components/ProductGrid'
@@ -9,203 +8,73 @@ import CartDrawer from '../components/CartDrawer'
 import QuickViewModal from '../components/QuickViewModal'
 import CheckoutModal from '../components/CheckoutModal'
 import StorefrontFooter from '../components/StorefrontFooter'
-import {
-  createOrder,
-  getProducts,
-  getCategories,
-  OrderApiError,
-  ProductApiError,
-  type ShippingInfo,
-} from '../lib/api'
-
-const ALL_CATEGORY: Category = { id: 'all', name: 'All Products', icon: '✨', slug: 'all' }
+import { useCatalog } from './hooks/useCatalog'
+import { useToast } from './hooks/useToast'
+import { useCart } from './hooks/useCart'
+import { useCheckout } from './hooks/useCheckout'
 
 export default function ClientStorefront() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [catalogLoading, setCatalogLoading] = useState<boolean>(true)
-  const [catalogError, setCatalogError] = useState<string>('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [searchQuery, setSearchQuery] = useState<string>('')
-  const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'rating'>(
-    'featured'
-  )
+  const {
+    products,
+    catalogLoading,
+    catalogError,
+    categoryTabs,
+    selectedCategory,
+    setSelectedCategory,
+    searchQuery,
+    setSearchQuery,
+    sortBy,
+    setSortBy,
+    filteredProducts,
+  } = useCatalog()
 
-  // Cart state
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false)
-  const [discountCode, setDiscountCode] = useState<string>('')
-  const [appliedDiscount, setAppliedDiscount] = useState<number>(0)
-  const [discountError, setDiscountError] = useState<string>('')
+  const { toastMessage, showToast } = useToast()
 
-  // Modals
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false)
-  const [checkoutStep, setCheckoutStep] = useState<'shipping' | 'payment' | 'confirmed'>('shipping')
-  const [lastOrderId, setLastOrderId] = useState<string>('')
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
-    fullName: 'Alex Morgan',
-    email: 'customer@ecommerce.com',
-    addressLine1: '742 Evergreen Terrace',
-    city: 'Springfield',
-    state: 'OR',
-    postalCode: '97477',
+  const {
+    cart,
+    isCartOpen,
+    setIsCartOpen,
+    discountCode,
+    setDiscountCode,
+    appliedDiscount,
+    discountError,
+    addToCart,
+    updateQuantity,
+    removeFromCart,
+    totalCartCount,
+    subtotal,
+    discountAmount,
+    estimatedTax,
+    shippingFee,
+    finalTotal,
+    applyPromoCode,
+    clearCart,
+  } = useCart(showToast)
+
+  const {
+    quickViewProduct,
+    setQuickViewProduct,
+    isCheckoutOpen,
+    setIsCheckoutOpen,
+    checkoutStep,
+    setCheckoutStep,
+    lastOrderId,
+    shippingInfo,
+    handleShippingInfoChange,
+    isSubmittingOrder,
+    checkoutError,
+    setCheckoutError,
+    handleCompleteOrder,
+  } = useCheckout({
+    cart,
+    subtotal,
+    estimatedTax,
+    shippingFee,
+    discountAmount,
+    finalTotal,
+    clearCart,
+    showToast,
   })
-  const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false)
-  const [checkoutError, setCheckoutError] = useState<string>('')
-
-  // Load the real catalog from ms-product (via the gateway) on mount.
-  useEffect(() => {
-    let cancelled = false
-    async function loadCatalog() {
-      setCatalogLoading(true)
-      setCatalogError('')
-      try {
-        const [fetchedProducts, fetchedCategories] = await Promise.all([
-          getProducts(),
-          getCategories(),
-        ])
-        if (cancelled) return
-        setProducts(fetchedProducts)
-        setCategories(fetchedCategories)
-      } catch (err) {
-        if (cancelled) return
-        setCatalogError(
-          err instanceof ProductApiError
-            ? err.message
-            : 'Something went wrong loading the catalog. Please try again.'
-        )
-      } finally {
-        if (!cancelled) setCatalogLoading(false)
-      }
-    }
-    void loadCatalog()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const categoryTabs = useMemo(() => [ALL_CATEGORY, ...categories], [categories])
-
-  // Filtered & Sorted products
-  const filteredProducts = useMemo(() => {
-    let list = products.filter((p) => {
-      const matchesCategory = selectedCategory === 'all' || p.category.id === selectedCategory
-      const matchesSearch =
-        p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
-      return matchesCategory && matchesSearch
-    })
-
-    if (sortBy === 'price-asc') {
-      list = [...list].sort((a, b) => a.price - b.price)
-    } else if (sortBy === 'price-desc') {
-      list = [...list].sort((a, b) => b.price - a.price)
-    } else if (sortBy === 'rating') {
-      list = [...list].sort((a, b) => b.ratings.average - a.ratings.average)
-    }
-
-    return list
-  }, [products, selectedCategory, searchQuery, sortBy])
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg)
-    setTimeout(() => {
-      setToastMessage(null)
-    }, 3000)
-  }
-
-  const addToCart = (product: Product, quantity = 1) => {
-    setCart((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id)
-      if (existing) {
-        return prev.map((item) =>
-          item.product.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
-        )
-      }
-      return [...prev, { product, quantity }]
-    })
-    showToast(`Added "${product.title}" to cart!`)
-  }
-
-  const updateQuantity = (productId: string, delta: number) => {
-    setCart(
-      (prev) =>
-        prev
-          .map((item) => {
-            if (item.product.id === productId) {
-              const newQty = item.quantity + delta
-              return newQty > 0 ? { ...item, quantity: newQty } : null
-            }
-            return item
-          })
-          .filter(Boolean) as CartItem[]
-    )
-  }
-
-  const removeFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.product.id !== productId))
-  }
-
-  const totalCartCount = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart])
-
-  const subtotal = useMemo(
-    () => cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0),
-    [cart]
-  )
-
-  const discountAmount = subtotal * appliedDiscount
-  const estimatedTax = (subtotal - discountAmount) * 0.08
-  const shippingFee = subtotal > 100 || subtotal === 0 ? 0 : 15.0
-  const finalTotal = Math.max(0, subtotal - discountAmount + estimatedTax + shippingFee)
-
-  const applyPromoCode = () => {
-    if (discountCode.trim().toUpperCase() === 'SAVE20') {
-      setAppliedDiscount(0.2)
-      setDiscountError('')
-      showToast('Promo code applied: 20% OFF!')
-    } else if (discountCode.trim().toUpperCase() === 'FREESHIP') {
-      setAppliedDiscount(0.05)
-      setDiscountError('')
-      showToast('Promo code applied: 5% Extra discount!')
-    } else {
-      setDiscountError('Invalid promo code. Try "SAVE20"')
-    }
-  }
-
-  const handleShippingInfoChange = (field: keyof ShippingInfo, value: string) => {
-    setShippingInfo((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleCompleteOrder = async () => {
-    setCheckoutError('')
-    setIsSubmittingOrder(true)
-    try {
-      const order = await createOrder(cart, shippingInfo, {
-        subtotal,
-        taxAmount: estimatedTax,
-        shippingAmount: shippingFee,
-        discountAmount,
-        totalAmount: finalTotal,
-        currency: 'USD',
-      })
-      setLastOrderId(order.orderNumber)
-      setCheckoutStep('confirmed')
-      setCart([])
-      setAppliedDiscount(0)
-    } catch (err) {
-      const message =
-        err instanceof OrderApiError
-          ? err.message
-          : 'Something went wrong placing your order. Please try again.'
-      setCheckoutError(message)
-      showToast(message)
-    } finally {
-      setIsSubmittingOrder(false)
-    }
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">

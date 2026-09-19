@@ -1,6 +1,6 @@
 import type { KeyspaceBackend, KeyspaceInspector } from './keyspaceInspector'
 import { CACHE_NAMESPACES } from './definitions'
-import { toRedisUnavailable } from './queueManager'
+import { toRedisUnavailable } from './errors'
 
 /**
  * Real key counts per Redis namespace, gathered with SCAN.

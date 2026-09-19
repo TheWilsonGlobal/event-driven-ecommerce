@@ -1,0 +1,5 @@
+export { registerHealthRoutes } from './health'
+export { registerStorageRoutes } from './storage'
+export { registerProductRoutes } from './products'
+export { registerCategoryRoutes } from './categories'
+export { registerUploadRoutes } from './uploads'

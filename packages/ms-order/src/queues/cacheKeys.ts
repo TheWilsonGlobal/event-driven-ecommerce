@@ -1,5 +1,5 @@
 import type { KeyspaceBackend, KeyspaceInspector } from './keyspaceInspector'
-import { toRedisUnavailable } from './queueManager'
+import { toRedisUnavailable } from './errors'
 
 /**
  * Individual-key listing for the admin's KV cache key browser.
