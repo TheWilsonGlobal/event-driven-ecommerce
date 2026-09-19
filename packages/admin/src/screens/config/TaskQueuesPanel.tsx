@@ -75,11 +75,7 @@ export default function TaskQueuesPanel({
           <StatChip value={stateCounts?.waiting ?? '—'} label="Waiting" variant="amber" />
           <StatChip value={stateCounts?.active ?? '—'} label="Active" variant="blue" />
           <StatChip value={stateCounts?.completed ?? '—'} label="Completed" variant="green" />
-          <StatChip
-            value={stateCounts?.failed ?? '—'}
-            label="Failed"
-            variant={stateCounts && stateCounts.failed > 0 ? 'red' : 'slate'}
-          />
+          <StatChip value={stateCounts?.failed ?? '—'} label="Failed" variant="red" />
           <StatChip value={stateCounts?.delayed ?? '—'} label="Delayed" variant="purple" />
           <StatChip value={totalCount ?? '—'} label="Total" />
         </div>

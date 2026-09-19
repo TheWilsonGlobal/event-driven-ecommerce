@@ -121,9 +121,7 @@ export default function QueuesPanel({
             <button
               key={state}
               type="button"
-              className={`chip ${
-                state === 'failed' && stateCounts && stateCounts.failed === 0 ? 'chip-slate' : tone
-              } chip-btn${statusFilter === state ? ' chip-btn-active' : ''}`}
+              className={`chip ${tone} chip-btn${statusFilter === state ? ' chip-btn-active' : ''}`}
               onClick={() => setStatusFilter((prev) => (prev === state ? null : state))}
               disabled={!stateCounts}
               aria-pressed={statusFilter === state}
