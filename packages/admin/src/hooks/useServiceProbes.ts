@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ServiceItem, RustfsHealth } from '../types'
-import { INITIAL_SERVICES } from '../data/seed'
+import { INITIAL_SERVICES } from '../data/seedServices'
 import { PRODUCT_SERVICE_URL, RUSTFS_BUCKET, RUSTFS_ENDPOINT } from '../data/serviceUrls'
 
 export function useServiceProbes(autoPolling: boolean) {

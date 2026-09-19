@@ -26,25 +26,31 @@ export default function ServiceModal({ service, onClose }: Props) {
           </div>
           <div className="form-group">
             <label>Raw Health Response Payload</label>
-            <pre
-              style={{
-                background: 'var(--bg)',
-                padding: '12px 16px',
-                borderRadius: 8,
-                border: '1px solid var(--border)',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: 'var(--green-light)',
-                overflowX: 'auto',
-                maxHeight: 280,
-              }}
-            >
-              {JSON.stringify(
-                service.details ?? { status: service.status, port: service.port },
-                null,
-                2
-              )}
-            </pre>
+            {service.details ? (
+              <pre
+                style={{
+                  background: 'var(--bg)',
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: 'var(--green-light)',
+                  overflowX: 'auto',
+                  maxHeight: 280,
+                }}
+              >
+                {JSON.stringify(service.details, null, 2)}
+              </pre>
+            ) : (
+              <div style={{ color: 'var(--text-faint)', fontSize: 12 }}>
+                {service.status === 'UNKNOWN'
+                  ? 'Not probed yet.'
+                  : service.error
+                    ? `No JSON body captured — ${service.error}.`
+                    : "This endpoint didn't return a JSON body (e.g. an HTML/dev-server response)."}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             <button className="btn btn-ghost" onClick={onClose}>

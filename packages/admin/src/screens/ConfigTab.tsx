@@ -156,21 +156,22 @@ export default function ConfigTab({
           <ConfigCard
             title={
               <>
-                <span>🔐 Security & JWT Policies</span>
+                <span>🔐 Auth (Demo Mode)</span>
                 <span className="chip chip-purple" style={{ marginLeft: 8 }}>
                   Auth
                 </span>
               </>
             }
-            count={4}
+            count={3}
             openSignal={openSignal}
           >
-            <ReadOnlyRow label="JWT Token Expiry" value="7 days" />
-            <ReadOnlyRow label="Refresh Token Lifetime" value="30 days" />
-            <ReadOnlyRow label="Password Hashing" value="Bcrypt (12 rounds)" />
+            <ReadOnlyRow label="Password Hashing" value="Bcrypt (10 rounds)" />
+            <ReadOnlyRow label="Login Token" value="Static demo token — no JWT is issued" />
             <div className="config-row">
-              <span className="k">Prisma Schema Validation</span>
-              <span className="v bool-true">Enabled</span>
+              <span className="k">Password Verification on Login</span>
+              <span className="v bool-false">
+                Not enforced — existence + active-status check only
+              </span>
             </div>
           </ConfigCard>
 
