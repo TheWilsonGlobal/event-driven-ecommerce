@@ -32,6 +32,10 @@ export default function InfraTab({
     loki,
     grafana,
     probeAll: probeObservability,
+    dirty: observabilityDirty,
+    setElasticsearchEnabled,
+    setLokiEnabled,
+    saveChanges: saveObservabilityChanges,
   } = useObservability()
 
   useEffect(() => {
@@ -108,6 +112,20 @@ export default function InfraTab({
               </button>
             </>
           )}
+          {tab === 'overview' && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={saveObservabilityChanges}
+              disabled={!observabilityDirty}
+              title={
+                observabilityDirty
+                  ? 'Keep the Elasticsearch/Loki Enabled overrides for this session'
+                  : 'No unsaved changes'
+              }
+            >
+              Save Changes
+            </button>
+          )}
           <button
             className="btn btn-ghost btn-sm"
             onClick={handleReload}
@@ -132,6 +150,8 @@ export default function InfraTab({
           loki={loki}
           grafana={grafana}
           onProbeObservability={probeObservability}
+          onSetElasticsearchEnabled={setElasticsearchEnabled}
+          onSetLokiEnabled={setLokiEnabled}
         />
       )}
       {tab === 'cache' && (

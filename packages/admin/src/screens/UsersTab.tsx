@@ -2,6 +2,9 @@ import { useState } from 'react'
 import type { UserRecord } from '../types'
 import { StatusBadge, Pagination } from '../components/ui'
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
+
 interface Props {
   filteredUsers: UserRecord[]
   userSearch: string
@@ -27,7 +30,11 @@ export default function UsersTab({
   onToggleStatus,
 }: Props) {
   const [page, setPage] = useState<number>(1)
-  const pageSize = 10
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
   const paginated = filteredUsers.slice((page - 1) * pageSize, page * pageSize)
 
   return (
@@ -175,6 +182,8 @@ export default function UsersTab({
           total={filteredUsers.length}
           onPage={setPage}
           noun="users"
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSize={changePageSize}
         />
       </div>
     </>

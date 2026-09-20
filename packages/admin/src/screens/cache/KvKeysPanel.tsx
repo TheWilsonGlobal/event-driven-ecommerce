@@ -28,7 +28,8 @@ function fmtBytes(sizeBytes: number | null): string {
 // on every render, or the filter memo recomputes constantly.
 const NO_KEYS: CacheKeyView[] = []
 
-const PAGE_SIZE = 10
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
 
 export default function KvKeysPanel({
   data,
@@ -44,6 +45,7 @@ export default function KvKeysPanel({
   const [filter, setFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<CacheKeyType | null>(null)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   const allKeys = data?.keys ?? NO_KEYS
 
@@ -67,7 +69,7 @@ export default function KvKeysPanel({
     )
   }, [allKeys, filter, typeFilter])
 
-  const paginatedKeys = filteredKeys.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginatedKeys = filteredKeys.slice((page - 1) * pageSize, page * pageSize)
 
   // Any filter change resets to page 1 — otherwise a narrowed result set can
   // leave the view stranded on a page that no longer exists.
@@ -77,6 +79,10 @@ export default function KvKeysPanel({
   }
   const toggleType = (next: CacheKeyType) => {
     setTypeFilter((prev) => (prev === next ? null : next))
+    setPage(1)
+  }
+  const changePageSize = (next: number) => {
+    setPageSize(next)
     setPage(1)
   }
 
@@ -195,10 +201,12 @@ export default function KvKeysPanel({
           </table>
           <Pagination
             page={page}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             total={filteredKeys.length}
             onPage={setPage}
             noun="keys"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSize={changePageSize}
           />
         </div>
       )}

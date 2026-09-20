@@ -4,7 +4,8 @@ import { StatusBadge, StatChip } from '../../components/ui'
 import { EmptyState, Pagination } from '../../components/ui'
 import type { GatewayServicesResource } from '../../hooks/useGatewayServices'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
 
 export default function ServicesPanel({
   services,
@@ -21,6 +22,11 @@ export default function ServicesPanel({
 }) {
   const [filter, setFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
 
   const healthyCount = services.filter((s) => s.status === 'HEALTHY').length
 
@@ -37,7 +43,7 @@ export default function ServicesPanel({
     return [...list].sort((a, b) => a.port - b.port)
   }, [services, filter])
 
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <>
@@ -167,10 +173,12 @@ export default function ServicesPanel({
           </table>
           <Pagination
             page={page}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             total={filtered.length}
             onPage={setPage}
             noun="services"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSize={changePageSize}
           />
         </div>
       )}

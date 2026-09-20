@@ -77,6 +77,27 @@ export function useObservability() {
     lastChecked: '',
   })
 
+  // Local-only overrides for the two toggleable targets. There is no backend
+  // settings store yet — nothing on ms-product/ms-order actually reads a
+  // mutable flag at runtime — so flipping these only changes what this admin
+  // session *displays* and does not change either service's real behavior.
+  // `dirty` tracks whether a toggle has been changed since the last Save, so
+  // the Save Changes button can stay disabled until there's something to save.
+  const [dirty, setDirty] = useState(false)
+
+  const setElasticsearchEnabled = useCallback((enabled: boolean) => {
+    setElasticsearch((prev) => ({ ...prev, enabled }))
+    setDirty(true)
+  }, [])
+  const setLokiEnabled = useCallback((enabled: boolean) => {
+    setLoki((prev) => ({ ...prev, enabled }))
+    setDirty(true)
+  }, [])
+  // No backend endpoint exists to persist these yet (see the comment above),
+  // so "saving" just clears the dirty flag — the toggle already took effect
+  // locally the moment it was flipped.
+  const saveChanges = useCallback(() => setDirty(false), [])
+
   const probeAll = useCallback(async () => {
     const [prom, es, lk, gf] = await Promise.all([
       probe(`${PROMETHEUS_URL}/-/healthy`),
@@ -115,5 +136,15 @@ export function useObservability() {
     }))
   }, [])
 
-  return { prometheus, elasticsearch, loki, grafana, probeAll }
+  return {
+    prometheus,
+    elasticsearch,
+    loki,
+    grafana,
+    probeAll,
+    dirty,
+    setElasticsearchEnabled,
+    setLokiEnabled,
+    saveChanges,
+  }
 }

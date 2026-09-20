@@ -20,6 +20,8 @@ export default function InfraPanel({
   loki,
   grafana,
   onProbeObservability,
+  onSetElasticsearchEnabled,
+  onSetLokiEnabled,
 }: {
   rustfsHealth: RustfsHealth
   openSignal?: OpenSignal
@@ -33,11 +35,17 @@ export default function InfraPanel({
   loki: ObservabilityTarget
   grafana: ObservabilityTarget
   onProbeObservability: () => void
+  onSetElasticsearchEnabled: (enabled: boolean) => void
+  onSetLokiEnabled: (enabled: boolean) => void
 }) {
   return (
     <>
       <KvCacheCard driver={driver} openSignal={openSignal} />
-      <StorageCard rustfsHealth={rustfsHealth} openSignal={openSignal} onPingRustFS={onPingRustFS} />
+      <StorageCard
+        rustfsHealth={rustfsHealth}
+        openSignal={openSignal}
+        onPingRustFS={onPingRustFS}
+      />
       <DatabaseCards
         services={services}
         openSignal={openSignal}
@@ -50,6 +58,8 @@ export default function InfraPanel({
         grafana={grafana}
         openSignal={openSignal}
         onProbeObservability={onProbeObservability}
+        onSetElasticsearchEnabled={onSetElasticsearchEnabled}
+        onSetLokiEnabled={onSetLokiEnabled}
       />
     </>
   )

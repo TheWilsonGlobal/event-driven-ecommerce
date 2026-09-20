@@ -1,5 +1,39 @@
 import type { ObservabilityTarget } from '../../../hooks/useObservability'
 import { ConfigCard, ReadOnlyRow, type OpenSignal } from '../parts'
+import { Toggle } from '../../../components/ui'
+
+/**
+ * The Enabled/Disabled switch for a toggleable target, rendered as its own
+ * row in the card body rather than a status chip in the header — the header
+ * chips are all read-only facts (name, kind, live health), while this one is
+ * an control the operator can act on, so it gets its own row with a label
+ * to make clear it is interactive.
+ */
+function EnabledRow({
+  enabled,
+  onChange,
+  envVar,
+}: {
+  enabled: boolean
+  onChange: (next: boolean) => void
+  envVar: string
+}) {
+  return (
+    <div className="config-row">
+      <span className="k">Enabled</span>
+      <span className="v" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Toggle checked={enabled} onChange={onChange} />
+        <span className={enabled ? 'bool-true' : 'bool-false'}>
+          {enabled ? 'Enabled' : 'Disabled'}
+        </span>
+        <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>
+          — defaults to {envVar} on next full restart; use Save Changes to keep this override for
+          the session
+        </span>
+      </span>
+    </div>
+  )
+}
 
 export function ObservabilityCards({
   prometheus,
@@ -8,6 +42,8 @@ export function ObservabilityCards({
   grafana,
   openSignal,
   onProbeObservability,
+  onSetElasticsearchEnabled,
+  onSetLokiEnabled,
 }: {
   prometheus: ObservabilityTarget
   elasticsearch: ObservabilityTarget
@@ -15,6 +51,8 @@ export function ObservabilityCards({
   grafana: ObservabilityTarget
   openSignal?: OpenSignal
   onProbeObservability: () => void
+  onSetElasticsearchEnabled: (enabled: boolean) => void
+  onSetLokiEnabled: (enabled: boolean) => void
 }) {
   return (
     <>
@@ -82,9 +120,6 @@ export function ObservabilityCards({
           <>
             <span>Elasticsearch</span>
             <span className="chip chip-blue">Product Search</span>
-            <span className={`chip ${elasticsearch.enabled ? 'chip-green' : 'chip-amber'}`}>
-              {elasticsearch.enabled ? 'Enabled' : 'Disabled (ELASTICSEARCH_ENABLED=false)'}
-            </span>
             <span
               className={`chip ${elasticsearch.healthy === null ? 'chip-amber' : elasticsearch.healthy ? 'chip-green' : 'chip-red'}`}
             >
@@ -108,6 +143,11 @@ export function ObservabilityCards({
           </button>
         }
       >
+        <EnabledRow
+          enabled={elasticsearch.enabled}
+          onChange={onSetElasticsearchEnabled}
+          envVar="ELASTICSEARCH_ENABLED"
+        />
         <ReadOnlyRow label="Health Endpoint" value={`${elasticsearch.endpoint}/_cluster/health`} />
         <ReadOnlyRow label="Index" value="products" />
         <ReadOnlyRow
@@ -137,9 +177,6 @@ export function ObservabilityCards({
           <>
             <span>Loki</span>
             <span className="chip chip-blue">Log Shipping</span>
-            <span className={`chip ${loki.enabled ? 'chip-green' : 'chip-amber'}`}>
-              {loki.enabled ? 'Enabled' : 'Disabled (LOKI_ENABLED=false)'}
-            </span>
             <span
               className={`chip ${loki.healthy === null ? 'chip-amber' : loki.healthy ? 'chip-green' : 'chip-red'}`}
             >
@@ -159,6 +196,7 @@ export function ObservabilityCards({
           </button>
         }
       >
+        <EnabledRow enabled={loki.enabled} onChange={onSetLokiEnabled} envVar="LOKI_ENABLED" />
         <ReadOnlyRow label="Health Endpoint" value={`${loki.endpoint}/ready`} />
         <ReadOnlyRow
           label="Shipped By"

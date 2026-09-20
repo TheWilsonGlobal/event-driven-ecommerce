@@ -2,6 +2,9 @@ import { useState } from 'react'
 import type { ProductRecord } from '../types'
 import { Pagination } from '../components/ui'
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
+
 interface Props {
   filteredProducts: ProductRecord[]
   productSearch: string
@@ -24,7 +27,11 @@ export default function ProductsTab({
   onAddProduct,
 }: Props) {
   const [page, setPage] = useState<number>(1)
-  const pageSize = 10
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
   const paginated = filteredProducts.slice((page - 1) * pageSize, page * pageSize)
 
   return (
@@ -163,6 +170,8 @@ export default function ProductsTab({
           total={filteredProducts.length}
           onPage={setPage}
           noun="products"
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSize={changePageSize}
         />
       </div>
     </>

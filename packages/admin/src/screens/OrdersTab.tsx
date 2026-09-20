@@ -33,6 +33,9 @@ function fmtAgo(iso: string | undefined | null): string {
   return '0s ago'
 }
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
+
 interface Props {
   filteredOrders: OrderRecord[]
   orderSearch: string
@@ -53,7 +56,11 @@ export default function OrdersTab({
   onUpdateStatus,
 }: Props) {
   const [page, setPage] = useState<number>(1)
-  const pageSize = 10
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
   const paginated = filteredOrders.slice((page - 1) * pageSize, page * pageSize)
 
   const statuses: OrderRecord['status'][] = [
@@ -199,6 +206,8 @@ export default function OrdersTab({
           total={filteredOrders.length}
           onPage={setPage}
           noun="orders"
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSize={changePageSize}
         />
       </div>
     </>

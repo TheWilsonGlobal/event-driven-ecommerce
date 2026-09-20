@@ -3,7 +3,8 @@ import { EmptyState, Pagination } from '../components/ui'
 import { DownloadIcon } from '../components/icons'
 import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT } from '../data/serviceUrls'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
 
 // RustFS is a real S3-compatible object store (docker-compose `rustfs`
 // service, bind-mounted from the host path in RUSTFS_DATA_PATH, owned by the
@@ -57,6 +58,11 @@ function download(key: string) {
 export default function StorageTab() {
   const [filter, setFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
   const [allObjects, setAllObjects] = useState<StorageObject[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -82,7 +88,7 @@ export default function StorageTab() {
 
   const q = filter.trim().toLowerCase()
   const objects = q ? allObjects.filter((o) => o.key.toLowerCase().includes(q)) : allObjects
-  const paginated = objects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginated = objects.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <>
@@ -162,10 +168,12 @@ export default function StorageTab() {
           </table>
           <Pagination
             page={page}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             total={objects.length}
             onPage={setPage}
             noun="objects"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSize={changePageSize}
           />
         </div>
       )}

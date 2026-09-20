@@ -5,7 +5,8 @@ import { describeError, type FetchError } from '../../hooks/useQueueData'
 import { WorkersIcon, RetryIcon, BackoffIcon, DelayIcon } from '../../components/icons'
 
 const NO_QUEUES: QueueInfo[] = []
-const PAGE_SIZE = 25
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
 
 /**
  * Distinct job names a queue has actually dispatched, read off its
@@ -32,6 +33,11 @@ export default function TaskQueuesPanel({
 }) {
   const [filter, setFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
 
   const allQueues = data?.queues ?? NO_QUEUES
 
@@ -46,7 +52,7 @@ export default function TaskQueuesPanel({
     )
   }, [allQueues, filter])
 
-  const paginated = queues.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginated = queues.slice((page - 1) * pageSize, page * pageSize)
 
   // Null when there is no live payload — a zero-seeded reducer would print
   // `Waiting 0 · Active 0 · …` above the offline banner, indistinguishable
@@ -233,10 +239,12 @@ export default function TaskQueuesPanel({
           </table>
           <Pagination
             page={page}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             total={queues.length}
             onPage={setPage}
             noun="queues"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSize={changePageSize}
           />
         </div>
       )}

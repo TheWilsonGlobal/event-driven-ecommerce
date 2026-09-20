@@ -4,7 +4,8 @@ import type { FetchError } from '../../hooks/useQueueData'
 import { describeError } from '../../hooks/useQueueData'
 import { EmptyState, OfflineBanner, Pagination, Spinner } from '../../components/ui'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
 
 // A truncated count is a lower bound (the SCAN hit its cap), so it is rendered
 // with a "≥" prefix rather than as an exact figure.
@@ -45,6 +46,11 @@ export default function CachePanel({
   onRetry: () => void
 }) {
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
 
   // The `other` column only appears when a type outside the broken-out set is
   // actually present — an always-zero column is noise.
@@ -54,7 +60,7 @@ export default function CachePanel({
   // The Total row below sums ALL namespaces regardless of page, so it must
   // never be part of the paginated slice — it stays pinned as the table's
   // last row on every page.
-  const paginated = data ? data.namespaces.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : []
+  const paginated = data ? data.namespaces.slice((page - 1) * pageSize, page * pageSize) : []
 
   return (
     <>
@@ -178,10 +184,12 @@ export default function CachePanel({
           </table>
           <Pagination
             page={page}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             total={data.namespaces.length}
             onPage={setPage}
             noun="namespaces"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSize={changePageSize}
           />
         </div>
       )}

@@ -5,7 +5,8 @@ import { fetchLogFileContent } from '../../hooks/useLogFiles'
 import { EmptyState, Pagination, Spinner, StatChip } from '../../components/ui'
 import { DownloadIcon, FileIcon } from '../../components/icons'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -30,6 +31,11 @@ export default function SystemLogsPanel({
 }) {
   const [filter, setFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
   const [viewing, setViewing] = useState<LogFileSummary | null>(null)
   const [content, setContent] = useState<string | null>(null)
   const [contentError, setContentError] = useState<string | null>(null)
@@ -44,7 +50,7 @@ export default function SystemLogsPanel({
   }, [files, filter])
 
   const totalBytes = files.reduce((sum, f) => sum + f.sizeBytes, 0)
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   const openFile = async (file: LogFileSummary) => {
     setViewing(file)
@@ -187,10 +193,12 @@ export default function SystemLogsPanel({
           </table>
           <Pagination
             page={page}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             total={filtered.length}
             onPage={setPage}
             noun="files"
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSize={changePageSize}
           />
         </div>
       )}

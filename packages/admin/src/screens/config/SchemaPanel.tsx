@@ -3,7 +3,8 @@ import type { SchemaData, SchemaUnreachable } from '../../hooks/useSchema'
 import { ConfigCard, type OpenSignal } from './parts'
 import { EmptyState, Pagination, Spinner, StatChip } from '../../components/ui'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 25
 
 export default function SchemaPanel({
   data,
@@ -18,6 +19,11 @@ export default function SchemaPanel({
 }) {
   const [filter, setFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const changePageSize = (next: number) => {
+    setPageSize(next)
+    setPage(1)
+  }
 
   const tables = useMemo(() => {
     if (!data) return []
@@ -28,7 +34,7 @@ export default function SchemaPanel({
     )
   }, [data, filter])
 
-  const paginated = tables.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginated = tables.slice((page - 1) * pageSize, page * pageSize)
 
   if (loading && !data) return <Spinner label="Introspecting live database schema…" />
   if (!data)
@@ -184,10 +190,12 @@ export default function SchemaPanel({
       {tables.length > 0 && (
         <Pagination
           page={page}
-          pageSize={PAGE_SIZE}
+          pageSize={pageSize}
           total={tables.length}
           onPage={setPage}
           noun="tables"
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageSize={changePageSize}
         />
       )}
     </>

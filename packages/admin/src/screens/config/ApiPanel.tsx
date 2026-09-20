@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { ApiDocsData, ApiDocsUnreachable } from '../../hooks/useApiDocs'
 import { ConfigCard, type OpenSignal } from './parts'
-import { EmptyState, Pagination, Spinner, StatChip } from '../../components/ui'
+import { EmptyState, Spinner, StatChip } from '../../components/ui'
 import { ExternalLinkIcon } from '../../components/icons'
-
-const PAGE_SIZE = 25
 
 /** OPTIONS first — CORS-preflight plumbing rather than an API verb an
  *  operator calls directly, so it's grouped with undoc as a "noise" column —
@@ -25,20 +23,16 @@ export default function ApiPanel({
   const [filter, setFilter] = useState('')
   const [methodFilter, setMethodFilter] = useState<string | null>(null)
   const [undocOnly, setUndocOnly] = useState(false)
-  const [page, setPage] = useState(1)
 
   const toggleMethodFilter = (m: string) => {
     setMethodFilter((prev) => (prev === m ? null : m))
-    setPage(1)
   }
   const toggleUndocOnly = () => {
     setUndocOnly((prev) => !prev)
-    setPage(1)
   }
   const clearHeaderFilters = () => {
     setMethodFilter(null)
     setUndocOnly(false)
-    setPage(1)
   }
 
   const groups = useMemo(() => {
@@ -57,8 +51,6 @@ export default function ApiPanel({
       }))
       .filter((g) => g.endpoints.length > 0)
   }, [data, filter, methodFilter, undocOnly])
-
-  const paginatedGroups = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   if (loading && !data) return <Spinner label="Fetching live OpenAPI docs from each service…" />
   if (!data)
@@ -88,10 +80,7 @@ export default function ApiPanel({
             type="text"
             placeholder="Filter services, paths or methods..."
             value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value)
-              setPage(1)
-            }}
+            onChange={(e) => setFilter(e.target.value)}
           />
         </div>
         <div className="toolbar-right">
@@ -161,7 +150,7 @@ export default function ApiPanel({
           }
         />
       ) : (
-        paginatedGroups.map((group) => {
+        groups.map((group) => {
           const counts: Record<string, number> = {}
           let undoc = 0
           for (const e of group.endpoints) {
@@ -242,16 +231,6 @@ export default function ApiPanel({
             </ConfigCard>
           )
         })
-      )}
-
-      {groups.length > 0 && (
-        <Pagination
-          page={page}
-          pageSize={PAGE_SIZE}
-          total={groups.length}
-          onPage={setPage}
-          noun="services"
-        />
       )}
     </>
   )
