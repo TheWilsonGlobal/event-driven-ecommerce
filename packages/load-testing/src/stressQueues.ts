@@ -238,10 +238,7 @@ async function stressOrderService(
   let attemptedPass2 = 0
   const paymentTasks = Array.from({ length: pass2Count }, (_, i) => async () => {
     attemptedPass2++
-    const createRes = await postJson(
-      `${baseUrl}/api/v1/orders`,
-      randomOrderBody(false, 10_000 + i)
-    )
+    const createRes = await postJson(`${baseUrl}/api/v1/orders`, randomOrderBody(false, 10_000 + i))
     recordHttpFailure(result, createRes)
     if (!createRes.ok) {
       return
@@ -487,7 +484,7 @@ async function drainAndReport(
       'Note: this script forces every payment-retry job to fail (outcome: "fail"), which drives ' +
       'it through all 5 attempts of its exponential backoff (10s/20s/40s/80s/160s — definitions.ts) ' +
       'before finally landing as "failed". That alone exceeds the default 60s drain window, so a ' +
-      "handful of payment-retry jobs still sitting in \"delayed\" (not stuck 'active') at report " +
+      'handful of payment-retry jobs still sitting in "delayed" (not stuck \'active\') at report ' +
       'time is expected too, not a stall — only notification-dispatch / saga-compensation / ' +
       'reindex-search are realistic to see drain fully within this run.'
   )

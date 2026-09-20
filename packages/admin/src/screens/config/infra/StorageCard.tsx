@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RustfsHealth } from '../../../types'
 import { ConfigCard, ReadOnlyRow, type OpenSignal } from '../parts'
-import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT, RUSTFS_DATA_PATH } from '../../../data/serviceUrls'
+import {
+  PRODUCT_SERVICE_URL,
+  RUSTFS_CONSOLE_ENDPOINT,
+  RUSTFS_DATA_PATH,
+} from '../../../data/serviceUrls'
 
 interface StorageObject {
   sizeBytes: number

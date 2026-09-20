@@ -51,10 +51,20 @@ export const recentJobSchema = {
     // "no error" for every non-failed job.
     failedReason: {
       type: ['string', 'null'],
-      description: "The thrown error's message from the job's last failed attempt. null unless status is 'failed'.",
+      description:
+        "The thrown error's message from the job's last failed attempt. null unless status is 'failed'.",
     },
   },
-  required: ['id', 'name', 'status', 'attempts', 'maxAttempts', 'createdAt', 'updatedAt', 'failedReason'],
+  required: [
+    'id',
+    'name',
+    'status',
+    'attempts',
+    'maxAttempts',
+    'createdAt',
+    'updatedAt',
+    'failedReason',
+  ],
 } as const
 
 export const serviceUnavailableSchema = {

@@ -59,10 +59,7 @@ async function probe(service: UpstreamService): Promise<GatewayServiceHealth> {
   }
 }
 
-export function registerServicesRoute(
-  server: FastifyInstance,
-  upstreams: UpstreamService[]
-): void {
+export function registerServicesRoute(server: FastifyInstance, upstreams: UpstreamService[]): void {
   server.get(
     '/api/v1/services',
     {
@@ -71,7 +68,7 @@ export function registerServicesRoute(
         description:
           'Live health of every backend microservice this gateway proxies to, probed ' +
           "server-side by this process (never the browser) against each service's own " +
-          '/health. Reports the gateway\'s own real network path, which can differ from a ' +
+          "/health. Reports the gateway's own real network path, which can differ from a " +
           "browser-side probe's. Does not cover the frontend apps or object storage — those " +
           'have no upstream this gateway proxies to and are probed client-side instead.',
         response: {

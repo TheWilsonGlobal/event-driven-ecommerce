@@ -24,12 +24,7 @@ interface Props {
   onImageUrlChange: (url: string) => void
 }
 
-export default function ImagePicker({
-  isOpen,
-  editingProduct,
-  imageUrl,
-  onImageUrlChange,
-}: Props) {
+export default function ImagePicker({ isOpen, editingProduct, imageUrl, onImageUrlChange }: Props) {
   const [imageSource, setImageSource] = useState<ImageSource>('url')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -254,9 +249,7 @@ export default function ImagePicker({
           </>
         )}
         {uploadError && (
-          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--red-light)' }}>
-            {uploadError}
-          </div>
+          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--red-light)' }}>{uploadError}</div>
         )}
       </div>
     </div>

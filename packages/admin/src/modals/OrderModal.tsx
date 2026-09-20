@@ -213,8 +213,9 @@ export default function OrderModal({ order, onClose }: Props) {
                   <span className="k">Items</span>
                   <span className="v mono">
                     {order.items.reduce((sum, i) => sum + i.quantity, 0)} unit
-                    {order.items.reduce((sum, i) => sum + i.quantity, 0) === 1 ? '' : 's'} across{' '}
-                    {order.items.length} line{order.items.length === 1 ? '' : 's'}
+                    {order.items.reduce((sum, i) => sum + i.quantity, 0) === 1
+                      ? ''
+                      : 's'} across {order.items.length} line{order.items.length === 1 ? '' : 's'}
                   </span>
                 </div>
                 <div

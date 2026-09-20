@@ -199,7 +199,11 @@ function mergeQueueData(payloads: (QueueData | null)[]): QueueData | null {
  * null only when every source failed.
  */
 const QUEUE_SOURCES = [
-  { service: 'ms-order', url: `${ORDER_SERVICE_URL}/api/v1/queues`, authority: ORDER_SERVICE_AUTHORITY },
+  {
+    service: 'ms-order',
+    url: `${ORDER_SERVICE_URL}/api/v1/queues`,
+    authority: ORDER_SERVICE_AUTHORITY,
+  },
   {
     service: 'ms-product',
     url: `${PRODUCT_SERVICE_URL}/api/v1/queues`,

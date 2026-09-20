@@ -38,7 +38,10 @@ export default function TaskQueuesTab() {
             key={source.service}
             title={`${source.service} queue data unavailable — ${describeSourceError(source)}`}
             detail={source.error?.message}
-            reason={source.error?.reason ?? (source.error?.status ? `HTTP ${source.error.status}` : 'network_error')}
+            reason={
+              source.error?.reason ??
+              (source.error?.status ? `HTTP ${source.error.status}` : 'network_error')
+            }
             onRetry={refetch}
             retrying={loading}
           />
@@ -47,7 +50,7 @@ export default function TaskQueuesTab() {
       <QueuesPanel
         data={data}
         loading={loading}
-        error={allFailed ? failed[0]?.error ?? null : null}
+        error={allFailed ? (failed[0]?.error ?? null) : null}
         onRetry={refetch}
       />
     </>
