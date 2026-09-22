@@ -163,3 +163,39 @@ export async function getCategories(): Promise<Category[]> {
   const body = (await response.json()) as { categories: Category[] }
   return body.categories
 }
+
+export interface ServiceLocation {
+  name: string
+  url: string
+}
+
+export class TopologyApiError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TopologyApiError'
+  }
+}
+
+/**
+ * The gateway's static service registry (see registerTopologyRoute in the
+ * gateway repo) -- every service's configured origin, not just the three
+ * this storefront proxies through. Built for StorefrontFooter's port badges,
+ * which used to be hand-typed literals: RustFS's badge went stale the moment
+ * its host port moved from 9000 to 6380 on 2026-09-22, because nothing here
+ * would have noticed. Throws rather than returning a partial/empty list on
+ * failure, same as every other call in this file -- the caller decides what
+ * "the gateway is unreachable" should look like, not this function.
+ */
+export async function getTopology(): Promise<ServiceLocation[]> {
+  let response: Response
+  try {
+    response = await fetch(`${GATEWAY_URL}/api/v1/topology`)
+  } catch {
+    throw new TopologyApiError('Could not reach the API gateway. Please check your connection.')
+  }
+  if (!response.ok) {
+    throw new TopologyApiError(`API gateway returned an error (status ${response.status}).`)
+  }
+  const body = (await response.json()) as { services: ServiceLocation[] }
+  return body.services
+}

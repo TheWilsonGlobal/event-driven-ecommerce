@@ -15,7 +15,7 @@ import {
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
-import { registerLogRoutes, registerServicesRoute } from './diagnostics'
+import { registerLogRoutes, registerServicesRoute, registerTopologyRoute } from './diagnostics'
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
@@ -28,6 +28,16 @@ const PORT = parseInt(process.env.API_GATEWAY_PORT || process.env.PORT || '5460'
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://127.0.0.1:5463'
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:5464'
 const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5465'
+
+// The two frontends have no proxy route (nothing here forwards traffic to
+// them), so unlike the three URLs above there is no existing env var for
+// their full origin -- only a bare port. Built the same way here as
+// everywhere a *_PORT-only value needs to become a dialable origin.
+const ADMIN_URL = `http://127.0.0.1:${process.env.ADMIN_PORT || '5461'}`
+const CLIENT_URL = `http://127.0.0.1:${process.env.CLIENT_PORT || '5462'}`
+// Owned by the infra-hub repo, not this one -- RUSTFS_ENDPOINT is the one
+// value here this gateway does not proxy to or run itself, only reports.
+const RUSTFS_ENDPOINT = process.env.RUSTFS_ENDPOINT || 'http://localhost:6380'
 
 async function bootstrap() {
   const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
@@ -142,6 +152,16 @@ async function bootstrap() {
     { name: 'ms-user', url: USER_SERVICE_URL },
     { name: 'ms-product', url: PRODUCT_SERVICE_URL },
     { name: 'ms-order', url: ORDER_SERVICE_URL },
+  ])
+
+  registerTopologyRoute(server, [
+    { name: 'gateway', url: `http://127.0.0.1:${String(PORT)}` },
+    { name: 'admin', url: ADMIN_URL },
+    { name: 'client', url: CLIENT_URL },
+    { name: 'ms-user', url: USER_SERVICE_URL },
+    { name: 'ms-product', url: PRODUCT_SERVICE_URL },
+    { name: 'ms-order', url: ORDER_SERVICE_URL },
+    { name: 'rustfs', url: RUSTFS_ENDPOINT },
   ])
 
   // Proxy user and auth routes

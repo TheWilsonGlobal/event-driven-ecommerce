@@ -4,7 +4,12 @@ describe('RustFS and Storage Configuration', () => {
   it('should load default RustFS configuration when no env is provided', () => {
     const config = loadStorageConfig({})
     expect(config.provider).toBe('rustfs')
-    expect(config.rustfs.endpoint).toBe('http://localhost:9000')
+    // 6380, not 9000: the default moved 2026-09-22 to match infra-hub's
+    // docker-compose.yml, which now publishes RustFS on 6380/6381 (9000
+    // collided with the Hadoop NameNode and a k8s MinIO port-forward on this
+    // machine). This assertion is what would have caught the default going
+    // stale if it were ever forgotten here.
+    expect(config.rustfs.endpoint).toBe('http://localhost:6380')
     expect(config.rustfs.bucket).toBe('ecommerce-uploads')
     expect(config.rustfs.accessKey).toBe('rustfsadmin')
   })

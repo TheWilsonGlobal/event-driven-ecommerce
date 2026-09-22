@@ -38,8 +38,10 @@ export default defineConfig(({ mode }) => {
     VITE_USER_SERVICE_URL: origin('USER_SERVICE_PORT', '5463'),
     VITE_PRODUCT_SERVICE_URL: origin('PRODUCT_SERVICE_PORT', '5464'),
     VITE_ORDER_SERVICE_URL: origin('ORDER_SERVICE_PORT', '5465'),
-    VITE_RUSTFS_ENDPOINT: env.RUSTFS_ENDPOINT || 'http://localhost:9000',
-    VITE_RUSTFS_CONSOLE_ENDPOINT: env.RUSTFS_CONSOLE_ENDPOINT || 'http://localhost:9001',
+    // Fallbacks moved off 9000/9001 to 6380/6381 on 2026-09-22, matching
+    // infra-hub -- which owns the container these values describe.
+    VITE_RUSTFS_ENDPOINT: env.RUSTFS_ENDPOINT || 'http://localhost:6380',
+    VITE_RUSTFS_CONSOLE_ENDPOINT: env.RUSTFS_CONSOLE_ENDPOINT || 'http://localhost:6381',
     VITE_RUSTFS_BUCKET: env.RUSTFS_BUCKET || 'ecommerce-uploads',
     VITE_RUSTFS_DATA_PATH: env.RUSTFS_DATA_PATH || 'C:\\Hub\\RustFS',
     VITE_PROMETHEUS_URL: `http://${host}:${port('PROMETHEUS_PORT', '9090')}`,

@@ -42,8 +42,10 @@ export function loadStorageConfig(env: NodeJS.ProcessEnv = process.env): Storage
   return {
     provider,
     rustfs: {
-      endpoint: env.RUSTFS_ENDPOINT ?? 'http://localhost:9000',
-      consoleEndpoint: env.RUSTFS_CONSOLE_ENDPOINT ?? 'http://localhost:9001',
+      // Fallbacks moved off 9000/9001 to 6380/6381 on 2026-09-22, matching
+      // infra-hub -- which owns the container this client talks to.
+      endpoint: env.RUSTFS_ENDPOINT ?? 'http://localhost:6380',
+      consoleEndpoint: env.RUSTFS_CONSOLE_ENDPOINT ?? 'http://localhost:6381',
       accessKey: env.RUSTFS_ACCESS_KEY ?? 'rustfsadmin',
       secretKey: env.RUSTFS_SECRET_KEY ?? 'rustfspassword',
       bucket: env.RUSTFS_BUCKET ?? 'ecommerce-uploads',

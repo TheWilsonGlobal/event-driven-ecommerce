@@ -4,7 +4,9 @@ import { ConfigCard, ReadOnlyRow, type OpenSignal } from '../parts'
 import {
   PRODUCT_SERVICE_URL,
   RUSTFS_CONSOLE_ENDPOINT,
+  RUSTFS_CONSOLE_PORT,
   RUSTFS_DATA_PATH,
+  RUSTFS_PORT,
 } from '../../../data/serviceUrls'
 
 interface StorageObject {
@@ -93,8 +95,11 @@ export function StorageCard({
         </span>
       </div>
       <ReadOnlyRow label="Image" value="rustfs/rustfs:latest" />
-      <ReadOnlyRow label="S3 API Port" value="9000" />
-      <ReadOnlyRow label="Console Port" value="9001" />
+      {/* Derived from the real endpoint URLs rather than hand-typed, so a
+          future host-port move (like 9000/9001 -> 6380/6381 on 2026-09-22)
+          cannot leave this label describing the old port. */}
+      <ReadOnlyRow label="S3 API Port" value={RUSTFS_PORT} />
+      <ReadOnlyRow label="Console Port" value={RUSTFS_CONSOLE_PORT} />
       <ReadOnlyRow label="Host Path" value={RUSTFS_DATA_PATH} />
       <ReadOnlyRow label="Container Path" value="/data" />
       <ReadOnlyRow label="Mount Type" value="bind" />
@@ -145,7 +150,7 @@ export function StorageCard({
           rel="noreferrer"
           style={{ fontSize: 12, color: 'var(--blue-light)', fontWeight: 600 }}
         >
-          Open RustFS Console (Port 9001) &rarr;
+          Open RustFS Console (Port {RUSTFS_CONSOLE_PORT}) &rarr;
         </a>
       </div>
     </ConfigCard>

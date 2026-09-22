@@ -48,6 +48,8 @@ export const CLIENT_PORT = new URL(CLIENT_URL).port
 export const USER_SERVICE_PORT = new URL(USER_SERVICE_URL).port
 export const PRODUCT_SERVICE_PORT = new URL(PRODUCT_SERVICE_URL).port
 export const ORDER_SERVICE_PORT = new URL(ORDER_SERVICE_URL).port
+export const RUSTFS_PORT = new URL(RUSTFS_ENDPOINT).port
+export const RUSTFS_CONSOLE_PORT = new URL(RUSTFS_CONSOLE_ENDPOINT).port
 
 /** Host:port for the order/product services, for use in operator-facing error text. */
 export const ORDER_SERVICE_AUTHORITY = new URL(ORDER_SERVICE_URL).host

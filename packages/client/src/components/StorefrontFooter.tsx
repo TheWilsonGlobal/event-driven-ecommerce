@@ -21,7 +21,7 @@ export default function StorefrontFooter() {
             Order: 5465
           </span>
           <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
-            RustFS: 9000
+            RustFS: 6380
           </span>
         </div>
         <div className="flex items-center gap-4">

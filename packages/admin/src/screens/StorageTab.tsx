@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { EmptyState, Pagination } from '../components/ui'
 import { DownloadIcon } from '../components/icons'
-import { PRODUCT_SERVICE_URL, RUSTFS_CONSOLE_ENDPOINT } from '../data/serviceUrls'
+import {
+  PRODUCT_SERVICE_URL,
+  RUSTFS_CONSOLE_ENDPOINT,
+  RUSTFS_CONSOLE_PORT,
+} from '../data/serviceUrls'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const DEFAULT_PAGE_SIZE = 25
@@ -185,7 +189,7 @@ export default function StorageTab() {
           rel="noreferrer"
           style={{ fontSize: 12, color: 'var(--blue-light)', fontWeight: 600 }}
         >
-          Open RustFS Console (Port 9001) &rarr;
+          Open RustFS Console (Port {RUSTFS_CONSOLE_PORT}) &rarr;
         </a>
       </div>
     </>
