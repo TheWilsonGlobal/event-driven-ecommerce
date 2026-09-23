@@ -40,13 +40,33 @@ const EXPIRABLE_STATUSES = new Set(['PENDING'])
  * otherwise moved on. The job payload is 15 minutes stale by construction and
  * must never be trusted as a view of current state.
  */
-export function makeExpireOrderProcessor(prisma: PrismaClient) {
+export interface ExpireOrderDeps {
+  prisma: PrismaClient
+  /**
+   * Publishes order.cancelled after a real expiry.
+   *
+   * Injected rather than imported so this module stays free of the event
+   * layer — the same reason startWorkers takes `enqueueRefundPayment` as a
+   * parameter instead of closing over a QueueManager.
+   *
+   * This hand-off is load-bearing: an expired order releases nothing without
+   * it, so ms-inventory would hold that stock reserved forever.
+   */
+  onOrderCancelled: (data: {
+    orderId: string
+    orderNumber: string
+    reason: string
+    items: { productId: string; sku: string; quantity: number; unitPrice: number }[]
+  }) => Promise<void>
+}
+
+export function makeExpireOrderProcessor({ prisma, onOrderCancelled }: ExpireOrderDeps) {
   return async function processExpireOrder(job: Job<ExpireOrderJob>) {
     const { orderId, orderNumber } = job.data
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      include: { payments: true },
+      include: { payments: true, items: true },
     })
 
     if (!order) {
@@ -74,6 +94,21 @@ export function makeExpireOrderProcessor(prisma: PrismaClient) {
     await prisma.order.update({
       where: { id: orderId },
       data: { status: 'CANCELLED' },
+    })
+
+    // The order is now genuinely cancelled and committed. Publishing failures
+    // are swallowed inside the publisher, so a broker outage cannot fail the
+    // job and cause BullMQ to retry a cancellation that already happened.
+    await onOrderCancelled({
+      orderId,
+      orderNumber,
+      reason: 'expired-unpaid',
+      items: order.items.map((i) => ({
+        productId: i.productId,
+        sku: i.productSku,
+        quantity: i.quantity,
+        unitPrice: Number(i.unitPrice),
+      })),
     })
 
     return { outcome: 'cancelled', orderId, orderNumber }

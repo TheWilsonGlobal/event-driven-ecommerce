@@ -38,6 +38,8 @@
       "@ecommerce/ms-user": ["./packages/ms-user/src"],
       "@ecommerce/ms-product": ["./packages/ms-product/src"],
       "@ecommerce/ms-order": ["./packages/ms-order/src"],
+      "@ecommerce/ms-inventory": ["./packages/ms-inventory/src"],
+      "@ecommerce/ms-analytics": ["./packages/ms-analytics/src"],
       "@ecommerce/client": ["./packages/client/src"],
       "@ecommerce/admin": ["./packages/admin/src"]
     }

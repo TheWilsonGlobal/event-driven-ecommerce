@@ -1,0 +1,19 @@
+{
+  // Test-only compiler options. The root tsconfig sets `types: ["node"]`,
+  // which excludes @types/jest and makes `describe`/`it`/`expect` unresolvable
+  // in test files; ts-jest reads THIS file instead. Same approach as
+  // shared/messaging's tsconfig.jest.json.
+  //
+  // Tests are deliberately not part of the build: tsconfig.json excludes
+  // **/*.test.ts, so this file is what gives the editor and ts-jest the
+  // correct view of them.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "jest"],
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

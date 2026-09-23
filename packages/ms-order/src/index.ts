@@ -21,6 +21,14 @@ import { registerOrderRoutes } from './routes/orders'
 import { registerPaymentRoutes } from './routes/payments'
 import { registerCartRoutes } from './routes/cart'
 import { registerShutdownHandlers } from './shutdown'
+import { checkKafkaHealth, registerKafkaMetrics } from '@ecommerce/shared-messaging'
+import {
+  eventProducer,
+  kafkaAdminClient,
+  kafkaSettings,
+  registerEventRoutes,
+  publishOrderCancelled,
+} from './events'
 
 /** Workspace root — this service's cwd is packages/ms-order. */
 const REPO_ROOT = path.resolve(__dirname, '../../../')
@@ -71,7 +79,18 @@ async function bootstrap() {
   })
 
   // Before every other plugin, so the onResponse hook sees all traffic.
-  registerMetrics(server, { service: 'ms-order' })
+  const metrics = registerMetrics(server, { service: 'ms-order' })
+
+  // Event-backbone series on the SAME registry, so one scrape of /metrics
+  // carries both. ms-order publishes but does not consume, so this contributes
+  // topic counters and partition counts; the lag series come from the two
+  // consumer services. See §6.6 of the implementation report.
+  registerKafkaMetrics({
+    registry: metrics.registry,
+    service: 'ms-order',
+    producer: eventProducer,
+    kafka: kafkaAdminClient,
+  })
 
   // Before any route registration below — onRoute only fires for routes
   // registered after this hook is attached.
@@ -103,6 +122,21 @@ async function bootstrap() {
                   queue: { type: 'string' },
                 },
               },
+              // Read from a ~10s cache so a liveness probe never blocks on an
+              // unreachable broker -- the lesson ms-product learned when an
+              // uncached Elasticsearch probe took ~2.5s during an outage.
+              // `reachable:false` with `enabled:false` is a healthy default,
+              // not an outage.
+              events: {
+                type: 'object',
+                properties: {
+                  enabled: { type: 'boolean' },
+                  reachable: { type: 'boolean' },
+                  brokers: { type: 'array', items: { type: 'string' } },
+                  reason: { type: ['string', 'null'] },
+                  cachedAgeMs: { type: 'number' },
+                },
+              },
             },
           },
         },
@@ -118,6 +152,11 @@ async function bootstrap() {
           driver: dbConfig.relational.driver,
           queue: dbConfig.keyValue.driver,
         },
+        events: await checkKafkaHealth(
+          kafkaAdminClient,
+          kafkaSettings.brokers,
+          kafkaSettings.enabled
+        ),
       }
     }
   )
@@ -126,6 +165,7 @@ async function bootstrap() {
   registerPaymentRoutes(server, { prisma, queueManager })
 
   registerQueueRoutes(server, queueManager)
+  registerEventRoutes(server)
   registerSchemaRoutes(server, prisma)
   registerLogRoutes(server)
 
@@ -143,7 +183,16 @@ async function bootstrap() {
   // Workers attach to Redis lazily; if Redis is down they sit reconnecting
   // (with an 'error' handler attached) and the service still serves HTTP.
   if (redisEnabled) {
-    queueManager.startWorkers()
+    queueManager.startWorkers({
+      // An expiry that actually cancels an order publishes the fact, so
+      // ms-inventory can release what it reserved. Swallows its own failures.
+      onOrderCancelled: async (data) => {
+        await publishOrderCancelled(data)
+      },
+    })
+    console.log(
+      `[Order Service] BullMQ workers started for: ${QUEUE_DEFINITIONS.map((q) => q.name).join(', ')}`
+    )
   } else {
     const info = queueManager.keyValueInfo()
     // eslint-disable-next-line no-console
@@ -152,14 +201,24 @@ async function bootstrap() {
         `BullMQ workers are disabled and the queue endpoints will report ` +
         `kv_driver_not_redis. Snapshot: ${info.dataPath ?? 'in-memory'}`
     )
+  }
+
+  // Kafka is OPTIONAL and off by default. Say which state we are in at boot,
+  // so "no events are appearing" is diagnosable from the log alone.
+  if (kafkaSettings.enabled) {
     console.log(
-      `[Order Service] BullMQ workers started for: ${QUEUE_DEFINITIONS.map((q) => q.name).join(', ')}`
+      `[Order Service] Kafka event publishing ENABLED -> ${kafkaSettings.brokers.join(', ')}`
+    )
+  } else {
+    console.log(
+      '[Order Service] Kafka event publishing DISABLED (set KAFKA_ENABLED=true to enable); ' +
+        'GET /api/v1/events reports enabled:false'
     )
   }
 
   registerEndpointsRoute(server, routeRegistry, 'ms-order')
 
-  registerShutdownHandlers({ server, queueManager, kvStore, prisma })
+  registerShutdownHandlers({ server, queueManager, kvStore, prisma, eventProducer })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

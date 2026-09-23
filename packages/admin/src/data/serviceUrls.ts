@@ -15,6 +15,9 @@ export const CLIENT_URL = import.meta.env.VITE_CLIENT_URL
 export const USER_SERVICE_URL = import.meta.env.VITE_USER_SERVICE_URL
 export const PRODUCT_SERVICE_URL = import.meta.env.VITE_PRODUCT_SERVICE_URL
 export const ORDER_SERVICE_URL = import.meta.env.VITE_ORDER_SERVICE_URL
+/** Event-backbone consumers. Both serve their own /api/v1/events. */
+export const INVENTORY_SERVICE_URL = import.meta.env.VITE_INVENTORY_SERVICE_URL
+export const ANALYTICS_SERVICE_URL = import.meta.env.VITE_ANALYTICS_SERVICE_URL
 
 /** Object storage (RustFS / S3-compatible) — API endpoint and web console. */
 export const RUSTFS_ENDPOINT = import.meta.env.VITE_RUSTFS_ENDPOINT
@@ -41,6 +44,17 @@ export const LOKI_ENABLED = import.meta.env.VITE_LOKI_ENABLED === 'true'
 /** Dashboards for the three backends above. Owned by infra-hub (host 3005 by default). */
 export const GRAFANA_URL = import.meta.env.VITE_GRAFANA_URL
 
+/**
+ * Kafka event backbone. The broker is owned by infra-hub (profile `kafka`) and
+ * is OPTIONAL — `KAFKA_ENABLED=false` is the repo default. When disabled the
+ * services answer /api/v1/events with 200 + `enabled:false`, which the admin
+ * must render as a configured state, never as an outage.
+ */
+export const KAFKA_ENABLED = import.meta.env.VITE_KAFKA_ENABLED === 'true'
+export const KAFKA_BROKERS = import.meta.env.VITE_KAFKA_BROKERS
+/** Redpanda Console — 9102 (infra-hub's 910x block), not 8080/8090. */
+export const REDPANDA_CONSOLE_URL = import.meta.env.VITE_REDPANDA_CONSOLE_URL
+
 /** Port-only views, for panels that display a port rather than an origin. */
 export const ADMIN_PORT = new URL(ADMIN_URL).port
 export const GATEWAY_PORT = new URL(GATEWAY_URL).port
@@ -48,9 +62,13 @@ export const CLIENT_PORT = new URL(CLIENT_URL).port
 export const USER_SERVICE_PORT = new URL(USER_SERVICE_URL).port
 export const PRODUCT_SERVICE_PORT = new URL(PRODUCT_SERVICE_URL).port
 export const ORDER_SERVICE_PORT = new URL(ORDER_SERVICE_URL).port
+export const INVENTORY_SERVICE_PORT = new URL(INVENTORY_SERVICE_URL).port
+export const ANALYTICS_SERVICE_PORT = new URL(ANALYTICS_SERVICE_URL).port
 export const RUSTFS_PORT = new URL(RUSTFS_ENDPOINT).port
 export const RUSTFS_CONSOLE_PORT = new URL(RUSTFS_CONSOLE_ENDPOINT).port
 
 /** Host:port for the order/product services, for use in operator-facing error text. */
 export const ORDER_SERVICE_AUTHORITY = new URL(ORDER_SERVICE_URL).host
+export const INVENTORY_SERVICE_AUTHORITY = new URL(INVENTORY_SERVICE_URL).host
+export const ANALYTICS_SERVICE_AUTHORITY = new URL(ANALYTICS_SERVICE_URL).host
 export const PRODUCT_SERVICE_AUTHORITY = new URL(PRODUCT_SERVICE_URL).host

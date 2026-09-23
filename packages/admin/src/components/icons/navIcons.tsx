@@ -164,3 +164,29 @@ export function QueueIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+/**
+ * Events (Kafka event backbone). A broadcast/fan-out mark: one source node
+ * emitting to several subscribers, which is what distinguishes a topic from
+ * QueueIcon's point-to-point stacked bars.
+ */
+export function EventsIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <circle cx="5" cy="12" r="2.5" />
+      <circle cx="19" cy="5" r="2.5" />
+      <circle cx="19" cy="19" r="2.5" />
+      <line x1="7.2" y1="10.9" x2="16.8" y2="6.1" />
+      <line x1="7.2" y1="13.1" x2="16.8" y2="17.9" />
+      <line x1="8" y1="12" x2="15" y2="12" />
+    </svg>
+  )
+}

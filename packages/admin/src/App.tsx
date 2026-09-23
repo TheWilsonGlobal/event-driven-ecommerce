@@ -11,6 +11,7 @@ import {
   OrdersIcon,
   UsersIcon,
   QueueIcon,
+  EventsIcon,
   StorageIcon,
   PersistenceIcon,
   CacheIcon,
@@ -24,11 +25,13 @@ import ProductsTab from './screens/ProductsTab'
 import OrdersTab from './screens/OrdersTab'
 import UsersTab from './screens/UsersTab'
 import TaskQueuesTab from './screens/TaskQueuesTab'
+import EventsTab from './screens/EventsTab'
 import StorageTab from './screens/StorageTab'
 import InfraTab from './screens/InfraTab'
 import KvKeysTab from './screens/KvKeysTab'
 import ConfigTab from './screens/ConfigTab'
 import { useCacheKeys, useMergedQueueData } from './hooks/useQueueData'
+import { useMergedEventData } from './hooks/useEventData'
 import { CLIENT_URL } from './data/serviceUrls'
 
 // Modals
@@ -53,16 +56,24 @@ export default function App() {
   // shows the reachable source(s)' total — see useMergedQueueData.
   const queueData = useMergedQueueData()
   const cacheKeyData = useCacheKeys()
+  // Sidebar topic-count badge for Events. `summary` is null until at least one
+  // of the three services answers and null again if every one fails, so the
+  // badge simply disappears rather than showing a 0 that would read as
+  // "the backbone has no topics". Also suppressed while the first load is in
+  // flight, matching the queue badge: a count is either measured or absent.
+  const eventData = useMergedEventData()
 
   // These badges own separate hook instances from the tabs, so refresh them on
   // navigation. Without this they would stay stuck on their mount-time result —
   // notably staying blank after Redis recovers, until a full page reload.
   const refetchQueues = queueData.refetch
   const refetchCacheKeys = cacheKeyData.refetch
+  const refetchEvents = eventData.refetch
   useEffect(() => {
     refetchQueues()
     refetchCacheKeys()
-  }, [app.tab, refetchQueues, refetchCacheKeys])
+    refetchEvents()
+  }, [app.tab, refetchQueues, refetchCacheKeys, refetchEvents])
 
   const OPERATIONS: NavEntry[] = [{ key: 'dashboard', label: 'Dashboard', Icon: DashboardIcon }]
 
@@ -88,6 +99,12 @@ export default function App() {
       label: 'Task Queues',
       Icon: QueueIcon,
       count: queueData.data?.summary.totalJobs,
+    },
+    {
+      key: 'events',
+      label: 'Events',
+      Icon: EventsIcon,
+      count: eventData.loading ? undefined : eventData.summary?.topicCount,
     },
   ]
 
@@ -244,6 +261,8 @@ export default function App() {
         )}
 
         {app.tab === 'task-queues' && <TaskQueuesTab />}
+
+        {app.tab === 'events' && <EventsTab />}
 
         {app.tab === 'kv-keys' && <KvKeysTab />}
 

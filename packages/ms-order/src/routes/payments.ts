@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import { QueueManager } from '../queues'
+import {
+  publishOrderConfirmed,
+  publishPaymentCaptured,
+  publishPaymentFailed,
+  publishPaymentRefunded,
+} from '../events'
 
 export interface PaymentsRouteDeps {
   prisma: PrismaClient
@@ -121,6 +127,34 @@ export function registerPaymentRoutes(
         })
         await prisma.order.update({ where: { id: orderId }, data: { status: 'CONFIRMED' } })
 
+        // Two facts, both now true and both committed. payment.captured is the
+        // money event; order.confirmed is the lifecycle event. They are
+        // separate topics because they have different audiences — analytics
+        // wants both, inventory only cares about the order reaching a terminal
+        // paid state.
+        await publishPaymentCaptured(
+          {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            paymentId: pendingPayment.id,
+            provider: pendingPayment.provider,
+            amount: Number(pendingPayment.amount),
+            currency: pendingPayment.currency,
+          },
+          request.id
+        )
+        await publishOrderConfirmed(
+          {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            customerEmail: order.customerEmail,
+            customerName: order.customerName,
+            totalAmount: Number(order.totalAmount),
+            currency: order.currency,
+          },
+          request.id
+        )
+
         // A now-confirmed order genuinely warrants its confirmation + receipt.
         await queueManager.tryEnqueue('send-confirmation', () =>
           queueManager.enqueueSendConfirmation({
@@ -150,6 +184,27 @@ export function registerPaymentRoutes(
       }
 
       // Capture failed: this is the genuine trigger for payment-retry.
+      //
+      // payment.failed is published as a FACT for analytics. The retry itself
+      // stays on BullMQ and is NOT moved behind Kafka: a retry is work with one
+      // owner, an attempt counter and a terminal failure state, none of which
+      // Kafka provides. This is the split the whole design rests on.
+      await publishPaymentFailed(
+        {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          paymentId: pendingPayment.id,
+          provider: pendingPayment.provider,
+          amount: Number(pendingPayment.amount),
+          currency: pendingPayment.currency,
+          reason: 'simulated-capture-declined',
+          // First attempt — the BullMQ retries that follow are counted by the
+          // job's own attemptsMade, not here.
+          attempt: 1,
+        },
+        request.id
+      )
+
       const retryJobId = await queueManager.tryEnqueue('retry-capture', () =>
         queueManager.enqueueRetryCapture({
           orderId: order.id,
@@ -243,6 +298,23 @@ export function registerPaymentRoutes(
             error: 'Order has no COMPLETED payment to refund',
           })
         }
+        // The refund is COMPENSATION WORK, so it goes on BullMQ. The fact
+        // that a refund was initiated is published for analytics. Note the
+        // ordering: publish describes an intent that the queue then carries
+        // out, so a consumer must treat this as "refund started", not
+        // "refund settled".
+        await publishPaymentRefunded(
+          {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            paymentId: capturedPayment.id,
+            amount: Number(capturedPayment.amount),
+            currency: capturedPayment.currency,
+            reason,
+          },
+          request.id
+        )
+
         jobId = await queueManager.tryEnqueue('refund-payment', () =>
           queueManager.enqueueRefundPayment({
             orderId: order.id,

@@ -116,6 +116,61 @@ services:
       - ./packages/ms-order/src:/app/src
       - /app/node_modules
 
+  # ── Event-backbone consumers ────────────────────────────────────────────
+  #
+  # Both are OPTIONAL. They consume from Redpanda, which lives in infra-hub
+  # behind `--profile kafka`, and they boot fine without it: KAFKA_ENABLED
+  # defaults to false, in which case no Kafka client is constructed at all and
+  # every HTTP route still serves. Bringing them up with the broker down costs
+  # a stale view, not a failed container.
+  #
+  # ⚠️ KAFKA_BROKERS is redpanda:29092, NOT localhost:9100. 29092 is the
+  # broker's INTERNAL listener, which is the only one reachable from another
+  # container on infra-network. 9100 is the host-side mapping, for processes
+  # running on the host under `pnpm run dev`. Using the host value here fails
+  # with ECONNREFUSED that looks exactly like a broker that is simply down.
+  inventory-service:
+    build:
+      context: .
+      dockerfile: packages/ms-inventory/Dockerfile
+    container_name: ecommerce-inventory-service
+    environment:
+      NODE_ENV: development
+      INVENTORY_SERVICE_PORT: 5466
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: redpanda:29092
+      NEDB_DATA_PATH: /app/data/nedb
+    ports:
+      - "5466:5466"
+    networks:
+      - infra-network
+    volumes:
+      - ./packages/ms-inventory/src:/app/src
+      - inventory-data:/app/data
+      - /app/node_modules
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: packages/ms-analytics/Dockerfile
+    container_name: ecommerce-analytics-service
+    environment:
+      NODE_ENV: development
+      ANALYTICS_SERVICE_PORT: 5467
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: redpanda:29092
+      NEDB_DATA_PATH: /app/data/nedb
+    ports:
+      - "5467:5467"
+    networks:
+      - infra-network
+    volumes:
+      - ./packages/ms-analytics/src:/app/src
+      - analytics-data:/app/data
+      - /app/node_modules
+
   client:
     build:
       context: .
@@ -134,6 +189,13 @@ services:
       - ./packages/client/src:/app/src
       - ./packages/client/public:/app/public
       - /app/node_modules
+
+volumes:
+  # Aggregates and the processed-event ledgers. Named rather than bind-mounted
+  # so they survive `up --build`: both services key idempotency on an eventId
+  # ledger, and a wiped ledger turns a redelivery into a double-apply.
+  inventory-data:
+  analytics-data:
 
 networks:
   # The backing services (postgres, redis, mongodb, elasticsearch, rustfs,

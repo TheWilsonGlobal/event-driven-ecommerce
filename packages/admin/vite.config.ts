@@ -38,6 +38,13 @@ export default defineConfig(({ mode }) => {
     VITE_USER_SERVICE_URL: origin('USER_SERVICE_PORT', '5463'),
     VITE_PRODUCT_SERVICE_URL: origin('PRODUCT_SERVICE_PORT', '5464'),
     VITE_ORDER_SERVICE_URL: origin('ORDER_SERVICE_PORT', '5465'),
+    VITE_INVENTORY_SERVICE_URL: origin('INVENTORY_SERVICE_PORT', '5466'),
+    VITE_ANALYTICS_SERVICE_URL: origin('ANALYTICS_SERVICE_PORT', '5467'),
+    // Kafka is optional and off by default; the admin reads this to render
+    // "disabled" as a configured state rather than as an outage.
+    VITE_KAFKA_ENABLED: String(env.KAFKA_ENABLED === 'true'),
+    VITE_KAFKA_BROKERS: env.KAFKA_BROKERS || 'localhost:9100',
+    VITE_REDPANDA_CONSOLE_URL: `http://${host}:${port('REDPANDA_CONSOLE_PORT', '9102')}`,
     // Fallbacks moved off 9000/9001 to 6380/6381 on 2026-09-22, matching
     // infra-hub -- which owns the container these values describe.
     VITE_RUSTFS_ENDPOINT: env.RUSTFS_ENDPOINT || 'http://localhost:6380',

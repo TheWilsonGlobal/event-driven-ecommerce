@@ -38,6 +38,7 @@ describe('App smoke test', () => {
       'Users & Roles',
       'Configuration',
       'Task Queues',
+      'Events',
       'Infra',
       'KV Cache',
       'S3 Storage',

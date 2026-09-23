@@ -1,6 +1,6 @@
 import IORedis from 'ioredis'
 import type { RedisOptions } from 'ioredis'
-import { describeError } from './describeError'
+import { describeError } from '../describeError'
 
 /**
  * Redis connection management for a service's BullMQ queues.

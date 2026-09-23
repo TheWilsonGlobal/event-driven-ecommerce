@@ -28,6 +28,12 @@ const PORT = parseInt(process.env.API_GATEWAY_PORT || process.env.PORT || '5460'
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://127.0.0.1:5463'
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:5464'
 const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5465'
+// Event-backbone consumers. Both are OPTIONAL services: they consume Kafka and
+// serve their own read APIs, so the gateway proxies to them when they are
+// running and the health rollup reports them down when they are not -- exactly
+// as it already does for the other three.
+const INVENTORY_SERVICE_URL = process.env.INVENTORY_SERVICE_URL || 'http://127.0.0.1:5466'
+const ANALYTICS_SERVICE_URL = process.env.ANALYTICS_SERVICE_URL || 'http://127.0.0.1:5467'
 
 // The two frontends have no proxy route (nothing here forwards traffic to
 // them), so unlike the three URLs above there is no existing env var for
@@ -141,6 +147,8 @@ async function bootstrap() {
           users: USER_SERVICE_URL,
           products: PRODUCT_SERVICE_URL,
           orders: ORDER_SERVICE_URL,
+          inventory: INVENTORY_SERVICE_URL,
+          analytics: ANALYTICS_SERVICE_URL,
         },
       }
     }
@@ -152,6 +160,8 @@ async function bootstrap() {
     { name: 'ms-user', url: USER_SERVICE_URL },
     { name: 'ms-product', url: PRODUCT_SERVICE_URL },
     { name: 'ms-order', url: ORDER_SERVICE_URL },
+    { name: 'ms-inventory', url: INVENTORY_SERVICE_URL },
+    { name: 'ms-analytics', url: ANALYTICS_SERVICE_URL },
   ])
 
   registerTopologyRoute(server, [
@@ -161,6 +171,8 @@ async function bootstrap() {
     { name: 'ms-user', url: USER_SERVICE_URL },
     { name: 'ms-product', url: PRODUCT_SERVICE_URL },
     { name: 'ms-order', url: ORDER_SERVICE_URL },
+    { name: 'ms-inventory', url: INVENTORY_SERVICE_URL },
+    { name: 'ms-analytics', url: ANALYTICS_SERVICE_URL },
     { name: 'rustfs', url: RUSTFS_ENDPOINT },
   ])
 
@@ -207,6 +219,25 @@ async function bootstrap() {
     upstream: ORDER_SERVICE_URL,
     prefix: '/api/v1/payments',
     rewritePrefix: '/api/v1/payments',
+  })
+
+  // Proxy inventory and analytics (event-backbone consumers)
+  await server.register(httpProxy, {
+    upstream: INVENTORY_SERVICE_URL,
+    prefix: '/api/v1/inventory',
+    rewritePrefix: '/api/v1/inventory',
+  })
+
+  await server.register(httpProxy, {
+    upstream: INVENTORY_SERVICE_URL,
+    prefix: '/api/v1/reservations',
+    rewritePrefix: '/api/v1/reservations',
+  })
+
+  await server.register(httpProxy, {
+    upstream: ANALYTICS_SERVICE_URL,
+    prefix: '/api/v1/analytics',
+    rewritePrefix: '/api/v1/analytics',
   })
 
   registerEndpointsRoute(server, routeRegistry, 'gateway')

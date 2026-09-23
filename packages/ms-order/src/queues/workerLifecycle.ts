@@ -20,13 +20,24 @@ import {
  * exhausted-retries hand-off enqueues a real refund compensation job on the
  * saga-compensation queue.
  */
+export interface StartWorkersDeps {
+  /** Publishes order.cancelled when an expiry actually cancels an order. */
+  onOrderCancelled: (data: {
+    orderId: string
+    orderNumber: string
+    reason: string
+    items: { productId: string; sku: string; quantity: number; unitPrice: number }[]
+  }) => Promise<void>
+}
+
 export function startWorkers(
   prisma: PrismaClient,
-  enqueueRefundPayment: (data: RefundPaymentJob) => Promise<string | undefined>
+  enqueueRefundPayment: (data: RefundPaymentJob) => Promise<string | undefined>,
+  { onOrderCancelled }: StartWorkersDeps
 ): Worker[] {
   const workers: Worker[] = []
 
-  const expireOrder = makeExpireOrderProcessor(prisma)
+  const expireOrder = makeExpireOrderProcessor({ prisma, onOrderCancelled })
   const retryCapture = makeRetryCaptureProcessor({
     prisma,
     onRetriesExhausted: async (job) => {

@@ -1,4 +1,4 @@
-import { describeError } from './describeError'
+import { describeError } from '../describeError'
 
 /** Thrown when Redis cannot serve a request; callers map this to HTTP 503. */
 export class RedisUnavailableError extends Error {

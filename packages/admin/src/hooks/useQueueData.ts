@@ -54,7 +54,15 @@ export interface LiveResource<T> {
   refetch: () => void
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+/**
+ * Shared fetch used by every live panel: bounded by REQUEST_TIMEOUT_MS, and
+ * throwing a structured FetchError rather than a bare Error so callers can
+ * distinguish "never reached the service" from "the service answered 503".
+ *
+ * Exported for useEventData.ts, which needs identical semantics against
+ * /api/v1/events on three services.
+ */
+export async function fetchJson<T>(url: string): Promise<T> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   let res: Response
@@ -94,7 +102,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T
 }
 
-function isFetchError(value: unknown): value is FetchError {
+export function isFetchError(value: unknown): value is FetchError {
   return typeof value === 'object' && value !== null && 'kind' in value && 'message' in value
 }
 

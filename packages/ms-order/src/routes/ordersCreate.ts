@@ -3,6 +3,7 @@ import * as crypto from 'crypto'
 import { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import { paymentMethodToProvider, paymentStatusToPaymentRowStatus } from '../seedOrders'
 import { QueueManager } from '../queues'
+import { publishOrderCreated, publishOrderConfirmed } from '../events'
 import { toOrderRecord, generateUniqueOrderNumber, CreateOrderBody } from '../orderMapping'
 
 export interface OrdersCreateRouteDeps {
@@ -174,6 +175,33 @@ export function registerOrderCreateRoute(
       // committed to the database and a Redis outage must not retroactively
       // fail it.
 
+      // Kafka first: order.created is a FACT about a row that now exists, and
+      // it is what ms-inventory and ms-analytics consume. Publishing is
+      // additive — the BullMQ enqueues below are unchanged, so an unreachable
+      // broker changes nothing about how checkout behaves today.
+      //
+      // Published for BOTH branches: a CONFIRMED order still needs its stock
+      // reserved and still belongs in the analytics funnel. `status` on the
+      // payload is what lets a consumer tell the two apart.
+      await publishOrderCreated(
+        {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          userId: order.userId,
+          customerEmail: order.customerEmail,
+          status: orderStatus,
+          totalAmount: Number(order.totalAmount),
+          currency: order.currency,
+          items: order.items.map((i) => ({
+            productId: i.productId,
+            sku: i.productSku,
+            quantity: i.quantity,
+            unitPrice: Number(i.unitPrice),
+          })),
+        },
+        request.id
+      )
+
       if (orderStatus === 'PENDING') {
         // order-expiration: only reachable for an order that is genuinely
         // awaiting payment.
@@ -185,8 +213,29 @@ export function registerOrderCreateRoute(
           })
         )
       } else {
+        // An order created with payment already captured is confirmed at
+        // birth, so the confirmation fact belongs on the log too.
+        await publishOrderConfirmed(
+          {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            customerEmail: order.customerEmail,
+            customerName: order.customerName,
+            totalAmount: Number(order.totalAmount),
+            currency: order.currency,
+          },
+          request.id
+        )
+
         // notification-dispatch: a confirmed order really does warrant a
         // confirmation email and a receipt.
+        //
+        // These stay in-process deliberately. They COULD move behind an
+        // order.confirmed consumer, and the plan notes that as the one
+        // existing trigger worth relocating — but doing it in the same change
+        // that introduces the backbone would put checkout's emails behind an
+        // optional, default-off broker. They move once a consumer for them
+        // exists and is proven.
         await queueManager.tryEnqueue('send-confirmation', () =>
           queueManager.enqueueSendConfirmation({
             orderId: order.id,

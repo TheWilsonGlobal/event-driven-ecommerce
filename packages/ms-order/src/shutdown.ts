@@ -2,12 +2,14 @@ import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '../node_modules/.prisma-ms-order/client'
 import type { KeyValueStoreAdapter } from '@ecommerce/shared-database'
 import { QueueManager } from './queues'
+import type { EventProducer } from '@ecommerce/shared-messaging'
 
 export interface ShutdownDeps {
   server: FastifyInstance
   queueManager: QueueManager
   kvStore: KeyValueStoreAdapter | undefined
   prisma: PrismaClient
+  eventProducer: EventProducer
 }
 
 /**
@@ -20,6 +22,7 @@ export function registerShutdownHandlers({
   queueManager,
   kvStore,
   prisma,
+  eventProducer,
 }: ShutdownDeps): void {
   let shuttingDown = false
 
@@ -40,6 +43,15 @@ export function registerShutdownHandlers({
       await queueManager.close()
     } catch (err) {
       console.warn(`[Order Service] Error closing queues: ${(err as Error).message}`)
+    }
+
+    // Before the KV store, and after the HTTP server: kafkajs BATCHES sends
+    // internally, so exiting without disconnecting can drop messages the
+    // producer already accepted but has not yet put on the wire.
+    try {
+      await eventProducer.close()
+    } catch (err) {
+      console.warn(`[Order Service] Error closing event producer: ${(err as Error).message}`)
     }
 
     try {

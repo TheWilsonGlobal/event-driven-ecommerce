@@ -17,7 +17,7 @@ import type { KeyspaceInspector } from './keyspaceInspector'
 import { EmbeddedKeyspaceInspector, RedisKeyspaceInspector } from './keyspaceInspector'
 import { createRedisConnection, closeAllRedisConnections } from './redisConnection'
 import { describeError } from './describeError'
-import { startWorkers as startWorkerPool } from './workerLifecycle'
+import { startWorkers as startWorkerPool, type StartWorkersDeps } from './workerLifecycle'
 import type { RedisUnavailableError } from './errors'
 import {
   checkRedis as checkRedisConnection,
@@ -140,9 +140,16 @@ export class QueueManager {
     return q
   }
 
-  /** Starts one Worker per queue, each on its own dedicated connection. */
-  startWorkers(): void {
-    const started = startWorkerPool(this.prisma, (data) => this.enqueueRefundPayment(data))
+  /**
+   * Starts one Worker per queue, each on its own dedicated connection.
+   *
+   * `onOrderCancelled` is passed through to the expire-order processor so an
+   * expiry publishes the cancellation fact. Injected by the caller (index.ts)
+   * rather than imported here, keeping the queue layer independent of the
+   * event layer.
+   */
+  startWorkers(deps: StartWorkersDeps): void {
+    const started = startWorkerPool(this.prisma, (data) => this.enqueueRefundPayment(data), deps)
     this.workers.push(...started)
   }
 
