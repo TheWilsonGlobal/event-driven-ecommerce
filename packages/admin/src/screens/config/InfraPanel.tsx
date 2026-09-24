@@ -2,11 +2,14 @@ import type { RustfsHealth, ServiceItem } from '../../types'
 import type { LiveResource } from '../../hooks/useQueueData'
 import type { CacheDriverInfo } from './cacheTypes'
 import type { ObservabilityTarget } from '../../hooks/useObservability'
+import type { MergedEventResource } from '../../hooks/useEventData'
+import type { KafkaConfigResource } from '../../hooks/useKafkaConfig'
 import type { OpenSignal } from './parts'
 import { KvCacheCard } from './infra/KvCacheCard'
 import { StorageCard } from './infra/StorageCard'
 import { DatabaseCards } from './infra/DatabaseCards'
 import { ObservabilityCards } from './infra/ObservabilityCards'
+import { KafkaCard } from './infra/KafkaCard'
 
 export default function InfraPanel({
   rustfsHealth,
@@ -22,6 +25,8 @@ export default function InfraPanel({
   onProbeObservability,
   onSetElasticsearchEnabled,
   onSetLokiEnabled,
+  events,
+  kafkaConfig,
 }: {
   rustfsHealth: RustfsHealth
   openSignal?: OpenSignal
@@ -37,6 +42,9 @@ export default function InfraPanel({
   onProbeObservability: () => void
   onSetElasticsearchEnabled: (enabled: boolean) => void
   onSetLokiEnabled: (enabled: boolean) => void
+  /** Live backbone state, shared with the Events tab's hook. */
+  events: MergedEventResource
+  kafkaConfig: KafkaConfigResource
 }) {
   return (
     <>
@@ -51,6 +59,7 @@ export default function InfraPanel({
         openSignal={openSignal}
         onRefreshServices={onRefreshServices}
       />
+      <KafkaCard resource={events} config={kafkaConfig} openSignal={openSignal} />
       <ObservabilityCards
         prometheus={prometheus}
         elasticsearch={elasticsearch}

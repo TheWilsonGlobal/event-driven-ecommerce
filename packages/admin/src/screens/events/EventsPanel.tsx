@@ -9,6 +9,7 @@ import {
   type TopicRow,
 } from '../../hooks/useEventData'
 import { KAFKA_BROKERS, REDPANDA_CONSOLE_URL } from '../../data/serviceUrls'
+import type { KafkaConfigResource } from '../../hooks/useKafkaConfig'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const DEFAULT_PAGE_SIZE = 25
@@ -95,7 +96,14 @@ function GroupStateChip({ state }: { state: string | null }) {
 /** Sub-view selector. Topics and consumer groups are different shapes, not one table. */
 type View = 'topics' | 'consumers'
 
-export default function EventsPanel({ resource }: { resource: MergedEventResource }) {
+export default function EventsPanel({
+  resource,
+  kafkaConfig,
+}: {
+  resource: MergedEventResource
+  /** Drives the Enable button below. Same hook the Infra Kafka card uses. */
+  kafkaConfig: KafkaConfigResource
+}) {
   const {
     sources,
     topics,
@@ -236,6 +244,59 @@ export default function EventsPanel({ resource }: { resource: MergedEventResourc
               <span className="mono">.env</span>, and restart the services.
             </span>
           </div>
+          {/* The button writes the .env line only. It deliberately does NOT
+              flip the banner above to "enabled": the flag is read at boot, so
+              until the services restart this panel is still telling the truth
+              about a backbone that is switched off. */}
+          <div className="panel-row">
+            <span className="k" />
+            <span className="v" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  void kafkaConfig.setEnabled(true)
+                }}
+                disabled={kafkaConfig.saving || kafkaConfig.result?.enabled === true}
+                aria-busy={kafkaConfig.saving}
+                title={
+                  kafkaConfig.result?.enabled === true
+                    ? 'Already written to .env — restart the services for it to take effect'
+                    : 'Write KAFKA_ENABLED=true to the repo-root .env. Does not start Kafka in the running services.'
+                }
+              >
+                {kafkaConfig.saving
+                  ? 'Writing .env…'
+                  : kafkaConfig.result?.enabled === true
+                    ? 'Written to .env ✓'
+                    : 'Enable Kafka'}
+              </button>
+              <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>
+                Writes the flag only — the services read it at boot, so a restart is still required.
+              </span>
+            </span>
+          </div>
+          {kafkaConfig.result?.restartRequired && (
+            <div className="warn-banner" style={{ marginTop: 8 }}>
+              <strong>Restart required.</strong>{' '}
+              <span className="mono">KAFKA_ENABLED={String(kafkaConfig.result.enabled)}</span> was
+              written to <span className="mono">{kafkaConfig.result.envPath}</span>. The running
+              services still have{' '}
+              <span className="mono">
+                KAFKA_ENABLED={String(kafkaConfig.result.runtimeEnabled)}
+              </span>
+              , so everything below is still unmeasured. Start the broker (&nbsp;
+              <span className="mono">
+                cd ../../infra-hub &amp;&amp; docker compose --profile kafka up -d
+              </span>
+              &nbsp;) and restart ms-order, ms-inventory and ms-analytics.
+            </div>
+          )}
+          {kafkaConfig.error && (
+            <div className="warn-banner" style={{ marginTop: 8 }}>
+              <strong>Could not write .env.</strong> {kafkaConfig.error.message} — KAFKA_ENABLED was{' '}
+              <strong>not</strong> changed.
+            </div>
+          )}
           <div className="panel-row">
             <span className="k">Topic definitions</span>
             <span className="v">

@@ -7,6 +7,8 @@ import SchemaPanel from './config/SchemaPanel'
 import { useCacheDriver, useCacheNamespaces } from '../hooks/useQueueData'
 import { useSchema } from '../hooks/useSchema'
 import { useObservability } from '../hooks/useObservability'
+import { useMergedEventData } from '../hooks/useEventData'
+import { useKafkaConfig } from '../hooks/useKafkaConfig'
 
 type InfraSubTab = 'overview' | 'cache' | 'schema'
 
@@ -22,6 +24,12 @@ export default function InfraTab({
   onRefreshServices: () => void
 }) {
   const [tab, setTab] = useState<InfraSubTab>('overview')
+
+  // The Kafka group reads the same live backbone data the Events tab does —
+  // one endpoint per service, one contract, so the two screens can never
+  // disagree about whether Kafka is on.
+  const events = useMergedEventData()
+  const kafkaConfig = useKafkaConfig()
 
   const cache = useCacheNamespaces()
   const driver = useCacheDriver()
@@ -50,7 +58,7 @@ export default function InfraTab({
   // The live sub-tabs refetch in place.
   const reloading =
     (tab === 'cache' && cache.loading) ||
-    (tab === 'overview' && driver.loading) ||
+    (tab === 'overview' && (driver.loading || events.loading)) ||
     (tab === 'schema' && schema.loading)
   const handleReload = () => {
     if (tab === 'cache') {
@@ -62,6 +70,7 @@ export default function InfraTab({
       onPingRustFS()
       onRefreshServices()
       probeObservability()
+      events.refetch()
     }
   }
 
@@ -82,7 +91,7 @@ export default function InfraTab({
               // omitted rather than showing a stale or invented number.
               const count =
                 key === 'overview'
-                  ? 8
+                  ? 9
                   : key === 'cache'
                     ? cache.data?.namespaces.length
                     : key === 'schema'
@@ -152,6 +161,8 @@ export default function InfraTab({
           onProbeObservability={probeObservability}
           onSetElasticsearchEnabled={setElasticsearchEnabled}
           onSetLokiEnabled={setLokiEnabled}
+          events={events}
+          kafkaConfig={kafkaConfig}
         />
       )}
       {tab === 'cache' && (

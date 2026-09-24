@@ -1,10 +1,13 @@
+// MUST be first: loads .env before any module below reads process.env.
+// See loadEnv.ts — import hoisting means no statement in this file's body
+// can run before these imports, so the dotenv calls have to live in one.
+import { REPO_ROOT } from './loadEnv'
 import type { FastifyInstance } from 'fastify'
 import fastify from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
-import * as dotenv from 'dotenv'
 import * as path from 'path'
 import { loadDatabaseConfig } from '@ecommerce/shared-database'
 import {
@@ -56,10 +59,6 @@ import { registerShutdownHandlers } from './shutdown'
  * `eventsProcessed: 0` and `lastEventAt: null`, which says "nothing processed"
  * rather than "all values are zero". Nothing here throws at construction.
  */
-
-/** Workspace root — this service's cwd is packages/ms-analytics. */
-const REPO_ROOT = path.resolve(__dirname, '../../../')
-dotenv.config({ path: path.join(REPO_ROOT, '.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.ANALYTICS_SERVICE_PORT || '5467', 10)

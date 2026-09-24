@@ -197,3 +197,72 @@ export function sendKafkaUnavailable(
     timestamp: new Date().toISOString(),
   })
 }
+
+/**
+ * Request body for PATCH /api/v1/events/config.
+ *
+ * `additionalProperties: false` so a typo'd key is a 400 rather than a silent
+ * no-op that returns 200 and changes nothing.
+ */
+export const kafkaConfigRequestSchema = {
+  type: 'object',
+  properties: {
+    enabled: {
+      type: 'boolean',
+      description: 'The value to persist as KAFKA_ENABLED in the repo-root .env.',
+    },
+  },
+  required: ['enabled'],
+  additionalProperties: false,
+} as const
+
+/**
+ * Response for PATCH /api/v1/events/config.
+ *
+ * `enabled` and `runtimeEnabled` are deliberately SEPARATE fields. The flag is
+ * read once at import time, so a write to .env cannot affect the running
+ * process — collapsing the two into one boolean would report the persisted
+ * value as though it were live, which is exactly the fabricated status the
+ * events endpoints are built to prevent.
+ */
+export const kafkaConfigResponseSchema = {
+  type: 'object',
+  properties: {
+    enabled: {
+      type: 'boolean',
+      description: 'The value now persisted in .env. NOT necessarily what this process is running.',
+    },
+    runtimeEnabled: {
+      type: 'boolean',
+      description:
+        'What this process actually booted with. Unchanged by the write — KAFKA_ENABLED is ' +
+        'read at module import time and no client exists to start when it was false.',
+    },
+    restartRequired: {
+      type: 'boolean',
+      description:
+        'True when the persisted value differs from the running one. The UI must not claim ' +
+        'Kafka is on while this is true.',
+    },
+    envPath: {
+      type: 'string',
+      description: 'Absolute path of the .env actually written, so the operator can verify it.',
+    },
+    timestamp: { type: 'string', format: 'date-time' },
+  },
+  required: ['enabled', 'runtimeEnabled', 'restartRequired', 'envPath', 'timestamp'],
+} as const
+
+/** 500 body for a .env that could not be read or written. */
+export const kafkaConfigErrorSchema = {
+  type: 'object',
+  description: 'The .env could not be read or written. Nothing was persisted.',
+  properties: {
+    error: { type: 'string' },
+    reason: { type: 'string', description: 'Machine-readable cause: kafka_env_write_failed' },
+    message: { type: 'string' },
+    envPath: { type: 'string' },
+    timestamp: { type: 'string', format: 'date-time' },
+  },
+  required: ['error', 'reason', 'message', 'envPath', 'timestamp'],
+} as const

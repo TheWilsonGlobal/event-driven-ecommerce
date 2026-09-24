@@ -125,5 +125,15 @@ export {
   eventsResponseSchema,
   kafkaUnavailableSchema,
   sendKafkaUnavailable,
+  kafkaConfigRequestSchema,
+  kafkaConfigResponseSchema,
+  kafkaConfigErrorSchema,
 } from './kafka/schemas'
 export { registerKafkaMetrics, type KafkaMetricsOptions } from './kafka/metrics'
+export {
+  setKafkaEnabledInEnv,
+  setEnvValue,
+  resolveRepoEnvPath,
+  KafkaEnvWriteError,
+  type KafkaEnvToggleResult,
+} from './kafka/envToggle'

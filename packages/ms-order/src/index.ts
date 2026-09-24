@@ -1,8 +1,11 @@
+// MUST be first: loads .env before any module below reads process.env.
+// See loadEnv.ts — import hoisting means no statement in this file's body
+// can run before these imports, so the dotenv calls have to live in one.
+import { REPO_ROOT } from './loadEnv'
 import type { FastifyInstance } from 'fastify'
 import fastify from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
-import * as dotenv from 'dotenv'
 import * as path from 'path'
 import { PrismaClient } from '../node_modules/.prisma-ms-order/client'
 import { createKeyValueStore, loadDatabaseConfig } from '@ecommerce/shared-database'
@@ -29,15 +32,6 @@ import {
   registerEventRoutes,
   publishOrderCancelled,
 } from './events'
-
-/** Workspace root — this service's cwd is packages/ms-order. */
-const REPO_ROOT = path.resolve(__dirname, '../../../')
-
-// Package-local .env first: dotenv never overrides an already-set key, so the
-// SQLite DATABASE_URL this service's Prisma schema needs wins over the root
-// .env's Postgres DATABASE_URL (which other, non-Prisma consumers read).
-dotenv.config({ path: path.resolve(__dirname, '../.env') })
-dotenv.config({ path: path.resolve(REPO_ROOT, '.env') })
 
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.ORDER_SERVICE_PORT || '5465', 10)
@@ -165,7 +159,7 @@ async function bootstrap() {
   registerPaymentRoutes(server, { prisma, queueManager })
 
   registerQueueRoutes(server, queueManager)
-  registerEventRoutes(server)
+  registerEventRoutes(server, { repoRoot: REPO_ROOT })
   registerSchemaRoutes(server, prisma)
   registerLogRoutes(server)
 

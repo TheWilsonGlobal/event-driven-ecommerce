@@ -1,5 +1,6 @@
 import EventsPanel from './events/EventsPanel'
 import { useMergedEventData } from '../hooks/useEventData'
+import { useKafkaConfig } from '../hooks/useKafkaConfig'
 import { KAFKA_BROKERS } from '../data/serviceUrls'
 
 /**
@@ -14,6 +15,10 @@ import { KAFKA_BROKERS } from '../data/serviceUrls'
  */
 export default function EventsTab() {
   const resource = useMergedEventData()
+  // Owns the .env write behind the panel's Enable button. Separate from
+  // `resource` because persisting the flag and observing the backbone are
+  // different facts — see useKafkaConfig.
+  const kafkaConfig = useKafkaConfig()
   const { loading, lastUpdated, brokers, allDisabled, refetch } = resource
 
   // Brokers reported by a service that answered, else the build-time config.
@@ -57,7 +62,7 @@ export default function EventsTab() {
         </div>
       </div>
 
-      <EventsPanel resource={resource} />
+      <EventsPanel resource={resource} kafkaConfig={kafkaConfig} />
     </>
   )
 }

@@ -6,6 +6,12 @@ import {
   sendKafkaUnavailable,
   withKafkaAdminDeadline,
   KafkaUnavailableError,
+  kafkaConfigRequestSchema,
+  kafkaConfigResponseSchema,
+  kafkaConfigErrorSchema,
+  setKafkaEnabledInEnv,
+  resolveRepoEnvPath,
+  KafkaEnvWriteError,
 } from '@ecommerce/shared-messaging'
 import { eventProducer, kafkaAdminClient } from './producer'
 
@@ -26,7 +32,7 @@ import { eventProducer, kafkaAdminClient } from './producer'
  * healthy-but-idle backbone, which is the exact defect the queue endpoints
  * were built to avoid.
  */
-export function registerEventRoutes(server: FastifyInstance): void {
+export function registerEventRoutes(server: FastifyInstance, options: { repoRoot: string }): void {
   server.get(
     '/api/v1/events',
     {
@@ -92,6 +98,68 @@ export function registerEventRoutes(server: FastifyInstance): void {
       }
 
       return data
+    }
+  )
+
+  /**
+   * `PATCH /api/v1/events/config` — persist KAFKA_ENABLED to the repo-root .env.
+   *
+   * ── What this does NOT do ─────────────────────────────────────────────────
+   * It does not turn Kafka on. `loadKafkaSettings` reads KAFKA_ENABLED once at
+   * module import time, and when it was false this process built no client, no
+   * producer and no consumer — there is nothing here to start. Writing the flag
+   * and reporting `enabled: true` as though the backbone were live would be the
+   * same class of lie as serialising an unmeasured lag as 0.
+   *
+   * So the response carries THREE facts, not one: the value now persisted
+   * (`enabled`), the value this process is actually running (`runtimeEnabled`),
+   * and whether they disagree (`restartRequired`). The admin UI renders the
+   * restart notice off that last field rather than flipping its status chip to
+   * green.
+   *
+   * ms-order owns this route because it is the backbone's producer and already
+   * owns the write side of the event contract; ms-inventory and ms-analytics
+   * read the same repo-root .env at their own boot, so one write reconfigures
+   * all three.
+   */
+  server.patch<{ Body: { enabled: boolean } }>(
+    '/api/v1/events/config',
+    {
+      schema: {
+        tags: ['events'],
+        description:
+          'Persists KAFKA_ENABLED to the repo-root .env. Does NOT start or stop Kafka in ' +
+          'the running process — the flag is read at boot, so the response reports ' +
+          'restartRequired whenever the persisted value differs from the running one.',
+        body: kafkaConfigRequestSchema,
+        response: {
+          200: kafkaConfigResponseSchema,
+          500: kafkaConfigErrorSchema,
+        },
+      },
+    },
+    async (request, reply: FastifyReply) => {
+      const { enabled } = request.body
+      const envPath = resolveRepoEnvPath(options.repoRoot)
+
+      try {
+        // `eventProducer.enabled` is what this process booted with, not a
+        // re-read of process.env — a later dotenv call or an external edit
+        // could have changed the variable without changing what was built.
+        return setKafkaEnabledInEnv(envPath, enabled, eventProducer.enabled)
+      } catch (err) {
+        const isWriteError = err instanceof KafkaEnvWriteError
+        request.log.error({ err, envPath }, 'Failed to persist KAFKA_ENABLED to the repo-root .env')
+        // 500, not 200-with-a-flag: nothing was persisted, and a success shape
+        // here would leave the UI showing a toggle that never took.
+        return reply.status(500).send({
+          error: 'Internal Server Error',
+          reason: 'kafka_env_write_failed',
+          message: isWriteError ? err.message : err instanceof Error ? err.message : String(err),
+          envPath,
+          timestamp: new Date().toISOString(),
+        })
+      }
     }
   )
 }
