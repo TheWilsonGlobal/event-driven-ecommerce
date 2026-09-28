@@ -48,6 +48,9 @@ export default function InfraPanel({
 }) {
   return (
     <>
+      {/* The event backbone leads: it is the spine the services talk over, so
+          its state frames everything below it. */}
+      <KafkaCard resource={events} config={kafkaConfig} openSignal={openSignal} />
       <KvCacheCard driver={driver} openSignal={openSignal} />
       <StorageCard
         rustfsHealth={rustfsHealth}
@@ -59,7 +62,6 @@ export default function InfraPanel({
         openSignal={openSignal}
         onRefreshServices={onRefreshServices}
       />
-      <KafkaCard resource={events} config={kafkaConfig} openSignal={openSignal} />
       <ObservabilityCards
         prometheus={prometheus}
         elasticsearch={elasticsearch}

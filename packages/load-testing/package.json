@@ -6,7 +6,8 @@
   "main": "dist/stressQueues.js",
   "scripts": {
     "build": "tsc -b",
-    "stress": "ts-node src/stressQueues.ts"
+    "stress": "ts-node src/stressQueues.ts",
+    "stress:events": "ts-node src/stressEvents.ts"
   },
   "dependencies": {},
   "devDependencies": {
