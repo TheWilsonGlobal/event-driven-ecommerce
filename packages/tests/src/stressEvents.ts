@@ -35,8 +35,8 @@
  * `['number','null']` schemas and the admin panel's `—` exist to enforce.
  *
  * Usage:
- *   pnpm --filter @ecommerce/load-testing run stress:events
- *   pnpm --filter @ecommerce/load-testing run stress:events -- --orders=500 --concurrency=50
+ *   pnpm --filter @ecommerce/tests run stress:events
+ *   pnpm --filter @ecommerce/tests run stress:events -- --orders=500 --concurrency=50
  *
  * Requires KAFKA_ENABLED=true, a reachable broker, and ms-order (5465),
  * ms-inventory (5466) and ms-analytics (5467) running. The script refuses to

@@ -1,12 +1,13 @@
 {
-  "name": "@ecommerce/load-testing",
+  "name": "@ecommerce/tests",
   "version": "1.0.0",
   "private": true,
   "description": "Standalone HTTP load generator that hammers the real ms-order/ms-product BullMQ queues via their live routes, then verifies via GET /api/v1/queues that BullMQ actually drained the surge (no dropped enqueues, no jobs stuck 'active' past a stall window, no unexpected failures).",
   "main": "dist/stressQueues.js",
   "scripts": {
     "build": "tsc -b",
-    "stress": "ts-node src/stressQueues.ts",
+    "stress": "ts-node src/stressQueues.ts && ts-node src/stressEvents.ts",
+    "stress:queues": "ts-node src/stressQueues.ts",
     "stress:events": "ts-node src/stressEvents.ts"
   },
   "dependencies": {},

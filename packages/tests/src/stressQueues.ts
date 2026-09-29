@@ -16,8 +16,8 @@
  *  - wall-clock throughput (jobs/sec observed by the queue's own counters)
  *
  * Usage:
- *   pnpm --filter @ecommerce/load-testing run stress
- *   pnpm --filter @ecommerce/load-testing run stress -- --concurrency=50 --rounds=3
+ *   pnpm --filter @ecommerce/tests run stress
+ *   pnpm --filter @ecommerce/tests run stress -- --concurrency=50 --rounds=3
  *
  * Requires ms-order (5465) and ms-product (5464) already running against a
  * real Redis (KV_CACHE_DRIVER=redis) — see 08-operational-commands.md §8.2.

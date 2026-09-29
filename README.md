@@ -8,15 +8,20 @@ This monorepo contains the following services:
 
 ### Backend Services (Fastify 4)
 - **API Gateway** (`packages/gateway` · Port 5460) - Reverse proxy, JWT verification, rate limiting
-- **User Service** (`packages/ms-user` · Port 5463) - Authentication, authorization, and user management
-- **Product Service** (`packages/ms-product` · Port 5464) - Product catalog, Elasticsearch search, and inventory
-- **Order Service** (`packages/ms-order` · Port 5465) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal
+- **User Service** (`packages/ms-user` · Port 5463) - Authentication, authorization, and user management (Prisma / SQLite / Postgres)
+- **Product Service** (`packages/ms-product` · Port 5464) - Product catalog, Elasticsearch search, and inventory (NeDB / MongoDB)
+- **Order Service** (`packages/ms-order` · Port 5465) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal (Prisma / SQLite / Postgres)
+- **Inventory Service** (`packages/ms-inventory` · Port 5466) - Stock reservation, inventory tracking, and Kafka consumer
+- **Analytics Service** (`packages/ms-analytics` · Port 5467) - Sales & event metric aggregation, and Kafka consumer
+
+### Testing & Verification
+- **Load & Stress Testing** (`packages/tests`) - Live HTTP & queue/event load test harness for BullMQ and Kafka
 
 ### Shared Libraries
 - **Types** (`packages/shared/types`) - Common TypeScript type definitions & DTOs
-- **Utils** (`packages/shared/utils`) - Shared utility functions & response wrappers
+- **Utils** (`packages/shared/utils`) - Shared utility functions, logger (Pino + Loki), metrics (Prometheus) & response wrappers
 - **Database** (`packages/shared/database`) - Prisma ORM, Mongoose & Redis clients
-- **Messaging** (`packages/shared/messaging`) - BullMQ queues & workers over Redis 7
+- **Messaging** (`packages/shared/messaging`) - BullMQ queues, workers & Kafka event clients
 
 ### Frontend & Control Plane
 - **Web Client** (`packages/client` · Port 5462) - Next.js 14 SSR React customer application
@@ -62,13 +67,21 @@ pnpm run dev
 
 ### Root Level Scripts
 - `pnpm run dev` - Start all services concurrently in development mode (Gateway, Services, Client, Admin)
+- `pnpm run dev:backend` - Start all backend services and Gateway concurrently
 - `pnpm run build` - Build all workspace packages
-- `pnpm run db:generate` - Generate Prisma clients across all microservices
-- `pnpm run db:migrate` - Deploy database migrations across PostgreSQL services
+- `pnpm run build:shared` - Build all shared packages
+- `pnpm run db:generate` - Generate Prisma clients across microservices
+- `pnpm run db:migrate` - Deploy database migrations across PostgreSQL/SQLite services
 - `pnpm run test` - Run all tests across workspace
+- `pnpm run test:watch` - Run tests in interactive watch mode
 - `pnpm run lint` - Lint all packages
-- `pnpm run docker:up` - Start container services with Docker Compose
-- `pnpm run docker:down` - Stop Docker Compose services
+- `pnpm run lint:fix` - Lint and auto-fix across packages
+- `pnpm run format` - Format code with Prettier
+- `pnpm run docker:up` - Start application container services with Docker Compose
+- `pnpm run docker:down` - Stop Docker Compose application services
+- `pnpm run stress` - Run all backend stress tests (BullMQ task queues + Kafka event backbone)
+- `pnpm run stress:queues` - Run BullMQ task queue stress test (`@ecommerce/tests`)
+- `pnpm run stress:events` - Run Kafka event backbone stress test (`@ecommerce/tests`)
 
 ### Service-Specific Scripts
 - `pnpm run dev:gateway` - Start API Gateway only (`@ecommerce/gateway` · Port 5460)
@@ -77,6 +90,8 @@ pnpm run dev
 - `pnpm run dev:ms-user` - Start User Service (`@ecommerce/ms-user` · Port 5463)
 - `pnpm run dev:ms-product` - Start Product Service (`@ecommerce/ms-product` · Port 5464)
 - `pnpm run dev:ms-order` - Start Order Service (`@ecommerce/ms-order` · Port 5465)
+- `pnpm run dev:ms-inventory` - Start Inventory Service (`@ecommerce/ms-inventory` · Port 5466)
+- `pnpm run dev:ms-analytics` - Start Analytics Service (`@ecommerce/ms-analytics` · Port 5467)
 
 ## 🏃 Development Workflow
 
@@ -170,8 +185,9 @@ API documentation is available at:
 
 ## 🧪 Testing
 
+### Unit & Package Tests
 ```bash
-# Run all tests
+# Run all unit/package tests across workspace
 pnpm test
 
 # Run tests in watch mode
@@ -181,13 +197,59 @@ pnpm run test:watch
 pnpm --filter @ecommerce/client run test:coverage
 ```
 
-## 📝 License
+### ⚡ Stress & Load Testing (`@ecommerce/tests`)
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+The load testing suite performs live end-to-end stress testing against real HTTP routes, BullMQ queues, and Kafka event consumers.
 
-## 🤝 Contributing
+#### 1. Prerequisites
+Before running stress tests, start the infrastructure and backend services:
+```bash
+# Terminal 1: Start Redis, Kafka/Redpanda, etc. in infra-hub
+cd ../infra-hub && docker compose up -d
 
-Please read our contributing guidelines before submitting a pull request.
+# Terminal 2: Start all backend microservices
+pnpm run dev:backend
+```
+
+#### 2. Running Stress Tests
+```bash
+# Run all backend stress tests (Queues + Kafka Events)
+pnpm run stress
+
+# Run BullMQ task queue load test only (ms-order, ms-product)
+pnpm run stress:queues
+# With custom concurrency and rounds:
+pnpm run stress:queues -- --concurrency=50 --rounds=3
+
+# Run Kafka event-backbone load test only (ms-order, ms-inventory, ms-analytics)
+pnpm run stress:events
+# With custom order count and concurrency:
+pnpm run stress:events -- --orders=500 --concurrency=50
+```
+
+---
+
+## 🔌 Service Ports Reference
+
+| Service | Port | Description |
+|---|---|---|
+| **API Gateway** | `5460` | Public API Gateway (`/api-docs`, reverse proxy) |
+| **Admin Cockpit** | `5461` | React + Vite centralized administration UI |
+| **Web Client** | `5462` | Next.js 14 SSR customer storefront |
+| **ms-user** | `5463` | User, authentication, and JWT authorization service |
+| **ms-product** | `5464` | Catalog, Elasticsearch search, and category service |
+| **ms-order** | `5465` | Checkout, BullMQ queues, and payment saga service |
+| **ms-inventory** | `5466` | Stock reservation and Kafka inventory event consumer |
+| **ms-analytics** | `5467` | Order and payment event aggregation consumer |
+| **PostgreSQL** | `5432` | Relational database (infra-hub) |
+| **Redis** | `6379` | Key-value cache and BullMQ broker (infra-hub) |
+| **MongoDB** | `27017` | Document database (infra-hub) |
+| **Elasticsearch** | `9200` | Full-text search engine (infra-hub) |
+| **Prometheus** | `9090` | Metrics scraper (infra-hub) |
+| **Grafana** | `3005` | Observability dashboards (infra-hub) |
+| **Kafka Broker** | `9100` | Redpanda / Kafka wire protocol (infra-hub) |
+| **Kafka Admin** | `9101` | Redpanda admin API / lag sampler (infra-hub) |
+| **Kafka Console** | `9102` | Redpanda web console (infra-hub) |
 ## Backing services
 
 **No backing service is defined in this repo.** PostgreSQL, MongoDB, Redis,
@@ -410,3 +472,14 @@ reassuring possible answer.
    The payload says so via `countersAreProcessLifetime`.
 5. **Single broker, `replication.factor=1`.** Correct for local development,
    not a production topology.
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🤝 Contributing
+
+Please read our contributing guidelines before submitting a pull request.
+
