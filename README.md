@@ -1,10 +1,12 @@
-# Microservices E-Commerce Platform
+# Event-Driven E-Commerce Platform
 
-A scalable, production-ready microservices e-commerce platform built with Node.js, TypeScript, and React.
+A production-grade, event-driven microservices e-commerce platform built with TypeScript, Node.js (Fastify 4), Next.js 14, Kafka/Redpanda, BullMQ, and polyglot persistence.
 
-## 🏗️ Architecture
+## 🏗️ Architecture & Core Philosophy
 
-This monorepo contains the following services:
+This platform implements an **Event-Driven Architecture (EDA)** where asynchronous domain events, distributed task queues, and saga orchestration decouple core retail workloads from heavy synchronous dependencies.
+
+The monorepo contains the following services:
 
 ### Backend Services (Fastify 4)
 - **API Gateway** (`packages/gateway` · Port 5460) - Reverse proxy, JWT verification, rate limiting
@@ -26,6 +28,12 @@ This monorepo contains the following services:
 ### Frontend & Control Plane
 - **Web Client** (`packages/client` · Port 5462) - Next.js 14 SSR React customer application
 - **Admin Portal** (`packages/admin` · Port 5461) - React + Vite centralized service & config cockpit
+
+### 📖 Architecture & System Design Documentation
+Comprehensive architectural documentation and specifications are maintained in the accompanying notes repository (`.notes/APPs/samples/event-driven-ecommerce/`):
+- **Architecture Deep-Dive**: System overview, high-level topology, DB-per-service trade-offs, and component specs.
+- **Workflow & Diagrams**: Sequence diagrams, BullMQ job lifecycles, and Kafka event backbone flows.
+- **Advanced Patterns**: Transactional Outbox, Idempotent Consumers, and Distributed Saga Orchestration.
 
 ## 🚀 Quick Start
 
@@ -171,10 +179,10 @@ pnpm run docker:up
 ### Kubernetes (Kustomize) Deployment
 ```bash
 # Deploy to Staging
-kubectl apply -k scripts/k8s/overlays/staging
+kubectl apply -k packages/scripts/overlays/staging
 
 # Deploy to Production
-kubectl apply -k scripts/k8s/overlays/production
+kubectl apply -k packages/scripts/overlays/production
 ```
 
 ## 📚 API Documentation
@@ -404,7 +412,7 @@ Host ports are **9100** (Kafka wire protocol), **9101** (admin API, used for
 consumer lag) and **9102** (console) — re-ported 2026-09-23 from
 `9092`/`9644`/`5469` so all three sit in one contiguous block in the `9xxx`
 infrastructure range. The console was previously at `5469`, inside this repo's
-own `546x` *application* block, which read as if micro-services owned it; the
+own `546x` *application* block, which read as if this repo owned it; the
 broker is infra-hub's. `8080`/`8090` were never options — both belong to other
 projects on this machine.
 
