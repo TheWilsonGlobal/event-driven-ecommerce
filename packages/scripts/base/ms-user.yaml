@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ms-user
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ms-user
-          image: micro-services/ms-user:latest
+          image: event-driven-ecommerce/ms-user:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5463

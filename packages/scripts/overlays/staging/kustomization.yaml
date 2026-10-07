@@ -1,4 +1,4 @@
-﻿apiVersion: kustomize.config.k8s.io/v1beta1
+apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: staging
@@ -10,13 +10,13 @@ resources:
 namePrefix: staging-
 
 images:
-  - name: micro-services/api-gateway
+  - name: event-driven-ecommerce/api-gateway
     newTag: staging
-  - name: micro-services/ms-user
+  - name: event-driven-ecommerce/ms-user
     newTag: staging
-  - name: micro-services/ms-product
+  - name: event-driven-ecommerce/ms-product
     newTag: staging
-  - name: micro-services/ms-order
+  - name: event-driven-ecommerce/ms-order
     newTag: staging
-  - name: micro-services/frontend
+  - name: event-driven-ecommerce/frontend
     newTag: staging

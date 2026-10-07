@@ -1,4 +1,4 @@
-# Application services for the micro-services e-commerce platform.
+# Application services for the event-driven-ecommerce platform.
 #
 # Backing services (PostgreSQL, MongoDB, Redis, Elasticsearch, RustFS,
 # Prometheus, Grafana) are NOT defined here -- they moved to the infra-hub

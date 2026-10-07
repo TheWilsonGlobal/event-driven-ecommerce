@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ms-order
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: ms-order
-          image: micro-services/ms-order:latest
+          image: event-driven-ecommerce/ms-order:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5465

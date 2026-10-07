@@ -42,8 +42,8 @@ This monorepo contains the following services:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/micro-services.git
-cd micro-services
+git clone https://github.com/your-username/event-driven-ecommerce.git
+cd event-driven-ecommerce
 ```
 
 2. Copy environment variables:
