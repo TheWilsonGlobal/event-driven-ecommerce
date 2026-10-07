@@ -71,6 +71,42 @@ pnpm run db:generate
 pnpm run dev
 ```
 
+### Run Backend with Docker Compose
+
+#### Option A: Full Stack (Backing Infrastructure from Hub + Application Services)
+Start external backing services in the shared `hub` (PostgreSQL 15, Redis 7, MongoDB 7, Elasticsearch 8.11, Kafka/Redpanda, Prometheus, Grafana), then start the application services:
+
+```bash
+# 1. Start shared backing infrastructure from hub (C:\Git\APPs\hub):
+cd ../../hub && docker compose up -d
+# Or enable all profiles (search, monitoring, logging, kafka):
+docker compose --profile all up -d
+
+# 2. Start application services in this repo:
+pnpm run docker:up
+# Or using Makefile:
+make docker-up
+```
+
+#### Option B: Application Services Only (Using External Infrastructure from Hub)
+When running against existing or external shared infrastructure already running in `hub`:
+
+```bash
+# Start only internal application services (Gateway, User, Product, Order, Inventory, Analytics, Client):
+pnpm run docker:up
+# Or shortcut script:
+pnpm run docker:up:services
+# Or using Makefile:
+make docker-up-services
+
+# Stop services only:
+pnpm run docker:down
+# Or shortcut script:
+pnpm run docker:down:services
+# Or using Makefile:
+make docker-down-services
+```
+
 ## 📦 Available Scripts
 
 ### Root Level Scripts
@@ -84,9 +120,10 @@ pnpm run dev
 - `pnpm run test:watch` - Run tests in interactive watch mode
 - `pnpm run lint` - Lint all packages
 - `pnpm run lint:fix` - Lint and auto-fix across packages
-- `pnpm run format` - Format code with Prettier
 - `pnpm run docker:up` - Start application container services with Docker Compose
+- `pnpm run docker:up:services` - Start internal application services only (using external Hub infra)
 - `pnpm run docker:down` - Stop Docker Compose application services
+- `pnpm run docker:down:services` - Stop internal application services only
 - `pnpm run stress` - Run all backend stress tests (BullMQ task queues + Kafka event backbone)
 - `pnpm run stress:queues` - Run BullMQ task queue stress test (`@ecommerce/tests`)
 - `pnpm run stress:events` - Run Kafka event backbone stress test (`@ecommerce/tests`)
@@ -168,12 +205,42 @@ retries, state transitions and all database writes are real. See the
 ## 🚀 Deployment
 
 ### Docker Deployment
+
+#### Option A: Application Services Only (External Hub Infrastructure Active)
+Use when backing services (Postgres, Mongo, Redis, Redpanda/Kafka, etc.) are already running in `hub`:
+
 ```bash
-# Build all services
+# Build images
 pnpm run docker:build
 
-# Start with Docker Compose
+# Launch application containers
 pnpm run docker:up
+# Or explicit services command:
+pnpm run docker:up:services
+# Or with Makefile:
+make docker-up-services
+
+# Tear down application containers:
+pnpm run docker:down
+# Or:
+make docker-down-services
+```
+
+#### Option B: Full Stack Deployment (Boot Hub Infra + Application Services)
+To start the complete environment from scratch:
+
+```bash
+# 1. Start shared backing infrastructure in Hub (C:\Git\APPs\hub):
+cd ../../hub
+docker compose up -d
+# Or start with all monitoring, search, and kafka profiles:
+docker compose --profile all up -d
+
+# 2. Start application services:
+cd ../samples/event-driven-ecommerce
+pnpm run docker:up
+# Or with Makefile:
+make docker-up
 ```
 
 ### Kubernetes (Kustomize) Deployment
@@ -212,8 +279,8 @@ The load testing suite performs live end-to-end stress testing against real HTTP
 #### 1. Prerequisites
 Before running stress tests, start the infrastructure and backend services:
 ```bash
-# Terminal 1: Start Redis, Kafka/Redpanda, etc. in infra-hub
-cd ../infra-hub && docker compose up -d
+# Terminal 1: Start Redis, Kafka/Redpanda, etc. in Hub (C:\Git\APPs\hub)
+cd ../../hub && docker compose up -d
 
 # Terminal 2: Start all backend microservices
 pnpm run dev:backend
@@ -261,22 +328,22 @@ pnpm run stress:events -- --orders=500 --concurrency=50
 ## Backing services
 
 **No backing service is defined in this repo.** PostgreSQL, MongoDB, Redis,
-Elasticsearch, RustFS, Prometheus and Grafana all live in the `infra-hub` repo,
+Elasticsearch, RustFS, Prometheus, Grafana, and Kafka/Redpanda all live in the shared `hub` repo (`C:\Git\APPs\hub`),
 which owns their lifecycle:
 
 ```bash
-cd ../infra-hub
-docker compose up -d                      # Redis + RustFS (the two this repo uses)
-docker compose --profile all up -d        # plus Postgres, Mongo, ES, Prometheus, Grafana
+cd ../../hub
+docker compose up -d                      # Core backing services (Redis, etc.)
+docker compose --profile all up -d        # Plus Postgres, Mongo, ES, Prometheus, Grafana, Redpanda
 ```
 
-Ports are unchanged, so running the app on the host via `pnpm run dev` reaches
+Ports are standard, so running the app on the host via `pnpm run dev` reaches
 them on `localhost` using this repo's existing `.env` values — no code change.
 
-`docker-compose.yml` here now defines only the five application services and
-joins infra-hub's network as `external`, which is what keeps container
-hostnames (`DB_HOST: postgres`, `REDIS_HOST: redis`, …) resolving. **Start
-infra-hub first**, or compose fails with "network not found".
+`docker-compose.yml` here defines only the internal application services and
+joins hub's network as `external` (`infra-hub_infra-network`), which keeps container
+hostnames (`DB_HOST: postgres`, `REDIS_HOST: redis`, `KAFKA_BROKER: redpanda`, …) resolving. **Start
+hub first**, or compose fails with "network not found".
 
 RustFS object data lives at `C:\Hub\RustFS` (see `RUSTFS_DATA_PATH`), outside
 both repos.
@@ -288,7 +355,7 @@ both repos.
 is a search accelerator, never the record.
 
 ```bash
-cd ../infra-hub && docker compose --profile search up -d
+cd ../../hub && docker compose --profile search up -d
 ```
 
 - Every write path (seed, create, update, delete) mirrors into the index, and
@@ -320,7 +387,7 @@ request counts, latency histograms and Node process/event-loop stats, each
 labelled with `service`.
 
 ```bash
-cd ../infra-hub && docker compose --profile monitoring up -d
+cd ../../hub && docker compose --profile monitoring up -d
 ```
 
 - Prometheus (<http://localhost:9090>) scrapes all four over
@@ -346,7 +413,7 @@ configured once in
 Logs go to the terminal **and** Loki, so `pnpm run dev` looks exactly as before.
 
 ```bash
-cd ../infra-hub && docker compose --profile logging up -d
+cd ../../hub && docker compose --profile logging up -d
 ```
 
 Query them in Grafana → **Explore** → **Loki**:
@@ -399,10 +466,10 @@ Payment ──▶ BullMQ ──┬──▶ Retry
                      └──▶ Invoice
 ```
 
-The broker lives in the **infra-hub** repo, like every other backing service:
+The broker lives in the **hub** repo (`C:\Git\APPs\hub`), like every other backing service:
 
 ```bash
-cd ../../infra-hub && docker compose --profile kafka up -d
+cd ../../hub && docker compose --profile kafka up -d
 ```
 
 Redpanda rather than Kafka + ZooKeeper: same wire protocol (kafkajs is

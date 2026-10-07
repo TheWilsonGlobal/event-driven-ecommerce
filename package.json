@@ -29,7 +29,9 @@
     "bootstrap": "pnpm install",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
+    "docker:up:services": "docker-compose up -d",
     "docker:down": "docker-compose down",
+    "docker:down:services": "docker-compose down",
     "stress": "pnpm run stress:queues && pnpm run stress:events",
     "stress:queues": "pnpm --filter @ecommerce/tests run stress:queues",
     "stress:events": "pnpm --filter @ecommerce/tests run stress:events"
