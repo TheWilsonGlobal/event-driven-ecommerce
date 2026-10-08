@@ -30,6 +30,8 @@ spec:
           env:
             - name: PORT
               value: "5465"
+            - name: DATABASE_URL
+              value: "file:../../../data/db/ms-order.db"
           resources:
             requests:
               cpu: 100m

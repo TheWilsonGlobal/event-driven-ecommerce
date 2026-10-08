@@ -42,12 +42,13 @@ COPY --from=builder /app/packages/ms-order/package.json ./packages/ms-order/pack
 COPY --from=builder /app/packages/ms-order/prisma ./packages/ms-order/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
 
-RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
+RUN mkdir -p /app/logs /app/data/db /app/data/rocksdb && chown -R nodejs:nodejs /app/logs /app/data
 
 USER nodejs
 
 EXPOSE 5465
 
 ENV PORT=5465
+ENV DATABASE_URL="file:../../../data/db/ms-order.db"
 
 CMD ["node", "packages/ms-order/dist/index.js"]

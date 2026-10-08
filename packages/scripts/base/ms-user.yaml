@@ -30,6 +30,8 @@ spec:
           env:
             - name: PORT
               value: "5463"
+            - name: DATABASE_URL
+              value: "file:../../../data/db/ms-user.db"
           resources:
             requests:
               cpu: 100m

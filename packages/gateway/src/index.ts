@@ -24,7 +24,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 // instead of a stack trace per log line for the life of the process.
 let server: FastifyInstance
 
-const PORT = parseInt(process.env.API_GATEWAY_PORT || process.env.PORT || '5460', 10)
+const PORT = parseInt(process.env.PORT || process.env.PORT_GATEWAY || '5460', 10)
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://127.0.0.1:5463'
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://127.0.0.1:5464'
 const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://127.0.0.1:5465'
