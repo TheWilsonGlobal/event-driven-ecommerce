@@ -80,7 +80,7 @@ export default defineConfig(({ mode }) => {
       host: true,
     },
     test: {
-      environment: 'jsdom',
+      environment: 'happy-dom',
       setupFiles: ['./src/test/setup.ts'],
       globals: true,
       css: false,
