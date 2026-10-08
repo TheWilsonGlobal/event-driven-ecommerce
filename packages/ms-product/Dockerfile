@@ -38,7 +38,7 @@ COPY --from=builder /app/packages/ms-product/dist ./packages/ms-product/dist
 COPY --from=builder /app/packages/ms-product/package.json ./packages/ms-product/package.json
 COPY --from=builder /app/packages/shared ./packages/shared
 
-RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
+RUN mkdir -p /app/logs /app/data/nedb && chown -R nodejs:nodejs /app/logs /app/data
 
 USER nodejs
 

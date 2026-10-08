@@ -7,8 +7,6 @@ resources:
   - namespace.yaml
   - ../../base
 
-namePrefix: staging-
-
 images:
   - name: event-driven-ecommerce/api-gateway
     newTag: staging

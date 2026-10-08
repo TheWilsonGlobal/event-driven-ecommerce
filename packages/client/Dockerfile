@@ -44,7 +44,7 @@ RUN chown nodejs:nodejs .next
 
 # Automatically leverage output traces to reduce image size
 COPY --from=builder --chown=nodejs:nodejs /app/packages/client/.next/standalone ./
-COPY --from=builder --chown=nodejs:nodejs /app/packages/client/.next/static ./.next/static
+COPY --from=builder --chown=nodejs:nodejs /app/packages/client/.next/static ./packages/client/.next/static
 
 USER nodejs
 
@@ -53,4 +53,4 @@ EXPOSE 5462
 ENV PORT 5462
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["node", "packages/client/server.js"]
