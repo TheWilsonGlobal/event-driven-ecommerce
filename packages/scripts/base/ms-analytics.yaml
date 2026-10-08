@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-analytics
+  labels:
+    app: ms-analytics
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ms-analytics
+  template:
+    metadata:
+      labels:
+        app: ms-analytics
+    spec:
+      containers:
+        - name: ms-analytics
+          image: event-driven-ecommerce/ms-analytics:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5467
+              name: http
+          envFrom:
+            - configMapRef:
+                name: ecommerce-config
+            - secretRef:
+                name: ecommerce-secrets
+          env:
+            - name: ANALYTICS_SERVICE_PORT
+              value: "5467"
+            - name: KAFKA_ENABLED
+              value: "true"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5467
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5467
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-analytics
+  labels:
+    app: ms-analytics
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5467
+      targetPort: 5467
+      name: http
+  selector:
+    app: ms-analytics

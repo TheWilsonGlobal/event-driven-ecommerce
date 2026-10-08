@@ -18,5 +18,11 @@ images:
     newTag: staging
   - name: event-driven-ecommerce/ms-order
     newTag: staging
+  - name: event-driven-ecommerce/ms-inventory
+    newTag: staging
+  - name: event-driven-ecommerce/ms-analytics
+    newTag: staging
+  - name: event-driven-ecommerce/admin
+    newTag: staging
   - name: event-driven-ecommerce/frontend
     newTag: staging

@@ -19,5 +19,11 @@ images:
     newTag: latest
   - name: event-driven-ecommerce/ms-order
     newTag: latest
+  - name: event-driven-ecommerce/ms-inventory
+    newTag: latest
+  - name: event-driven-ecommerce/ms-analytics
+    newTag: latest
+  - name: event-driven-ecommerce/admin
+    newTag: latest
   - name: event-driven-ecommerce/frontend
     newTag: latest

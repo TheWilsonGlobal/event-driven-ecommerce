@@ -95,7 +95,7 @@ export interface ObjectStorageClient {
  * Uses @aws-sdk/client-s3 against the RustFS endpoint (RustFS is S3-API compatible).
  */
 export class RustFSStorageClient implements ObjectStorageClient {
-  private s3: S3Client
+  private s3: any
   private bucket: string
   private endpoint: string
 
@@ -184,7 +184,7 @@ export class RustFSStorageClient implements ObjectStorageClient {
     const result = await this.s3.send(
       new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix })
     )
-    return (result.Contents ?? []).map((obj) => ({
+    return (result.Contents ?? []).map((obj: any) => ({
       key: obj.Key ?? '',
       sizeBytes: obj.Size ?? 0,
       lastModified: (obj.LastModified ?? new Date()).toISOString(),

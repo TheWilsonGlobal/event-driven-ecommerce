@@ -36,3 +36,17 @@ docker-down:
 
 docker-down-services:
 	docker compose down
+
+ci-lint:
+	pnpm run lint
+	pnpm run format:check
+
+ci-test:
+	pnpm run db:generate
+	pnpm -r run test
+
+ci-build:
+	pnpm -r run build
+
+docker-build-all:
+	docker compose build

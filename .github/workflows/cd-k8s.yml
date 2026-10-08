@@ -1,0 +1,91 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: ["Build & Publish Containers"]
+    branches: [main]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Target Deployment Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env == 'staging' || github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+    environment: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Configure Kubeconfig
+        if: env.KUBE_CONFIG != ''
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_STAGING }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Update Image Tags & Dry-Run
+        run: |
+          cd packages/scripts/overlays/staging
+          kustomize build . > /tmp/staging-manifests.yaml
+          cat /tmp/staging-manifests.yaml | head -n 40
+
+      - name: Apply Manifests to Cluster
+        if: env.KUBE_CONFIG != ''
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_STAGING }}
+        run: |
+          kubectl apply -k packages/scripts/overlays/staging
+          kubectl rollout status deployment -l tier=backend -n staging --timeout=120s || true
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env == 'production' }}
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Configure Kubeconfig
+        if: env.KUBE_CONFIG != ''
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_PROD }}
+        run: |
+          mkdir -p $HOME/.kube
+          echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Update Image Tags & Dry-Run
+        run: |
+          cd packages/scripts/overlays/production
+          kustomize build . > /tmp/prod-manifests.yaml
+          cat /tmp/prod-manifests.yaml | head -n 40
+
+      - name: Apply Manifests to Cluster
+        if: env.KUBE_CONFIG != ''
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_PROD }}
+        run: |
+          kubectl apply -k packages/scripts/overlays/production
+          kubectl rollout status deployment -l tier=backend -n production --timeout=180s

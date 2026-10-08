@@ -1,0 +1,83 @@
+name: Build & Publish Containers
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  docker-matrix:
+    name: Build & Push (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-gateway
+            dockerfile: packages/gateway/Dockerfile
+            image_name: event-driven-ecommerce/api-gateway
+          - service: ms-user
+            dockerfile: packages/ms-user/Dockerfile
+            image_name: event-driven-ecommerce/ms-user
+          - service: ms-product
+            dockerfile: packages/ms-product/Dockerfile
+            image_name: event-driven-ecommerce/ms-product
+          - service: ms-order
+            dockerfile: packages/ms-order/Dockerfile
+            image_name: event-driven-ecommerce/ms-order
+          - service: ms-inventory
+            dockerfile: packages/ms-inventory/Dockerfile
+            image_name: event-driven-ecommerce/ms-inventory
+          - service: ms-analytics
+            dockerfile: packages/ms-analytics/Dockerfile
+            image_name: event-driven-ecommerce/ms-analytics
+          - service: client
+            dockerfile: packages/client/Dockerfile
+            image_name: event-driven-ecommerce/client
+          - service: admin
+            dockerfile: packages/admin/Dockerfile
+            image_name: event-driven-ecommerce/admin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-,enable=true
+            type=semver,pattern={{version}}
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

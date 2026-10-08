@@ -114,10 +114,31 @@ pipeline {
                         }
                     }
                 }
+                stage('Inventory Service') {
+                    steps {
+                        script {
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-inventory:${BUILD_NUMBER}", "-f packages/ms-inventory/Dockerfile .")
+                        }
+                    }
+                }
+                stage('Analytics Service') {
+                    steps {
+                        script {
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-analytics:${BUILD_NUMBER}", "-f packages/ms-analytics/Dockerfile .")
+                        }
+                    }
+                }
                 stage('Client') {
                     steps {
                         script {
                             docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/client:${BUILD_NUMBER}", "-f packages/client/Dockerfile .")
+                        }
+                    }
+                }
+                stage('Admin Cockpit') {
+                    steps {
+                        script {
+                            docker.build("${DOCKER_REGISTRY}/${DOCKER_IMAGE}/admin:${BUILD_NUMBER}", "-f packages/admin/Dockerfile .")
                         }
                     }
                 }
@@ -132,17 +153,8 @@ pipeline {
                 script {
                     withKubeConfig([credentialsId: 'kubeconfig']) {
                         sh """
-                            kubectl set image deployment/api-gateway api-gateway=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/api-gateway:${BUILD_NUMBER} -n staging
-                            kubectl set image deployment/ms-user ms-user=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-user:${BUILD_NUMBER} -n staging
-                            kubectl set image deployment/ms-product ms-product=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-product:${BUILD_NUMBER} -n staging
-                            kubectl set image deployment/ms-order ms-order=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-order:${BUILD_NUMBER} -n staging
-                            kubectl set image deployment/frontend frontend=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/frontend:${BUILD_NUMBER} -n staging
-
-                            kubectl rollout status deployment/api-gateway -n staging
-                            kubectl rollout status deployment/ms-user -n staging
-                            kubectl rollout status deployment/ms-product -n staging
-                            kubectl rollout status deployment/ms-order -n staging
-                            kubectl rollout status deployment/frontend -n staging
+                            kubectl apply -k packages/scripts/overlays/staging
+                            kubectl rollout status deployment -l tier=backend -n staging --timeout=120s
                         """
                     }
                 }
@@ -160,17 +172,8 @@ pipeline {
                 script {
                     withKubeConfig([credentialsId: 'kubeconfig']) {
                         sh """
-                            kubectl set image deployment/api-gateway api-gateway=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/api-gateway:${BUILD_NUMBER} -n production
-                            kubectl set image deployment/ms-user ms-user=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-user:${BUILD_NUMBER} -n production
-                            kubectl set image deployment/ms-product ms-product=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-product:${BUILD_NUMBER} -n production
-                            kubectl set image deployment/ms-order ms-order=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/ms-order:${BUILD_NUMBER} -n production
-                            kubectl set image deployment/frontend frontend=${DOCKER_REGISTRY}/${DOCKER_IMAGE}/frontend:${BUILD_NUMBER} -n production
-
-                            kubectl rollout status deployment/api-gateway -n production
-                            kubectl rollout status deployment/ms-user -n production
-                            kubectl rollout status deployment/ms-product -n production
-                            kubectl rollout status deployment/ms-order -n production
-                            kubectl rollout status deployment/frontend -n production
+                            kubectl apply -k packages/scripts/overlays/production
+                            kubectl rollout status deployment -l tier=backend -n production --timeout=180s
                         """
                     }
                 }
