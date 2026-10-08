@@ -23,6 +23,7 @@ COPY packages/ms-user ./packages/ms-user
 
 RUN pnpm --filter "@ecommerce/ms-user^..." run build
 RUN pnpm --filter @ecommerce/ms-user exec prisma generate
+RUN mkdir -p /app/data/db && DATABASE_URL="file:../../../data/db/ms-user.db" pnpm --filter @ecommerce/ms-user exec prisma migrate deploy
 RUN pnpm --filter @ecommerce/ms-user run build
 
 # Production image
@@ -41,6 +42,7 @@ COPY --from=builder /app/packages/ms-user/dist ./packages/ms-user/dist
 COPY --from=builder /app/packages/ms-user/package.json ./packages/ms-user/package.json
 COPY --from=builder /app/packages/ms-user/prisma ./packages/ms-user/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
+COPY --from=builder /app/data ./data
 
 RUN mkdir -p /app/logs /app/data/db && chown -R nodejs:nodejs /app/logs /app/data
 
