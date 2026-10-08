@@ -8,7 +8,7 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.json ./
 COPY packages/shared ./packages/shared
 COPY packages/client/package.json ./packages/client/
 
@@ -22,6 +22,7 @@ COPY packages/client ./packages/client
 
 ENV NEXT_TELEMETRY_DISABLED 1
 
+RUN pnpm --filter "@ecommerce/client^..." run build
 RUN pnpm --filter @ecommerce/client run build
 
 # Production image, copy all the files and run next
