@@ -41,7 +41,6 @@ COPY --from=builder /app/packages/ms-order/dist ./packages/ms-order/dist
 COPY --from=builder /app/packages/ms-order/package.json ./packages/ms-order/package.json
 COPY --from=builder /app/packages/ms-order/prisma ./packages/ms-order/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
-COPY data/db/ms-order.db ./data/db/ms-order.db
 
 RUN mkdir -p /app/logs /app/data/db /app/data/rocksdb && chown -R nodejs:nodejs /app/logs /app/data
 

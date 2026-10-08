@@ -41,7 +41,6 @@ COPY --from=builder /app/packages/ms-user/dist ./packages/ms-user/dist
 COPY --from=builder /app/packages/ms-user/package.json ./packages/ms-user/package.json
 COPY --from=builder /app/packages/ms-user/prisma ./packages/ms-user/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
-COPY data/db/ms-user.db ./data/db/ms-user.db
 
 RUN mkdir -p /app/logs /app/data/db && chown -R nodejs:nodejs /app/logs /app/data
 

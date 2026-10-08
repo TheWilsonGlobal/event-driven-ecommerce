@@ -33,8 +33,8 @@ dist
 .env.local
 **/.env
 **/.env.local
-data/rocksdb
-**/rocksdb
+data
+**/data
 !packages/admin/src/data
 !packages/shared/database/src/seed/data
 logs

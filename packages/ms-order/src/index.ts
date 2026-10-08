@@ -72,6 +72,8 @@ async function bootstrap() {
     logger: buildLoggerOptions({ service: 'ms-order', lokiReachable }),
   })
 
+  await seedOrdersIfEmpty(prisma)
+
   // Before every other plugin, so the onResponse hook sees all traffic.
   const metrics = registerMetrics(server, { service: 'ms-order' })
 

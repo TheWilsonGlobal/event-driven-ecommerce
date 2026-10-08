@@ -32,6 +32,29 @@ export function paymentMethodToProvider(paymentMethod: string): string {
   }
 }
 
+import * as fs from 'fs'
+import * as path from 'path'
+
+async function ensureTables(prisma: PrismaClient): Promise<void> {
+  const migrationsDir = path.resolve(__dirname, '../prisma/migrations')
+  if (fs.existsSync(migrationsDir)) {
+    const entries = fs.readdirSync(migrationsDir).sort()
+    for (const entry of entries) {
+      const sqlFile = path.join(migrationsDir, entry, 'migration.sql')
+      if (fs.existsSync(sqlFile)) {
+        const sql = fs.readFileSync(sqlFile, 'utf8')
+        const statements = sql
+          .split(';')
+          .map((s) => s.trim())
+          .filter(Boolean)
+        for (const statement of statements) {
+          await prisma.$executeRawUnsafe(statement)
+        }
+      }
+    }
+  }
+}
+
 /**
  * Inserts SEED_ORDERS (from @ecommerce/shared-database) into the ms-order
  * database, but only if the orders table is currently empty. Used both by
@@ -41,9 +64,17 @@ export function paymentMethodToProvider(paymentMethod: string): string {
  * Returns the number of orders inserted (0 if the table already had rows).
  */
 export async function seedOrdersIfEmpty(prisma: PrismaClient): Promise<number> {
-  const existingCount = await prisma.order.count()
-  if (existingCount > 0) {
-    return 0
+  try {
+    const existingCount = await prisma.order.count()
+    if (existingCount > 0) {
+      return 0
+    }
+  } catch (err: any) {
+    if (err?.code === 'P2021') {
+      await ensureTables(prisma)
+    } else {
+      throw err
+    }
   }
 
   for (const order of SEED_ORDERS) {
