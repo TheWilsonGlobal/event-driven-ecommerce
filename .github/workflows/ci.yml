@@ -18,7 +18,7 @@ env:
 jobs:
   validate:
     name: Lint, TypeCheck & Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64]
 
     steps:
       - name: Checkout repository
