@@ -23,7 +23,6 @@ COPY packages/ms-order ./packages/ms-order
 
 RUN pnpm --filter "@ecommerce/ms-order^..." run build
 RUN pnpm --filter @ecommerce/ms-order exec prisma generate
-RUN mkdir -p /app/data/db && DATABASE_URL="file:../../../data/db/ms-order.db" pnpm --filter @ecommerce/ms-order exec prisma migrate deploy
 RUN pnpm --filter @ecommerce/ms-order run build
 
 # Production image
@@ -42,7 +41,7 @@ COPY --from=builder /app/packages/ms-order/dist ./packages/ms-order/dist
 COPY --from=builder /app/packages/ms-order/package.json ./packages/ms-order/package.json
 COPY --from=builder /app/packages/ms-order/prisma ./packages/ms-order/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
-COPY --from=builder /app/data ./data
+COPY data/db/ms-order.db ./data/db/ms-order.db
 
 RUN mkdir -p /app/logs /app/data/db /app/data/rocksdb && chown -R nodejs:nodejs /app/logs /app/data
 
