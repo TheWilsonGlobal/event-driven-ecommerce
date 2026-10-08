@@ -21,6 +21,7 @@ COPY --from=deps /app ./
 COPY packages/client ./packages/client
 
 ENV NEXT_TELEMETRY_DISABLED 1
+ENV OUTPUT_STANDALONE true
 
 RUN pnpm --filter "@ecommerce/client^..." run build
 RUN pnpm --filter @ecommerce/client run build

@@ -2,7 +2,7 @@ const ADMIN_ORIGIN = process.env.ADMIN_ORIGIN || 'http://localhost:5461'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  ...(process.env.OUTPUT_STANDALONE === 'true' ? { output: 'standalone' } : {}),
   eslint: {
     ignoreDuringBuilds: true,
   },

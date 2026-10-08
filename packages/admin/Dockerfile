@@ -8,7 +8,7 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.json ./
 COPY packages/shared ./packages/shared
 COPY packages/admin/package.json ./packages/admin/
 
@@ -20,6 +20,7 @@ WORKDIR /app
 COPY --from=deps /app ./
 COPY packages/admin ./packages/admin
 
+RUN pnpm --filter "@ecommerce/admin^..." run build
 RUN pnpm --filter @ecommerce/admin run build
 
 # Production image with lightweight Nginx web server

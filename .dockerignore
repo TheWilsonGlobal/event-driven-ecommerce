@@ -1,0 +1,63 @@
+# Excluded from every Docker build context.
+#
+# ⚠️ node_modules is the load-bearing entry, not a size optimisation.
+#
+# Each Dockerfile installs dependencies in a `deps` stage, then the `builder`
+# stage does `COPY packages/<svc> ./packages/<svc>`. Without this file that
+# COPY overwrites the container's freshly-installed
+# packages/<svc>/node_modules with the HOST's — and in a pnpm workspace those
+# are symlinks into a Windows .pnpm store that does not exist in the image.
+#
+# The failure is not a missing-file error at COPY time; it surfaces much later
+# as the build script failing with
+#
+#     Error: Cannot find module '/app/packages/<svc>/node_modules/typescript/bin/tsc'
+#
+# which reads like a missing devDependency rather than a clobbered install.
+# (Measured 2026-09-23 while adding Dockerfiles for ms-inventory/ms-analytics;
+# the three pre-existing Dockerfiles have the same hazard and are fixed by this
+# file too.)
+node_modules
+**/node_modules
+
+# Build output — regenerated inside the image, and copying a host build in
+# would let a stale dist/ silently ship instead of the one just compiled.
+dist
+.next
+**/dist
+**/.next
+**/tsconfig.tsbuildinfo
+
+# Local state that must never be baked into an image.
+.env
+.env.local
+**/.env
+**/.env.local
+data
+**/data
+!packages/admin/src/data
+!packages/shared/database/src/seed/data
+logs
+**/logs
+*.log
+
+# Generated Prisma clients are rebuilt in the image by `prisma generate`;
+# a host copy targets the host's platform binaries.
+**/.prisma-*
+**/node_modules/.prisma
+
+# VCS, editor and OS noise.
+.git
+.gitignore
+.vscode
+.idea
+**/.DS_Store
+Thumbs.db
+
+# Test and doc artefacts that no runtime image needs.
+coverage
+**/coverage
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
