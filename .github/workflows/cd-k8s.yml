@@ -28,31 +28,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Kustomize
-        uses: imranismail/setup-kustomize@v2
-
       - name: Configure Kubeconfig
-        if: env.KUBE_CONFIG != ''
+        shell: powershell
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_STAGING }}
         run: |
-          mkdir -p $HOME/.kube
-          echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
+          if (-not $env:KUBE_CONFIG) {
+            Write-Host "KUBE_CONFIG_STAGING is not set; skipping cluster configuration."
+            exit 0
+          }
+          $kubeDir = Join-Path $HOME ".kube"
+          if (-not (Test-Path $kubeDir)) {
+            New-Item -ItemType Directory -Path $kubeDir -Force | Out-Null
+          }
+          $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:KUBE_CONFIG))
+          Set-Content -Path (Join-Path $kubeDir "config") -Value $decoded -Encoding utf8
 
-      - name: Update Image Tags & Dry-Run
+      - name: Validate Manifests & Dry-Run
+        shell: powershell
         run: |
-          cd packages/scripts/overlays/staging
-          kustomize build . > /tmp/staging-manifests.yaml
-          cat /tmp/staging-manifests.yaml | head -n 40
+          kubectl kustomize packages/scripts/overlays/staging -o staging-manifests.yaml
+          Get-Content staging-manifests.yaml -Head 40
+          Remove-Item staging-manifests.yaml -Force
 
       - name: Apply Manifests to Cluster
-        if: env.KUBE_CONFIG != ''
+        shell: powershell
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_STAGING }}
         run: |
+          if (-not $env:KUBE_CONFIG) {
+            Write-Host "KUBE_CONFIG_STAGING is not set; skipping deployment to cluster."
+            exit 0
+          }
           kubectl apply -k packages/scripts/overlays/staging
-          kubectl rollout status deployment -l tier=backend -n staging --timeout=120s || true
+          kubectl rollout status deployment -l tier=backend -n staging --timeout=120s
 
   deploy-production:
     name: Deploy to Production
@@ -64,28 +73,37 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Kustomize
-        uses: imranismail/setup-kustomize@v2
-
       - name: Configure Kubeconfig
-        if: env.KUBE_CONFIG != ''
+        shell: powershell
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_PROD }}
         run: |
-          mkdir -p $HOME/.kube
-          echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
+          if (-not $env:KUBE_CONFIG) {
+            Write-Host "KUBE_CONFIG_PROD is not set; skipping cluster configuration."
+            exit 0
+          }
+          $kubeDir = Join-Path $HOME ".kube"
+          if (-not (Test-Path $kubeDir)) {
+            New-Item -ItemType Directory -Path $kubeDir -Force | Out-Null
+          }
+          $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:KUBE_CONFIG))
+          Set-Content -Path (Join-Path $kubeDir "config") -Value $decoded -Encoding utf8
 
-      - name: Update Image Tags & Dry-Run
+      - name: Validate Manifests & Dry-Run
+        shell: powershell
         run: |
-          cd packages/scripts/overlays/production
-          kustomize build . > /tmp/prod-manifests.yaml
-          cat /tmp/prod-manifests.yaml | head -n 40
+          kubectl kustomize packages/scripts/overlays/production -o prod-manifests.yaml
+          Get-Content prod-manifests.yaml -Head 40
+          Remove-Item prod-manifests.yaml -Force
 
       - name: Apply Manifests to Cluster
-        if: env.KUBE_CONFIG != ''
+        shell: powershell
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG_PROD }}
         run: |
+          if (-not $env:KUBE_CONFIG) {
+            Write-Host "KUBE_CONFIG_PROD is not set; skipping deployment to cluster."
+            exit 0
+          }
           kubectl apply -k packages/scripts/overlays/production
           kubectl rollout status deployment -l tier=backend -n production --timeout=180s
