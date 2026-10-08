@@ -13,7 +13,7 @@ env:
 jobs:
   docker-matrix:
     name: Build & Push (${{ matrix.service }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64]
     permissions:
       contents: read
       packages: write

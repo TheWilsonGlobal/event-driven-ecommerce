@@ -20,7 +20,7 @@ on:
 jobs:
   deploy-staging:
     name: Deploy to Staging
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64]
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env == 'staging' || github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
     environment: staging
 
@@ -56,7 +56,7 @@ jobs:
 
   deploy-production:
     name: Deploy to Production
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64]
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env == 'production' }}
     environment: production
 
