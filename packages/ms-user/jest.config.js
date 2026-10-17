@@ -3,6 +3,9 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.spec.ts'],
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
+    '^.+\\.ts$': [
+      'ts-jest',
+      { tsconfig: 'tsconfig.jest.json', diagnostics: { ignoreCodes: [151002] } },
+    ],
   },
 }

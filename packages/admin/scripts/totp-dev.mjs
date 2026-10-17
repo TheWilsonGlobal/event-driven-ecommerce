@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // DEV helper: print the current TOTP code for a base32 secret (RFC 6238, SHA-1, 30 s, 6 digits).
 //
 //   node packages/admin/scripts/totp-dev.mjs <BASE32_SECRET>

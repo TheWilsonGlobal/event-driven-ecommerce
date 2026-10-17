@@ -5,6 +5,9 @@ module.exports = {
   // tsconfig.jest.json adds @types/jest, which the root tsconfig's
   // `types: ["node"]` otherwise excludes. See that file.
   transform: {
-    '^.+\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
+    '^.+\.tsx?$': [
+      'ts-jest',
+      { tsconfig: 'tsconfig.jest.json', diagnostics: { ignoreCodes: [151002] } },
+    ],
   },
 }
