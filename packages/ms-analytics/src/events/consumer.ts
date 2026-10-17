@@ -6,6 +6,7 @@ import {
   EventProducer,
   TOPICS,
   createKafkaClient,
+  withCorrelationTag,
   loadKafkaSettings,
   type KafkaSettings,
   type TopicName,
@@ -99,7 +100,7 @@ export function createAnalyticsConsumer(
     store,
     rankings,
     // eslint-disable-next-line no-console
-    log: (message: string) => console.log(`${LOG_PREFIX} ${message}`),
+    log: (message: string) => console.log(withCorrelationTag(`${LOG_PREFIX} ${message}`)),
   }
 
   const consumer = new EventConsumer(

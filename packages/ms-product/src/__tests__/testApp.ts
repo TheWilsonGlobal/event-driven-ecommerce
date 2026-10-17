@@ -85,6 +85,8 @@ export const product = (over: Partial<ProductDoc> & { id: string }): ProductDoc 
   ...over,
 })
 
+/** Test-only HS256 key for service-to-service tokens (not a real secret). */
+export const TEST_SERVICE_SECRET = 'unit-test-service-secret-0123456789abcdef'
 export const VENDOR_A = 'vendor-a'
 export const VENDOR_B = 'vendor-b'
 
@@ -110,6 +112,7 @@ export interface TestApp {
   products: MemoryStore<ProductDoc>
   uploads: { key: string; type: string; size: number }[]
   signedKeys: string[]
+  listPrefixes: (string | undefined)[]
   cache: ProductCache<ProductDoc>
   cacheResults: Record<CacheResult, number>
   tokens: () => Promise<
@@ -132,6 +135,7 @@ export async function buildApp(
   ])
   const uploads: TestApp['uploads'] = []
   const signedKeys: string[] = []
+  const listPrefixes: (string | undefined)[] = []
 
   const server = fastify({
     ...securityServerOptions({}),
@@ -151,6 +155,7 @@ export async function buildApp(
         issuer: ta.issuer,
         audience: ta.audience,
         production: false,
+        serviceAuthSecret: TEST_SERVICE_SECRET,
         limits: { ...roomy, ...(opts.limits ?? {}) },
       },
     },
@@ -176,9 +181,14 @@ export async function buildApp(
       signedKeys.push(key)
       return `http://storage.test/signed/${key}`
     },
-    listObjects: async () => [
-      { key: 'products/a.png', sizeBytes: 1, lastModified: new Date().toISOString() },
-    ],
+    // Deliberately ignores the prefix, so the route's own filter is what is tested.
+    listObjects: async (prefix?: string) => {
+      listPrefixes.push(prefix)
+      return [
+        { key: 'products/a.png', sizeBytes: 1, lastModified: new Date().toISOString() },
+        { key: 'receipts/r.pdf', sizeBytes: 2, lastModified: new Date().toISOString() },
+      ]
+    },
     healthCheck: async () => ({ healthy: true, latencyMs: 1, endpoint: 'http://storage.test' }),
   }
   const queueManager = new QueueManager(false)
@@ -222,6 +232,7 @@ export async function buildApp(
     products,
     uploads,
     signedKeys,
+    listPrefixes,
     cache,
     cacheResults,
     tokens: async () => ({

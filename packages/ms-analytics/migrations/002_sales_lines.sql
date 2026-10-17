@@ -9,8 +9,9 @@
 -- Orders consumed before this migration have no rows here: windowed rankings
 -- cover only events applied after it. The all-time view stays product_counters.
 --
--- Growth: rows older than the longest ranking window (7d) are useless to the
--- rank engine; the rebuild function prunes them. occurred_at is a real
+-- Growth: rows older than the longest ranking window (7d, plus a day of slack) are
+-- useless to the rank engine; RankingEngine prunes them hourly on a timer and again
+-- on every rebuild. occurred_at is a real
 -- timestamptz (parsed from the envelope; unparseable events write no row).
 CREATE TABLE {{schema}}.sales_lines (
   event_id    text          NOT NULL,

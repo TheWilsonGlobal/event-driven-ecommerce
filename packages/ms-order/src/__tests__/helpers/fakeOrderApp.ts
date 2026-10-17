@@ -123,7 +123,7 @@ export function makeOrder(userId: string, over: Partial<FakeOrder> = {}): FakeOr
 
 export class FakePrisma {
   orders: FakeOrder[] = []
-  outbox: { eventType: string }[] = []
+  outbox: { eventType: string; envelope: Record<string, any> }[] = [] // eslint-disable-line @typescript-eslint/no-explicit-any
 
   private match(where: Record<string, unknown> | undefined) {
     return (o: FakeOrder) =>
@@ -185,8 +185,8 @@ export class FakePrisma {
   }
 
   outboxEvent = {
-    create: async (a: { data: { eventType: string } }) => {
-      this.outbox.push({ eventType: a.data.eventType })
+    create: async (a: { data: { eventType: string; envelope?: Record<string, unknown> } }) => {
+      this.outbox.push({ eventType: a.data.eventType, envelope: a.data.envelope ?? {} })
     },
   }
 

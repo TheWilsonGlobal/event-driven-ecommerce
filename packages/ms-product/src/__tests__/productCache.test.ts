@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
-import { bearer, buildApp, type TestApp } from './testApp'
+import { signServiceToken } from '@ecommerce/shared-security'
+import { TEST_SERVICE_SECRET, bearer, buildApp, type TestApp } from './testApp'
 import { FakeRedis } from './fakeRedis'
 import { ProductCache, cacheKey, lockKey } from '../cache/productCache'
 
@@ -178,5 +179,108 @@ describe('GET /products/:id cache-aside', () => {
       expect(r.statusCode).toBe(404)
       expect(redis.data.has(cacheKey('prod-b'))).toBe(true)
     })
+  })
+})
+
+describe('service identities bypass the cache', () => {
+  const svcGet = async (a: TestApp, id: string) =>
+    a.server.inject({
+      url: `/api/v1/products/${id}`,
+      headers: {
+        authorization: `Bearer ${await signServiceToken(TEST_SERVICE_SECRET, 'ms-order')}`,
+      },
+    })
+
+  it('never reads a stale cached price and never writes back', async () => {
+    const redis = new FakeRedis()
+    const a = await app(redis)
+    expect((await get(a, 'prod-a')).statusCode).toBe(200) // fills the cache at price 10
+    a.products.docs[1]!.price = 77 // store changed; cache still holds 10
+    const svc = await svcGet(a, 'prod-a')
+    expect(svc.json().price).toBe(77)
+    expect((await get(a, 'prod-a')).json().price).toBe(10) // shoppers still hit the cache
+    // and a service read on a cold key does not populate it
+    redis.data.clear()
+    redis.calls.length = 0
+    expect((await svcGet(a, 'prod-a')).statusCode).toBe(200)
+    expect(redis.data.has(cacheKey('prod-a'))).toBe(false)
+    expect(redis.calls).toEqual([])
+  })
+})
+
+describe('ProductCache internals', () => {
+  const flush = () => new Promise((r) => setTimeout(r, 5))
+
+  it('a late cross-replica write-back is removed by the delayed DEL', async () => {
+    const redis = new FakeRedis()
+    const c = new ProductCache<{ v: number }>({ redis, delayedDelMs: 20 })
+    await c.invalidate('p')
+    redis.data.set(cacheKey('p'), JSON.stringify({ v: 'stale' })) // peer SETs after our DEL
+    await new Promise((r) => setTimeout(r, 40))
+    expect(redis.data.has(cacheKey('p'))).toBe(false)
+    await c.close()
+  })
+
+  it('close() cancels pending delayed DELs', async () => {
+    const redis = new FakeRedis()
+    const c = new ProductCache<{ v: number }>({ redis, delayedDelMs: 20 })
+    await c.invalidate('p')
+    await c.close()
+    redis.data.set(cacheKey('p'), '{}')
+    await new Promise((r) => setTimeout(r, 40))
+    expect(redis.data.has(cacheKey('p'))).toBe(true)
+  })
+
+  it('lock release is owned: a foreign token is not deleted', async () => {
+    const redis = new FakeRedis()
+    const c = new ProductCache<{ v: number }>({ redis, delayedDelMs: 1000 })
+    const p = c.getOrLoad('p', async () => {
+      redis.data.set(lockKey('p'), 'someone-elses-token') // our lock expired, a peer took it
+      return { v: 1 }
+    })
+    await p
+    expect(redis.data.get(lockKey('p'))).toBe('someone-elses-token')
+    await c.close()
+  })
+
+  it('lock release deletes our own token', async () => {
+    const redis = new FakeRedis()
+    const c = new ProductCache<{ v: number }>({ redis })
+    await c.getOrLoad('p', async () => ({ v: 1 }))
+    expect(redis.data.has(lockKey('p'))).toBe(false)
+  })
+
+  it('generation map is capped (LRU) and eviction stays conservative', async () => {
+    const redis = new FakeRedis()
+    const c = new ProductCache<{ v: number }>({ redis, generationCap: 3, delayedDelMs: 1000 })
+    let release!: (v: { v: number }) => void
+    const slow = c.getOrLoad('a', () => new Promise((r) => (release = r)))
+    await flush()
+    await c.invalidate('a') // a is now invalidated mid-load
+    for (const id of ['b', 'c', 'd', 'e']) await c.invalidate(id) // evicts a
+    expect(c.generationSize).toBe(3)
+    release({ v: 1 })
+    await slow
+    expect(redis.data.has(cacheKey('a'))).toBe(false) // stale load must not be written back
+    await c.close()
+  })
+
+  it('invalidate orphans the in-flight load: the next miss does not wait on it', async () => {
+    const redis = new FakeRedis()
+    const c = new ProductCache<{ v: number }>({ redis, delayedDelMs: 1000 })
+    let release!: (v: { v: number }) => void
+    const old = c.getOrLoad('p', () => new Promise((r) => (release = r)))
+    await flush()
+    expect(redis.data.has(lockKey('p'))).toBe(true)
+    await c.invalidate('p')
+    expect(redis.data.has(lockKey('p'))).toBe(false) // orphan's lock freed
+    const t0 = Date.now()
+    const fresh = await c.getOrLoad('p', async () => ({ v: 2 }))
+    expect(fresh).toEqual({ v: 2 })
+    expect(Date.now() - t0).toBeLessThan(500)
+    release({ v: 1 })
+    expect(await old).toEqual({ v: 1 }) // caller of the old flight still gets an answer
+    expect(JSON.parse(redis.data.get(cacheKey('p')) as string)).toEqual({ v: 2 })
+    await c.close()
   })
 })

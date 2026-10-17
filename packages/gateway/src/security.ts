@@ -1,6 +1,9 @@
 import type { FastifyInstance, HTTPMethods } from 'fastify'
 import {
   AppError,
+  CORRELATION_HEADER,
+  TRACEPARENT_HEADER,
+  correlationHeaders,
   loadSecurityConfig,
   type RateTier,
   type RoutePolicy,
@@ -109,6 +112,22 @@ export function stripIdentityHeaders(
     if (!isIdentityHeader(name)) out[name] = value
   }
   return out
+}
+
+/**
+ * The outgoing header set for a proxied call: identity headers dropped, and the
+ * trace headers REPLACED by the values the correlation plugin validated (so a
+ * malformed inbound `x-correlation-id` / `traceparent` is never forwarded, and
+ * every upstream log line shares the id the gateway echoes to the caller).
+ */
+export function forwardHeaders(
+  request: { correlationId: string; traceparent: string | null },
+  headers: Record<string, string | string[] | undefined>
+): Record<string, string | string[] | undefined> {
+  const out = stripIdentityHeaders(request, headers)
+  delete out[CORRELATION_HEADER]
+  delete out[TRACEPARENT_HEADER]
+  return { ...out, ...correlationHeaders(request) }
 }
 
 // ─── Request guards ─────────────────────────────────────────────────────────

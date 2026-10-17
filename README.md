@@ -9,29 +9,31 @@ This platform implements an **Event-Driven Architecture (EDA)** where asynchrono
 The monorepo contains the following services:
 
 ### Backend Services (Fastify 4)
-- **API Gateway** (`packages/gateway` · Port 5460) - Reverse proxy, JWT verification, rate limiting
-- **User Service** (`packages/ms-user` · Port 5463) - Authentication, authorization, and user management (Prisma / Postgres schema `ms_user`)
+- **API Gateway** (`packages/gateway` · Port 5460) - Reverse proxy, strips client identity headers, forwards the bearer token and trace headers, Redis rate limiting, CORS allow-list and CSP
+- **User Service** (`packages/ms-user` · Port 5463) - Profiles, roles and audit log on top of Supabase Auth, which holds the credentials (Prisma / Postgres schema `ms_user`)
 - **Product Service** (`packages/ms-product` · Port 5464) - Product catalog, Elasticsearch search, and catalogue storage (Postgres schema `ms_product`; NeDB is only the legacy driver)
 - **Order Service** (`packages/ms-order` · Port 5465) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal (Prisma / Postgres schema `ms_order`, transactional outbox)
 - **Inventory Service** (`packages/ms-inventory` · Port 5466) - Stock reservation, inventory tracking, and Kafka consumer (Postgres schema `ms_inventory`, transactional outbox)
-- **Analytics Service** (`packages/ms-analytics` · Port 5467) - Sales & event metric aggregation, and Kafka consumer (Postgres schema `ms_analytics`)
+- **Analytics Service** (`packages/ms-analytics` · Port 5467) - Sales & event metric aggregation, Redis sales rankings, and Kafka consumer (Postgres schema `ms_analytics`)
 
 ### Testing & Verification
 - **Load & Stress Testing** (`packages/tests`) - Live HTTP & queue/event load test harness for BullMQ and Kafka
 
 ### Shared Libraries
 - **Types** (`packages/shared/types`) - Common TypeScript type definitions & DTOs
+- **Security** (`packages/shared/security`) - `@ecommerce/shared-security`: token verification, RBAC policies, rate limiter, strict request validation, correlation ids, one error shape
 - **Utils** (`packages/shared/utils`) - Shared utility functions, logger (Pino + Loki), metrics (Prometheus) & response wrappers
 - **Database** (`packages/shared/database`) - Postgres pools/transactions/migrations for the single Supabase database, Redis clients (legacy NeDB/SQLite adapters kept until sign-off)
 - **Messaging** (`packages/shared/messaging`) - BullMQ queues, workers & Kafka event clients
 
 ### Frontend & Control Plane
 - **Web Client** (`packages/client` · Port 5462) - Next.js 14 SSR React customer application
-- **Admin Portal** (`packages/admin` · Port 5461) - React + Vite centralized service & config cockpit
+- **Admin Portal** (`packages/admin` · Port 5461) - React + Vite service & config cockpit (Supabase sign-in, TOTP required for admins, top-products leaderboard)
 
 ### 📖 Architecture & System Design Documentation
 Comprehensive architectural documentation and specifications are maintained in the accompanying notes repository (`.notes/APPs/samples/event-driven-ecommerce/`):
 - **Architecture Deep-Dive**: System overview, high-level topology, DB-per-service trade-offs, and component specs.
+- **API defense**: `change-05-api-defense/` (plans, `final-plan.md`, and the `*-updated-01.md` result docs).
 - **Workflow & Diagrams**: Sequence diagrams, BullMQ job lifecycles, and Kafka event backbone flows.
 - **Advanced Patterns**: Transactional Outbox, Idempotent Consumers, and Distributed Saga Orchestration.
 
@@ -41,10 +43,10 @@ Comprehensive architectural documentation and specifications are maintained in t
 - Node.js 18+
 - pnpm 10+ (`corepack enable` or `npm install -g pnpm`)
 - Docker & Docker Compose
-- PostgreSQL 15
-- Redis 7
-- MongoDB 7
-- Elasticsearch 8.11
+- A Supabase project (Postgres and Auth); no local Postgres is needed
+- Redis 7 (rate limiter, BullMQ, product cache, rankings)
+- Redpanda/Kafka (only when `KAFKA_ENABLED=true`)
+- Elasticsearch 8.11 (optional, product search)
 
 ### Installation
 
@@ -57,7 +59,8 @@ cd event-driven-ecommerce
 2. Copy environment variables:
 ```bash
 cp .env.example .env
-# Update .env with your configuration
+# Update .env: SUPABASE_DB_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY, SERVICE_AUTH_SECRET
+# .env is gitignored; never commit it
 ```
 
 3. Install dependencies and generate Prisma clients:
@@ -239,11 +242,39 @@ retries, state transitions and all database writes are real. See the
 
 ## 🔒 Security
 
-- JWT-based authentication
-- Rate limiting
-- CORS configuration
-- Input validation
-- Security headers with Helmet
+Four layers, implemented in `@ecommerce/shared-security` and wired into the gateway and every service
+(design and results: `change-05-api-defense/` in the notes repo).
+
+1. **Input validation.** Strict Ajv (no body coercion), closed TypeBox request and response schemas, 100 KB JSON cap,
+   non-JSON content types refused (415), upload magic-byte checks, Kafka payload schemas validated by consumers
+   (bad events are recorded as rejected, never retried). Errors always look like
+   `{statusCode, error, code, message, requestId, fields?}`.
+2. **Rate limiting.** Redis fixed-window counters with tiers (read / write / auth / expensive / admin), keyed by IP, user
+   and, for sign-in, email. Reads fail open; auth and admin fail closed. Responses carry `x-ratelimit-limit`,
+   `-remaining`, `-reset` (Unix seconds) and `retry-after`. Falls back to memory when Redis is not the KV driver.
+3. **Authentication (Supabase Auth).** Users sign in with Supabase; services verify the ES256 access token offline
+   against the project's JWKS (issuer, audience, expiry). Service-to-service calls use a 60 s HS256 token signed with
+   `SERVICE_AUTH_SECRET`. The business role comes only from the custom `app_role` claim, set by the **Custom Access
+   Token Hook** (`packages/ms-user/supabase/001_custom_access_token_hook.sql`, run once in the Supabase SQL editor,
+   then enable it under Authentication > Hooks). A token without the claim is treated as CUSTOMER. Admins need TOTP (`aal2`).
+4. **Authorization (RBAC).** Every route declares a `config.policy` (default deny; `assertPolicyCoverage` fails boot and
+   tests if one is missing). Roles ADMIN / VENDOR / CUSTOMER hold `resource:action[:any]` permissions; ownership
+   mismatches answer 404; operator routes need `aal2`. VENDOR storage access is limited to `products/`.
+
+Other measures: pino redaction of secrets, internal service ports published on `127.0.0.1` only, correlation ids on
+every request and Kafka event (`x-correlation-id` / `traceparent`). `/metrics` is public, so rely on network isolation.
+
+### Rollout switches
+
+`AUTH_ENFORCE` and `RATE_LIMIT_ENFORCE` default to **`report`**: denials are logged (`access.denied`) but not blocked.
+Flip to `enforce` only after the frontend follow-ups and a browser click-through on a side port; roll back by setting
+the variable back to `report`. `PRICE_CHECK` (ms-order verifies prices with ms-product) defaults to `report` too.
+See `.env.example` for the full list (`SUPABASE_*`, `CORS_ORIGINS`, `TRUST_PROXY`, `RATE_LIMIT_*_PER_MIN`).
+
+```bash
+pnpm --filter @ecommerce/ms-user run auth:sync             # dry run: lists seeded profiles without a Supabase account
+pnpm --filter @ecommerce/ms-user run auth:sync -- --apply  # create the accounts (writes to the live project)
+```
 
 ## 🚀 Deployment
 
@@ -286,6 +317,12 @@ pnpm run docker:up
 make docker-up
 ```
 
+### CI / CD
+
+- **CI Pipeline** (`.github/workflows/ci.yml`) runs lint, type-check and tests on every push and pull request.
+- **Build & Publish Containers** and **Deploy to Kubernetes** run only for a release tag (`v*.*.*`) or a manual run,
+  not for ordinary commits.
+
 ### Kubernetes (Kustomize) Deployment
 ```bash
 # Deploy to Staging
@@ -298,7 +335,8 @@ kubectl apply -k packages/scripts/overlays/production
 ## 📚 API Documentation
 
 API documentation is available at:
-- Swagger UI: http://localhost:5460/api-docs
+- Swagger UI: http://localhost:5460/api-docs (public in development; needs `ops:read` in production)
+- Rankings: `GET /api/v1/analytics/rankings/top-products?window=1h|24h|7d` and `/rankings/category/:categoryId` (ms-analytics)
 - API Gateway: Routes to all service endpoints
 
 ## 🧪 Testing
@@ -394,7 +432,7 @@ both repos.
 ## Search (Elasticsearch)
 
 `ms-product` indexes products into Elasticsearch and uses it to answer
-`GET /api/v1/products?search=`. NeDB remains the **source of truth** — the index
+`GET /api/v1/products?search=`. The Postgres `ms_product` schema (jsonb documents) is the **source of truth** (NeDB is only the legacy driver) — the index
 is a search accelerator, never the record.
 
 ```bash
@@ -402,12 +440,12 @@ cd ../../hub && docker compose --profile search up -d
 ```
 
 - Every write path (seed, create, update, delete) mirrors into the index, and
-  the whole catalogue is re-indexed from NeDB on each boot, so a wiped or stale
+  the whole catalogue is re-indexed from the database on each boot, so a wiped or stale
   index self-heals on restart.
 - Search results are ranked by relevance, tolerate a typo (`fuzziness: AUTO`)
   and match on `tags`/`sku` as well as title and description — none of which the
   previous substring scan could do.
-- Matching ids are resolved back to NeDB records before the response is built,
+- Matching ids are resolved back to database records before the response is built,
   so the API can never serve a stale indexed copy.
 
 `GET /health` reports cluster status from a **10s cache**, so a liveness probe
@@ -422,9 +460,21 @@ in-memory substring filter. The response's `searchEngine` field
 Set `ELASTICSEARCH_ENABLED=false` to skip it entirely and avoid the
 connection timeout on every search.
 
+## Caching and rankings (Redis)
+
+- **Product cache-aside** (ms-product): `GET /api/v1/products/:id` reads `cache:product:{id}` first; concurrent misses
+  share one load (in-process single-flight plus a Redis lock); entries expire after 1 h plus up to 5 min of jitter and are
+  deleted on every create, update and delete (with a second delayed delete). Requests made with a service token (ms-order's
+  price check) bypass the cache so a price is never stale. Metric: `product_cache_requests_total{result}`.
+  Redis down means direct reads, no errors.
+- **Sales rankings** (ms-analytics): each consumed `order.created` adds units sold to bucketed Redis sorted sets
+  (`rank:global:{1h,24h,7d}`, plus `rank:cat:{id}:{window}` when order lines carry a `categoryId`). The answer reports
+  `source: redis|postgres`; if Redis is unavailable it falls back to Postgres (all-time for the global ranking). The
+  `sales_lines` table feeds rebuilds and is pruned hourly. Redelivered events never double count.
+
 ## Metrics (Prometheus + Grafana)
 
-All four backend services expose `GET /metrics` via the shared plugin in
+All backend services expose `GET /metrics` via the shared plugin in
 [`packages/shared/utils/src/metrics.ts`](packages/shared/utils/src/metrics.ts):
 request counts, latency histograms and Node process/event-loop stats, each
 labelled with `service`.
@@ -450,7 +500,7 @@ clicking through the UI, so they survive a wiped data directory.
 
 ## Logs (Loki)
 
-All four backend services ship their pino logs to Loki via `pino-loki`,
+All backend services ship their pino logs to Loki via `pino-loki`,
 configured once in
 [`packages/shared/utils/src/logger.ts`](packages/shared/utils/src/logger.ts).
 Logs go to the terminal **and** Loki, so `pnpm run dev` looks exactly as before.
@@ -574,12 +624,11 @@ reassuring possible answer.
 
 ### Known limitations — stated, not hidden
 
-1. **Delivery is at-most-once.** Events are published *after* the database
-   commit and a publish failure is logged, counted and swallowed, so a broker
-   outage can never fail an order that is already committed. The consequence is
-   real: a crash between the commit and the publish **loses the event**. The
-   fix is a transactional outbox, deliberately out of scope here.
-   `publishFailures` on `/api/v1/events` reports this honestly.
+1. **Delivery is at-least-once.** ms-order and ms-inventory stage every event in a
+   transactional outbox (see "Reliability patterns") and a relay publishes it, so
+   a crash or a broker outage no longer loses events. Consumers dedupe on
+   `eventId`. Events from any publisher outside the outbox are still
+   fire-and-forget; `publishFailures` on `/api/v1/events` reports those.
 2. **No schema registry.** Envelope versioning is by convention and topic name.
 3. **A failing consumer handler does not retry.** The error is caught, counted
    and the offset advances — otherwise one bad message would wedge the
@@ -590,6 +639,8 @@ reassuring possible answer.
    The payload says so via `countersAreProcessLifetime`.
 5. **Single broker, `replication.factor=1`.** Correct for local development,
    not a production topology.
+6. **Payloads are validated, not versioned.** Consumers check each event against the schemas in
+   `packages/shared/messaging/src/kafka/payloadSchemas.ts`; malformed events are recorded as rejected and never retried.
 
 ---
 

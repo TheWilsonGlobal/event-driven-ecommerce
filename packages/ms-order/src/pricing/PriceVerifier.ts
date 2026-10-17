@@ -51,14 +51,15 @@ const differs = (a: number, b: number) => Math.abs(a - b) > PRICE_TOLERANCE + 1e
  */
 export async function checkOrderPrices(
   client: ProductClient,
-  input: PriceCheckInput
+  input: PriceCheckInput,
+  traceHeaders: Record<string, string> = {}
 ): Promise<PriceCheckResult> {
   const ids = [...new Set(input.items.map((i) => i.productId))]
   const found = new Map<string, CatalogProduct | null>()
   // Bounded fan-out: an order has at most 100 lines.
   for (let i = 0; i < ids.length; i += 10) {
     const batch = ids.slice(i, i + 10)
-    const results = await Promise.all(batch.map((id) => client.getProduct(id)))
+    const results = await Promise.all(batch.map((id) => client.getProduct(id, traceHeaders)))
     batch.forEach((id, n) => found.set(id, results[n] ?? null))
   }
 

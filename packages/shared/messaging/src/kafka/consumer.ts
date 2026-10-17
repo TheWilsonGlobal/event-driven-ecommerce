@@ -4,6 +4,7 @@ import { parseEnvelope, type EventEnvelope } from './envelope'
 import { toKafkaUnavailable, type KafkaUnavailableError } from './errors'
 import type { ConsumerGroupId, EventType, TopicName } from './topics'
 import { describeError } from '../describeError'
+import { runWithMessageContext } from './correlationContext'
 
 /**
  * Consumes domain events from the backbone.
@@ -129,6 +130,13 @@ function emptyCounters(): ConsumerCounters {
   }
 }
 
+/** A Kafka header value (Buffer | string | array | undefined) as a string, or null. */
+function headerValue(raw: Buffer | string | (Buffer | string)[] | undefined): string | null {
+  const v = Array.isArray(raw) ? raw[0] : raw
+  if (v === undefined) return null
+  return typeof v === 'string' ? v : v.toString('utf8')
+}
+
 export class EventConsumer {
   private readonly kafka: Kafka | undefined
   private consumer: Consumer | undefined
@@ -252,7 +260,13 @@ export class EventConsumer {
 
       await this.consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
-          await this.dispatch(topic, partition, message.offset, message.value)
+          await this.dispatch(
+            topic,
+            partition,
+            message.offset,
+            message.value,
+            headerValue(message.headers?.['correlation-id'])
+          )
         },
       })
 
@@ -280,12 +294,13 @@ export class EventConsumer {
     topic: string,
     partition: number,
     offset: string,
-    value: Buffer | null
+    value: Buffer | null,
+    headerCorrelationId?: string | null
   ): Promise<void> {
     // NOTE: reaching here already means kafkajs decoded the batch. A
     // compression/decode failure never gets this far — see the ⚠️ section in
     // this class's docblock.
-    const envelope = parseEnvelope(value)
+    const envelope = parseEnvelope(value, headerCorrelationId)
 
     if (!envelope) {
       // Unparseable. Counted as skipped, not failed: nothing was wrong with
@@ -312,7 +327,11 @@ export class EventConsumer {
 
     for (const handler of handlers) {
       try {
-        await handler(envelope, context)
+        // Everything the handler awaits sees this message's correlationId.
+        await runWithMessageContext(
+          { correlationId: envelope.correlationId, eventId: envelope.eventId },
+          () => handler(envelope, context)
+        )
         this.counters.consumed += 1
         this.counters.lastConsumedAt = new Date().toISOString()
       } catch (err) {
@@ -321,7 +340,7 @@ export class EventConsumer {
         this.counters.lastFailureReason = describeError(err)
         // eslint-disable-next-line no-console
         console.error(
-          `${this.options.logPrefix} Handler for ${envelope.eventType} (eventId=${envelope.eventId}) threw: ${describeError(err)}`
+          `${this.options.logPrefix} Handler for ${envelope.eventType} (eventId=${envelope.eventId} correlationId=${envelope.correlationId}) threw: ${describeError(err)}`
         )
       }
     }

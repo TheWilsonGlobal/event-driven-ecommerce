@@ -173,7 +173,9 @@ export async function handleOrderCreated(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  const salesLines: SalesLine[] = []
+  // Assigned only when the transaction callback completes: applyOnce may re-run the
+  // callback on a retry, and a shared array filled inside it would double count.
+  let salesLines: SalesLine[] = []
   const outcome = await applyOnce(deps, envelope, context, async (tx) => {
     const payload = envelope.payload as Partial<OrderCreatedPayload>
     const amount = usableAmount(payload.totalAmount)
@@ -234,24 +236,25 @@ export async function handleOrderCreated(
     // an unparseable occurredAt writes nothing (never filed under "now").
     const occurredMs = Date.parse(envelope.occurredAt)
     if (Number.isFinite(occurredMs)) {
+      const collected: SalesLine[] = []
       for (const item of items) {
         const productId = usableString(item?.productId)
         const quantity = usableAmount(item?.quantity)
         if (!productId || quantity === undefined || quantity <= 0) continue
-        // categoryId is not part of OrderLineItem today; take it when a
-        // publisher sends one, and skip the category set when it is absent.
+        // categoryId is an optional OrderLineItem field (absent on older events or
+        // when the client did not send it); an absent or key-unsafe value skips the
+        // category set.
         const rawCategory = (item as { categoryId?: unknown }).categoryId
-        salesLines.push({
+        collected.push({
           productId,
           categoryId:
             typeof rawCategory === 'string' && KEY_ID.test(rawCategory) ? rawCategory : null,
           quantity,
         })
       }
-      const merged = mergeLines(salesLines)
-      salesLines.length = 0
-      salesLines.push(...merged)
+      const merged = mergeLines(collected)
       await recordSalesLines(tx, envelope.eventId, new Date(occurredMs), merged)
+      salesLines = merged
     }
   })
 

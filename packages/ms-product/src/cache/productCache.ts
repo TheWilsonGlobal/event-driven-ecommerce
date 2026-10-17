@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import IORedis from 'ioredis'
 
 /**
@@ -23,6 +24,17 @@ import IORedis from 'ioredis'
  * also bumps an in-process generation, so a load that was already in flight when
  * the write landed cannot write its (older) result back. If the DEL itself fails
  * (Redis blip) the stale entry lives until its TTL (<= 3900 s); that is logged.
+ *
+ * Cross-replica race: the generation guard is per process. Replica B may have read
+ * the OLD document just before replica A's write and SET it just after A's DEL.
+ * Products carry no version/updatedAt to compare-and-set on, so the simplest correct
+ * fix is a second, delayed DEL (DELAYED_DEL_MS, default 2 s, unref'd) which removes
+ * any such late write-back. Price-critical readers (service identities such as
+ * ms-order's PriceVerifier) never use the cache at all; see the route.
+ *
+ * Lock release is owned: the lock value is a per-flight token and is only DELeted
+ * if it still holds that token (GET + compare + DEL; the residual window is
+ * microseconds against a 5 s lock), so a slow flight cannot free a newer flight's lock.
  */
 
 export const CACHE_TTL_BASE_SECONDS = 3600
@@ -30,6 +42,9 @@ export const CACHE_TTL_JITTER_SECONDS = 300
 export const LOCK_TTL_SECONDS = 5
 const LOCK_POLL_MS = 25
 const LOCK_WAIT_MS = 1000
+export const DELAYED_DEL_MS = 2000
+/** Max ids remembered in the invalidation-generation map. */
+export const GENERATION_CAP = 10_000
 
 /** The slice of ioredis this cache uses; a fake implements the same four calls. */
 export interface CacheRedis {
@@ -55,6 +70,10 @@ export interface ProductCacheOptions {
   log?: CacheLogger | undefined
   /** Injectable for tests; returns [0,1). */
   random?: (() => number) | undefined
+  /** Delay of the second DEL after an invalidation; injectable for tests. */
+  delayedDelMs?: number | undefined
+  /** Injectable for tests. */
+  generationCap?: number | undefined
 }
 
 export const cacheKey = (id: string): string => `cache:product:${id}`
@@ -68,8 +87,19 @@ export class ProductCache<T extends object> {
   private readonly log: CacheLogger | undefined
   private readonly random: () => number
   private readonly inflight = new Map<string, Promise<T | null>>()
-  /** Bumped by invalidate(); a load only writes back if it did not change. */
+  /**
+   * id -> sequence number of its last invalidation (LRU ordered, capped). A load
+   * records `seq` when it starts and writes back only if no invalidation of its id
+   * happened since. Evicted entries raise `evictedFloor`, so an id that fell out of
+   * the map is treated conservatively (no write-back for loads that began before
+   * the eviction), never as "never invalidated".
+   */
   private readonly generation = new Map<string, number>()
+  private seq = 0
+  private evictedFloor = 0
+  private readonly delayedDelMs: number
+  private readonly generationCap: number
+  private readonly timers = new Set<NodeJS.Timeout>()
   private degraded = false
 
   constructor(opts: ProductCacheOptions) {
@@ -77,6 +107,13 @@ export class ProductCache<T extends object> {
     this.counter = opts.counter
     this.log = opts.log
     this.random = opts.random ?? Math.random
+    this.delayedDelMs = opts.delayedDelMs ?? DELAYED_DEL_MS
+    this.generationCap = opts.generationCap ?? GENERATION_CAP
+  }
+
+  /** Number of ids tracked in the generation map (test visibility). */
+  get generationSize(): number {
+    return this.generation.size
   }
 
   /** TTL in seconds for one write-back: 3600 + random(0, 300). */
@@ -107,18 +144,49 @@ export class ProductCache<T extends object> {
 
   /** Drop the cached entry (and orphan any in-flight load) after a write. Never throws. */
   async invalidate(id: string): Promise<void> {
-    this.generation.set(id, (this.generation.get(id) ?? 0) + 1)
+    this.bumpGeneration(id)
+    // Orphan the in-flight load: the next miss starts its own flight instead of
+    // awaiting one that is reading pre-write data.
     this.inflight.delete(id)
     if (!this.redis) return
     try {
-      await this.redis.del(cacheKey(id))
+      // The orphaned flight may still hold the fetch lock; free it so the next miss
+      // does not poll for LOCK_WAIT_MS behind a flight whose result is discarded.
+      await this.redis.del(cacheKey(id), lockKey(id))
       this.recovered()
     } catch (err) {
       this.failed(`DEL ${cacheKey(id)} failed; entry may stay stale until its TTL: ${err}`)
     }
+    this.scheduleDelayedDel(id)
+  }
+
+  private bumpGeneration(id: string): void {
+    this.generation.delete(id) // re-insert at the recent end (LRU)
+    this.generation.set(id, ++this.seq)
+    while (this.generation.size > this.generationCap) {
+      const oldest = this.generation.entries().next().value as [string, number]
+      this.generation.delete(oldest[0])
+      this.evictedFloor = Math.max(this.evictedFloor, oldest[1])
+    }
+  }
+
+  private scheduleDelayedDel(id: string): void {
+    const redis = this.redis
+    if (!redis) return
+    const timer = setTimeout(() => {
+      this.timers.delete(timer)
+      this.bumpGeneration(id)
+      redis.del(cacheKey(id)).catch((err) => {
+        this.failed(`delayed DEL ${cacheKey(id)} failed: ${err}`)
+      })
+    }, this.delayedDelMs)
+    timer.unref()
+    this.timers.add(timer)
   }
 
   async close(): Promise<void> {
+    for (const t of this.timers) clearTimeout(t)
+    this.timers.clear()
     try {
       await this.redis?.quit?.()
     } catch {
@@ -127,12 +195,13 @@ export class ProductCache<T extends object> {
   }
 
   private async fill(id: string, load: () => Promise<T | null>): Promise<T | null> {
-    const startGen = this.generation.get(id) ?? 0
+    const startSeq = this.seq
+    const token = randomUUID()
     let locked = false
 
     if (this.redis) {
       try {
-        locked = (await this.redis.set(lockKey(id), '1', 'EX', LOCK_TTL_SECONDS, 'NX')) === 'OK'
+        locked = (await this.redis.set(lockKey(id), token, 'EX', LOCK_TTL_SECONDS, 'NX')) === 'OK'
         this.recovered()
         if (!locked) {
           // Another replica is loading this id: give it a moment to fill the cache.
@@ -154,7 +223,7 @@ export class ProductCache<T extends object> {
     try {
       this.counter?.inc({ result: this.redis && !this.degraded ? 'miss' : 'bypass' })
       const value = await load()
-      if (value && this.redis && (this.generation.get(id) ?? 0) === startGen) {
+      if (value && this.redis && (this.generation.get(id) ?? this.evictedFloor) <= startSeq) {
         try {
           await this.redis.set(cacheKey(id), JSON.stringify(value), 'EX', this.ttlSeconds())
         } catch (err) {
@@ -165,7 +234,8 @@ export class ProductCache<T extends object> {
     } finally {
       if (locked && this.redis) {
         try {
-          await this.redis.del(lockKey(id))
+          // Owned release: only free the lock if it is still ours.
+          if ((await this.redis.get(lockKey(id))) === token) await this.redis.del(lockKey(id))
         } catch {
           /* the lock expires on its own after LOCK_TTL_SECONDS */
         }

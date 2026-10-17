@@ -87,7 +87,14 @@ export function makeEnvelope<T>({
  * It deliberately checks only the envelope's own required fields; the payload
  * is the consumer's business to validate.
  */
-export function parseEnvelope(value: Buffer | string | null): EventEnvelope | null {
+/** One shape for a correlation id wherever it comes from (body or header). */
+const CORRELATION_ID = /^[A-Za-z0-9._-]{1,128}$/
+const validId = (v: unknown): v is string => typeof v === 'string' && CORRELATION_ID.test(v)
+
+export function parseEnvelope(
+  value: Buffer | string | null,
+  headerCorrelationId?: string | null
+): EventEnvelope | null {
   if (value === null) {
     return null
   }
@@ -119,7 +126,14 @@ export function parseEnvelope(value: Buffer | string | null): EventEnvelope | nu
     eventVersion: typeof e.eventVersion === 'number' ? e.eventVersion : 1,
     occurredAt: e.occurredAt,
     producer: e.producer,
-    correlationId: typeof e.correlationId === 'string' ? e.correlationId : e.eventId,
+    // Body wins if it is well formed (the id ends up in logs and metric labels, so a
+    // hostile one is rejected, not trusted); the `correlation-id` Kafka header (set
+    // by our producer) is the fallback; the eventId is the last resort.
+    correlationId: validId(e.correlationId)
+      ? e.correlationId
+      : validId(headerCorrelationId)
+        ? headerCorrelationId
+        : e.eventId,
     payload: e.payload,
   }
 }

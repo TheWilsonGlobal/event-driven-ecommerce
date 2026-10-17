@@ -103,6 +103,7 @@ export interface RankQuery {
 }
 
 const MAX_PRODUCT_ID_LENGTH = 128
+export const PRUNE_INTERVAL_MS = 3_600_000
 
 /** Merges duplicate productId lines (summing quantity) and drops unusable ones. */
 export function mergeLines(lines: SalesLine[]): SalesLine[] {
@@ -127,6 +128,7 @@ export class RankingEngine implements RankingSink {
   private readonly log: (message: string) => void
   private stale = false
   private rebuilding: Promise<{ rows: number }> | null = null
+  private pruneTimer: NodeJS.Timeout | null = null
 
   constructor(
     private readonly redis: RankRedis,
@@ -252,10 +254,32 @@ export class RankingEngine implements RankingSink {
     return this.rebuilding
   }
 
+  /** Deletes sales_lines older than the longest window (+1d slack); they can never rank again. */
+  async prune(): Promise<number> {
+    return pruneSalesLines(this.store, new Date(this.now() - LONGEST_WINDOW_MS - 24 * 3_600_000))
+  }
+
+  /**
+   * Prunes on a timer as well as on every rebuild, otherwise sales_lines would grow
+   * forever on a service that never rebuilds. The timer is unref'd (it never keeps the
+   * process alive) and failures are logged, never thrown. Idempotent.
+   */
+  startPruning(intervalMs: number = PRUNE_INTERVAL_MS): void {
+    if (this.pruneTimer) return
+    this.pruneTimer = setInterval(() => {
+      this.prune().catch((err: Error) => this.log(`sales_lines prune failed: ${err.message}`))
+    }, intervalMs)
+    this.pruneTimer.unref()
+  }
+
+  stopPruning(): void {
+    if (this.pruneTimer) clearInterval(this.pruneTimer)
+    this.pruneTimer = null
+  }
+
   private async doRebuild(): Promise<{ rows: number }> {
     const nowMs = this.now()
-    // Rows older than the longest window can never rank again.
-    await pruneSalesLines(this.store, new Date(nowMs - LONGEST_WINDOW_MS - 24 * 3_600_000))
+    await this.prune()
 
     // Snapshot Postgres first, then swap in one MULTI.
     const pipe = this.redis.multi()
@@ -309,6 +333,7 @@ export class RankingEngine implements RankingSink {
   }
 
   async close(): Promise<void> {
+    this.stopPruning()
     await this.redis.quit().catch(() => undefined)
   }
 }

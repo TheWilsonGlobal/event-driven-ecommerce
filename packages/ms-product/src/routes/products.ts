@@ -162,7 +162,10 @@ export function registerProductRoutes(
     async (req) => {
       const { id } = req.params
       const load = () => productsStore.findOne({ id })
-      const product = cache ? await cache.getOrLoad(id, load) : await load()
+      // Service identities (ms-order's PriceVerifier) must see the store's current
+      // price: they bypass the cache entirely (no read, no write-back).
+      const useCache = cache && req.auth?.kind !== 'service'
+      const product = useCache ? await cache.getOrLoad(id, load) : await load()
       if (!product) throw notFound('Product not found')
       return product
     }

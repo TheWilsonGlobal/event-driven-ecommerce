@@ -228,6 +228,7 @@ export default function App() {
             orders={data.orders}
             productsCount={data.products.length}
             usersCount={data.users.length}
+            products={data.products}
             rustfsHealth={data.rustfsHealth}
             onNavigate={app.setTab}
             onSelectOrder={data.setSelectedOrder}
@@ -292,7 +293,7 @@ export default function App() {
 
         {activeTab === 'kv-keys' && <KvKeysTab />}
 
-        {activeTab === 'storage' && <StorageTab />}
+        {activeTab === 'storage' && <StorageTab onNotify={app.showToast} />}
 
         {activeTab === 'persistence' && (
           <InfraTab

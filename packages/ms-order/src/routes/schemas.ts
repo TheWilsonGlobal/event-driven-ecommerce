@@ -59,6 +59,8 @@ export const OrderLineBody = Strict({
   title: Str(200),
   unitPrice: Money,
   quantity: Quantity,
+  /** Optional: lets ms-analytics rank categories. Same shape as its KEY_ID. */
+  categoryId: Type.Optional(Type.String({ pattern: '^[A-Za-z0-9_-]{1,64}$' })),
 })
 
 export const ShippingAddressBody = Strict({

@@ -55,12 +55,62 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
-function download(key: string) {
-  const url = `${PRODUCT_SERVICE_URL}/api/v1/storage/download?key=${encodeURIComponent(key)}`
-  window.location.href = url
+/**
+ * A navigation cannot carry the bearer token, so ask the API for the
+ * pre-signed URL as JSON (authenticated) and open that instead.
+ */
+async function fetchDownloadUrl(key: string): Promise<string> {
+  const res = await apiFetch(
+    `${PRODUCT_SERVICE_URL}/api/v1/storage/download?key=${encodeURIComponent(key)}&format=json`
+  )
+  if (!res.ok) throw await toApiError(res)
+  const data: { url?: unknown } = await res.json()
+  if (typeof data.url !== 'string' || !data.url) throw new Error('Download URL missing in response')
+  return data.url
 }
 
-export default function StorageTab() {
+/**
+ * Runs after an await, so window.open could be swallowed by popup blockers.
+ * A programmatic click on an anchor is treated as a normal navigation.
+ */
+function openInNewTab(url: string): void {
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  try {
+    a.click()
+  } finally {
+    a.remove()
+  }
+}
+
+interface StorageTabProps {
+  /** Toast sink (App's showToast). Errors are also shown inline. */
+  onNotify?: (message: string) => void
+}
+
+export default function StorageTab({ onNotify }: StorageTabProps) {
+  const [downloading, setDownloading] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+
+  const download = async (key: string) => {
+    setDownloading(key)
+    setDownloadError(null)
+    try {
+      const url = await fetchDownloadUrl(key)
+      openInNewTab(url)
+    } catch (err) {
+      const msg = `Download failed: ${errorText(err)}`
+      setDownloadError(msg)
+      onNotify?.(msg)
+    } finally {
+      setDownloading(null)
+    }
+  }
+
   const [filter, setFilter] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
@@ -139,6 +189,12 @@ export default function StorageTab() {
         </div>
       </div>
 
+      {downloadError && (
+        <div role="alert" className="chip chip-red" style={{ marginBottom: 10 }}>
+          {downloadError}
+        </div>
+      )}
+
       {loading ? (
         <EmptyState message="Loading objects from RustFS…" />
       ) : loadError ? (
@@ -171,8 +227,14 @@ export default function StorageTab() {
                   <td className="mono cell-right">{formatBytes(o.sizeBytes)}</td>
                   <td className="cell-muted">{formatDate(o.lastModified)}</td>
                   <td className="cell-right">
-                    <button className="btn btn-ghost btn-sm" onClick={() => download(o.key)}>
-                      <DownloadIcon style={{ width: 12, height: 12 }} /> Download
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => void download(o.key)}
+                      disabled={downloading === o.key}
+                      aria-label={`Download ${o.key}`}
+                    >
+                      <DownloadIcon style={{ width: 12, height: 12 }} />{' '}
+                      {downloading === o.key ? 'Preparing…' : 'Download'}
                     </button>
                   </td>
                 </tr>

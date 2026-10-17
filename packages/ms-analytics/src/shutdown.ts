@@ -8,7 +8,7 @@ export interface ShutdownDeps {
   consumer: EventConsumer
   producer: EventProducer
   security: SecurityHandle
-  rankings?: { close(): Promise<void> } | undefined
+  rankings?: { close(): Promise<void>; stopPruning?(): void } | undefined
 }
 
 /**
@@ -70,6 +70,9 @@ export function registerShutdownHandlers({
     } catch (err) {
       console.warn(`[Analytics Service] Error closing event producer: ${(err as Error).message}`)
     }
+
+    // The hourly sales_lines prune must not fire against a closing pool.
+    rankings?.stopPruning?.()
 
     // After the consumer: an in-flight handler still writes ranks post-commit.
     try {

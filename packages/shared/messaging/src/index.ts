@@ -64,6 +64,13 @@ export {
 
 export { createKafkaClient, loadKafkaSettings, type KafkaSettings } from './kafka/client'
 export {
+  runWithMessageContext,
+  currentMessageContext,
+  correlationTag,
+  withCorrelationTag,
+  type MessageContext,
+} from './kafka/correlationContext'
+export {
   makeEnvelope,
   parseEnvelope,
   type EventEnvelope,

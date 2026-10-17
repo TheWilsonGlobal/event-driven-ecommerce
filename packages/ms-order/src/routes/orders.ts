@@ -183,7 +183,7 @@ export function registerOrderRoutes(
                   unitPrice: Number(i.unitPrice),
                 })),
               },
-              request.id
+              request.correlationId
             )
           }
           return updated

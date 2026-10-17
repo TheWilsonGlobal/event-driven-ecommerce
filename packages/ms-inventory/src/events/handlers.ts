@@ -1,5 +1,6 @@
 import {
   validatePayload,
+  withCorrelationTag,
   type EventEnvelope,
   type OrderCancelledPayload,
   type OrderCreatedPayload,
@@ -104,6 +105,14 @@ import { LOG_PREFIX } from './producer'
  * thing that genuinely needs a timer instead: expiring a stale hold.
  */
 
+/** Console logging that appends `[correlationId=...]` while a Kafka message is being handled. */
+const say = {
+  // eslint-disable-next-line no-console
+  log: (message: string) => console.log(withCorrelationTag(message)),
+  // eslint-disable-next-line no-console
+  warn: (message: string) => console.warn(withCorrelationTag(message)),
+}
+
 export interface HandlerDeps {
   store: InventoryStore
   queueManager: QueueManager
@@ -205,7 +214,7 @@ export async function handleOrderCreated(
       // shared-messaging, plus the local line checks). Recorded as handled so a
       // redelivery does not re-log it forever; retrying could never succeed.
       await setOutcome(tx, envelope.eventId, 'rejected:malformed-payload')
-      console.warn(
+      say.warn(
         `${LOG_PREFIX} Rejected malformed ${envelope.eventType} ` +
           `(eventId=${envelope.eventId}): ${valid.ok ? 'unusable line items' : valid.reason}`
       )
@@ -294,21 +303,18 @@ export async function handleOrderCreated(
   // ── Committed. Only logging and the best-effort timer happen below. ───────
   switch (result.kind) {
     case 'duplicate':
-      // eslint-disable-next-line no-console
-      console.log(`${LOG_PREFIX} Skipping duplicate delivery of eventId=${envelope.eventId}`)
+      say.log(`${LOG_PREFIX} Skipping duplicate delivery of eventId=${envelope.eventId}`)
       return
     case 'rejected':
       return
     case 'skipped':
-      // eslint-disable-next-line no-console
-      console.log(
+      say.log(
         `${LOG_PREFIX} order.created for ${payload.orderNumber} ignored: reservation already ` +
           `${result.status} (eventId=${result.eventId})`
       )
       return
     case 'insufficient':
-      // eslint-disable-next-line no-console
-      console.warn(`${LOG_PREFIX} Insufficient stock for ${payload.orderNumber}: ${result.detail}`)
+      say.warn(`${LOG_PREFIX} Insufficient stock for ${payload.orderNumber}: ${result.detail}`)
       return
     case 'reserved':
       // Schedule the stale-hold sweep. The jobId is derived from the eventId, so
@@ -321,8 +327,7 @@ export async function handleOrderCreated(
           eventId: envelope.eventId,
         })
       )
-      // eslint-disable-next-line no-console
-      console.log(
+      say.log(
         `${LOG_PREFIX} Reserved stock for ${payload.orderNumber} (${result.items.length} ` +
           `product(s)); queued ${result.enqueued} inventory.reserved outbox row(s)`
       )
@@ -358,7 +363,7 @@ export async function handleOrderCancelled(
     const valid = validatePayload(envelope.eventType, payload)
     if (!valid.ok || !payload || typeof payload.orderId !== 'string') {
       await setOutcome(tx, envelope.eventId, 'rejected:malformed-payload')
-      console.warn(
+      say.warn(
         `${LOG_PREFIX} Rejected malformed ${envelope.eventType} ` +
           `(eventId=${envelope.eventId}): ${valid.ok ? 'no orderId' : valid.reason}`
       )
@@ -386,11 +391,9 @@ export async function handleOrderCancelled(
   })
 
   if (result.kind === 'duplicate') {
-    // eslint-disable-next-line no-console
-    console.log(`${LOG_PREFIX} Skipping duplicate delivery of eventId=${envelope.eventId}`)
+    say.log(`${LOG_PREFIX} Skipping duplicate delivery of eventId=${envelope.eventId}`)
   } else if (result.kind === 'released') {
-    // eslint-disable-next-line no-console
-    console.log(`${LOG_PREFIX} Released reservation for ${result.orderNumber} (${payload.reason})`)
+    say.log(`${LOG_PREFIX} Released reservation for ${result.orderNumber} (${payload.reason})`)
   }
 }
 

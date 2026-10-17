@@ -33,6 +33,8 @@ const OrderLine = Type.Object({
   sku: Type.String({ maxLength: 128 }),
   quantity: Units,
   unitPrice: Amount,
+  // Optional and backwards compatible; same pattern as ms-analytics' KEY_ID.
+  categoryId: Type.Optional(Type.String({ pattern: '^[A-Za-z0-9_-]{1,64}$' })),
 })
 
 const StockLine = Type.Object({

@@ -39,10 +39,22 @@ const MATRIX: Row[] = [
   ['DELETE', '/api/v1/products/prod-admin', 'none', 401, 403, 404, 200, 200],
   ['POST', '/api/v1/products/upload', 'png', 401, 403, 201, 201, 201],
   ['POST', '/api/v1/receipts/upload', 'png', 401, 403, 201, 201, 201],
-  // storage:read is held by ADMIN and VENDOR (not CUSTOMER) in rbac/roles.ts
+  // storage:read is held by ADMIN and VENDOR (not CUSTOMER) in rbac/roles.ts; a VENDOR is
+  // confined to products/ (receipts/* answers 404, like a missing object).
   ['GET', '/api/v1/storage/health', 'none', 401, 403, 200, 200, 200],
   ['GET', '/api/v1/storage/objects', 'none', 401, 403, 200, 200, 200],
   ['GET', '/api/v1/storage/download?key=products/a.png', 'none', 401, 403, 302, 302, 302],
+  ['GET', '/api/v1/storage/download?key=receipts/r.pdf', 'none', 401, 403, 404, 302, 302],
+  [
+    'GET',
+    '/api/v1/storage/download?key=receipts/r.pdf&format=json',
+    'none',
+    401,
+    403,
+    404,
+    200,
+    200,
+  ],
   [
     'GET',
     '/api/v1/storage/download?key=products/a.png&format=json',

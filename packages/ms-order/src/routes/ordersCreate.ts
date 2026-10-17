@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as crypto from 'crypto'
-import { AppError } from '@ecommerce/shared-security'
+import { AppError, correlationHeaders } from '@ecommerce/shared-security'
 import { Prisma, PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import { paymentMethodToProvider, paymentStatusToPaymentRowStatus } from '../seedOrders'
 import { QueueManager } from '../queues'
@@ -115,6 +115,15 @@ export function registerOrderCreateRoute(
           })
         : null
 
+      // First non-empty categoryId per product id (the order line body is
+      // optional-categoryId; the DB keeps no category column).
+      const categoryByProduct = new Map<string, string>()
+      for (const item of body.items) {
+        if (item.categoryId && !categoryByProduct.has(item.productId)) {
+          categoryByProduct.set(item.productId, item.categoryId)
+        }
+      }
+
       let orderNumber: string
       try {
         orderNumber = await generateUniqueOrderNumber(prisma)
@@ -196,6 +205,11 @@ export function registerOrderCreateRoute(
               include: { items: true, payments: true },
             })
 
+            const categoryFor = (productId: string): { categoryId?: string } => {
+              const categoryId = categoryByProduct.get(productId)
+              return categoryId ? { categoryId } : {}
+            }
+
             await stageOrderCreated(
               tx,
               {
@@ -211,9 +225,12 @@ export function registerOrderCreateRoute(
                   sku: i.productSku,
                   quantity: i.quantity,
                   unitPrice: Number(i.unitPrice),
+                  // Not stored on order_items: forwarded from the request so
+                  // ms-analytics can rank categories. Matched by product id.
+                  ...categoryFor(i.productId),
                 })),
               },
-              request.id
+              request.correlationId
             )
             if (orderStatus === 'CONFIRMED') {
               // Confirmed at birth, so the confirmation fact belongs on the log too.
@@ -227,7 +244,7 @@ export function registerOrderCreateRoute(
                   totalAmount: Number(created.totalAmount),
                   currency: created.currency,
                 },
-                request.id
+                request.correlationId
               )
             }
             return created
@@ -327,7 +344,11 @@ async function verifyPrices(
 ): Promise<Map<string, { sku: string | null; title: string | null }> | null> {
   const enforce = verifier.mode === 'enforce'
   try {
-    const { mismatches, products } = await checkOrderPrices(verifier.client, input)
+    const { mismatches, products } = await checkOrderPrices(
+      verifier.client,
+      input,
+      correlationHeaders(request)
+    )
     if (mismatches.length === 0) return products
     request.log.warn(
       {

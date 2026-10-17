@@ -200,6 +200,10 @@ async function bootstrap() {
     process.exit(1)
   }
 
+  // sales_lines older than the longest window are useless; prune hourly (unref'd,
+  // stopped in the shutdown handler) in addition to the prune inside each rebuild.
+  rankings?.startPruning()
+
   // Warm the rank ZSETs (rebuilds from Postgres when the keys are missing).
   // Background and non-fatal: the endpoints fall back to Postgres meanwhile.
   void rankings?.ensureReady().catch((err: Error) => {

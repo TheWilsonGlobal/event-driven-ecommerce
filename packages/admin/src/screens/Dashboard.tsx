@@ -1,11 +1,14 @@
-import type { ServiceItem, OrderRecord, RustfsHealth, Tab } from '../types'
+import type { ServiceItem, OrderRecord, ProductRecord, RustfsHealth, Tab } from '../types'
 import { StatCard, StatusBadge } from '../components/ui'
+import TopProductsPanel from './analytics/TopProductsPanel'
 
 interface Props {
   services: ServiceItem[]
   orders: OrderRecord[]
   productsCount: number
   usersCount: number
+  /** Used to resolve ranking product ids to titles. */
+  products?: ProductRecord[]
   rustfsHealth: RustfsHealth
   onNavigate: (tab: Tab) => void
   onSelectOrder: (order: OrderRecord) => void
@@ -16,6 +19,7 @@ export default function Dashboard({
   orders,
   productsCount,
   usersCount,
+  products = [],
   rustfsHealth,
   onNavigate,
   onSelectOrder,
@@ -115,6 +119,8 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+
+      <TopProductsPanel products={products} />
 
       {/* Recent Orders Table */}
       <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>

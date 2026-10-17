@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { Redis } from 'ioredis'
 import { createJwks, TokenVerifier } from './auth/verifier'
 import { authPlugin } from './auth/plugin'
+import { correlationPlugin } from './correlation'
 import { loadSecurityConfig, type SecurityConfig } from './config'
 import { registerStrictValidation } from './contracts/validator'
 import { registerErrorHandling } from './errors'
@@ -57,6 +58,8 @@ export async function registerSecurity(
 ): Promise<SecurityHandle> {
   const config: SecurityConfig = { ...loadSecurityConfig(), ...(options.overrides?.config ?? {}) }
 
+  // First hook of the pipeline: every later log line and reply carries the id.
+  await server.register(correlationPlugin)
   registerErrorHandling(server)
   registerStrictValidation(server)
 

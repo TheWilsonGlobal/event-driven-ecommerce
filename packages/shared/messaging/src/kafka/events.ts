@@ -14,6 +14,11 @@ export interface OrderLineItem {
   sku: string
   quantity: number
   unitPrice: number
+  /**
+   * Optional (order.created only, when the client sent it): the product's
+   * category, so ms-analytics can rank categories. Absent on older events.
+   */
+  categoryId?: string
 }
 
 /** order.created — an order row exists and is committed. */

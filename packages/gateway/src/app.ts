@@ -1,4 +1,8 @@
-import fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify'
+import fastify, {
+  type FastifyInstance,
+  type FastifyRequest,
+  type FastifyServerOptions,
+} from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import httpProxy from '@fastify/http-proxy'
@@ -23,7 +27,7 @@ import {
   proxyMounts,
   registerRequestGuards,
   relaxUpgradeInsecure,
-  stripIdentityHeaders,
+  forwardHeaders,
   type Upstreams,
 } from './security'
 
@@ -84,6 +88,7 @@ export async function buildGateway(opts: GatewayOptions): Promise<Gateway> {
       'x-ratelimit-limit',
       'x-ratelimit-remaining',
       'x-ratelimit-reset',
+      'x-correlation-id',
     ],
     maxAge: 600,
   })
@@ -220,7 +225,10 @@ export async function buildGateway(opts: GatewayOptions): Promise<Gateway> {
         prefix: mount.prefix,
         rewritePrefix: mount.prefix,
         httpMethods: rule.methods,
-        replyOptions: { rewriteRequestHeaders: stripIdentityHeaders },
+        replyOptions: {
+          rewriteRequestHeaders: (req, headers) =>
+            forwardHeaders(req as unknown as FastifyRequest, headers),
+        },
         config: {
           policy: rule.policy,
           proxyBodyLimit: rule.bodyLimit,

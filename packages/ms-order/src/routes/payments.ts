@@ -160,7 +160,7 @@ export function registerPaymentRoutes(
                 amount: Number(payment.amount),
                 currency: payment.currency,
               },
-              request.id
+              request.correlationId
             )
             await stageOrderConfirmed(
               tx,
@@ -172,7 +172,7 @@ export function registerPaymentRoutes(
                 totalAmount: Number(order.totalAmount),
                 currency: order.currency,
               },
-              request.id
+              request.correlationId
             )
             return payment.id
           },
@@ -234,7 +234,7 @@ export function registerPaymentRoutes(
           // job's own attemptsMade, not here.
           attempt: 1,
         },
-        request.id
+        request.correlationId
       )
 
       const retryJobId = await queueManager.tryEnqueue('retry-capture', () =>
@@ -326,7 +326,7 @@ export function registerPaymentRoutes(
             currency: capturedPayment.currency,
             reason,
           },
-          request.id
+          request.correlationId
         )
 
         jobId = await queueManager.tryEnqueue('refund-payment', () =>

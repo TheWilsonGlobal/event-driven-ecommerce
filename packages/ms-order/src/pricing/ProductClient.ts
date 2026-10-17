@@ -61,13 +61,20 @@ export class ProductClient {
     return { authorization: `Bearer ${this.token.value}` }
   }
 
-  /** The product, or null when ms-product says it does not exist. */
-  async getProduct(productId: string): Promise<CatalogProduct | null> {
+  /**
+   * The product, or null when ms-product says it does not exist.
+   * `extraHeaders` carries the trace headers (x-correlation-id, traceparent) of
+   * the checkout request so ms-product's log lines join the same story.
+   */
+  async getProduct(
+    productId: string,
+    extraHeaders: Record<string, string> = {}
+  ): Promise<CatalogProduct | null> {
     const url = `${this.opts.baseUrl.replace(/\/+$/, '')}/api/v1/products/${encodeURIComponent(productId)}`
     let res: Response
     try {
       res = await this.fetchImpl(url, {
-        headers: { accept: 'application/json', ...(await this.authHeader()) },
+        headers: { accept: 'application/json', ...extraHeaders, ...(await this.authHeader()) },
         signal: AbortSignal.timeout(this.timeoutMs),
       })
     } catch (err) {

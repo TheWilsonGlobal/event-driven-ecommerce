@@ -300,6 +300,61 @@ describe('identity header stripping', () => {
   })
 })
 
+describe('correlation propagation', () => {
+  const TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736'
+  const TRACEPARENT = `00-${TRACE_ID}-00f067aa0ba902b7-01`
+
+  it('forwards a valid x-correlation-id and traceparent and echoes the id', async () => {
+    const server = await build()
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/v1/products',
+      headers: { 'x-correlation-id': 'trace-test-1', traceparent: TRACEPARENT },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['x-correlation-id']).toBe('trace-test-1')
+    expect(seen[0]!.headers['x-correlation-id']).toBe('trace-test-1')
+    expect(seen[0]!.headers['traceparent']).toBe(TRACEPARENT)
+  })
+
+  it('derives the id from traceparent alone', async () => {
+    const server = await build()
+    await server.inject({
+      method: 'GET',
+      url: '/api/v1/products',
+      headers: { traceparent: TRACEPARENT },
+    })
+    expect(seen[0]!.headers['x-correlation-id']).toBe(TRACE_ID)
+  })
+
+  it('replaces a malformed id and drops a malformed traceparent instead of forwarding them', async () => {
+    const server = await build()
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/v1/products',
+      headers: { 'x-correlation-id': 'bad id; drop', traceparent: 'not-a-traceparent' },
+    })
+    const forwarded = seen[0]!.headers['x-correlation-id']
+    expect(forwarded).toMatch(/^[0-9a-f-]{36}$/)
+    expect(res.headers['x-correlation-id']).toBe(forwarded)
+    expect(seen[0]!.headers['traceparent']).toBeUndefined()
+  })
+
+  it('generates and forwards an id when the caller sent none', async () => {
+    const server = await build()
+    await server.inject({ method: 'GET', url: '/api/v1/products' })
+    expect(seen[0]!.headers['x-correlation-id']).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('exposes x-correlation-id to browsers via CORS', async () => {
+    const server = await build()
+    const res = await server.inject({ url: '/health', headers: { origin: ORIGINS[0]! } })
+    expect(String(res.headers['access-control-expose-headers']).toLowerCase()).toContain(
+      'x-correlation-id'
+    )
+  })
+})
+
 describe('CORS allow-list', () => {
   it('echoes an allowed origin and allows credentials', async () => {
     const server = await build()
