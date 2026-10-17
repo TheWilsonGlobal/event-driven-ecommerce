@@ -21,6 +21,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@ecommerce/shared-constants": "workspace:*",
     "@ecommerce/shared-database": "workspace:*",
     "@ecommerce/shared-messaging": "workspace:*",
     "@ecommerce/shared-security": "workspace:*",

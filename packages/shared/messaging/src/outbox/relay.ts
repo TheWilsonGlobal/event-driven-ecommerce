@@ -3,6 +3,7 @@ import { describeError } from '../describeError'
 import type { EventEnvelope } from '../kafka/envelope'
 import type { TopicName } from '../kafka/topics'
 import type { SqlClient } from './outbox'
+import { OUTBOX_DEFAULTS } from '@ecommerce/shared-constants'
 
 /**
  * Transactional outbox — the read side: a relay that drains `outbox_events`
@@ -343,10 +344,10 @@ export function loadOutboxEnv(env: NodeJS.ProcessEnv = process.env): OutboxEnvCo
     return Number.isFinite(v) && v > 0 ? v : d
   }
   return {
-    pollMs: n('OUTBOX_POLL_MS', 500),
-    batch: n('OUTBOX_BATCH', 50),
-    maxAttempts: n('OUTBOX_MAX_ATTEMPTS', 10),
-    leaseMs: n('OUTBOX_LEASE_MS', 60_000),
-    sendTimeoutMs: n('OUTBOX_SEND_TIMEOUT_MS', 10_000),
+    pollMs: n('OUTBOX_POLL_MS', OUTBOX_DEFAULTS.pollMs),
+    batch: n('OUTBOX_BATCH', OUTBOX_DEFAULTS.batch),
+    maxAttempts: n('OUTBOX_MAX_ATTEMPTS', OUTBOX_DEFAULTS.maxAttempts),
+    leaseMs: n('OUTBOX_LEASE_MS', OUTBOX_DEFAULTS.leaseMs),
+    sendTimeoutMs: n('OUTBOX_SEND_TIMEOUT_MS', OUTBOX_DEFAULTS.sendTimeoutMs),
   }
 }

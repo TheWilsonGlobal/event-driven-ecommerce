@@ -8,6 +8,7 @@ import {
   type RateTier,
   type RoutePolicy,
 } from '@ecommerce/shared-security'
+import { REDIS_DB_DEFAULT } from '@ecommerce/shared-constants'
 
 /** Per-route cap on a proxied request body, read by the onRequest guard below. */
 declare module 'fastify' {
@@ -47,7 +48,7 @@ export function redisFromEnv(env: NodeJS.ProcessEnv = process.env) {
     host: env.REDIS_HOST ?? 'localhost',
     port: parseInt(env.REDIS_PORT ?? '6379', 10),
     password: env.REDIS_PASSWORD || undefined,
-    db: parseInt(env.REDIS_DB ?? '0', 10),
+    db: parseInt(env.REDIS_DB ?? String(REDIS_DB_DEFAULT), 10),
   }
 }
 

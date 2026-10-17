@@ -1,4 +1,5 @@
 import { applyServiceUrlDefaults } from './postgres'
+import { REDIS_DB_DEFAULT } from '@ecommerce/shared-constants'
 export type DatabaseMode = 'server' | 'embedded' | 'supabase'
 export type RelationalDriver = 'postgres' | 'sqlite'
 export type DocumentDriver = 'mongodb' | 'nedb' | 'postgres'
@@ -143,7 +144,7 @@ export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): Databa
         host: env.REDIS_HOST ?? 'localhost',
         port: parseInt(env.REDIS_PORT ?? '6379', 10),
         password: env.REDIS_PASSWORD ?? undefined,
-        db: parseInt(env.REDIS_DB ?? '0', 10),
+        db: parseInt(env.REDIS_DB ?? String(REDIS_DB_DEFAULT), 10),
       },
       rocksdb: {
         dataPath: env.ROCKSDB_DATA_PATH ?? './data/rocksdb',

@@ -12,6 +12,7 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
+    "@ecommerce/shared-constants": "workspace:*",
     "@sinclair/typebox": "^0.27.12",
     "ajv": "^8.12.0",
     "ajv-formats": "^2.1.1",

@@ -19,6 +19,7 @@
  */
 
 import { Client } from '@elastic/elasticsearch'
+import { ELASTICSEARCH_INDEX_DEFAULT } from '@ecommerce/shared-constants'
 
 export interface SearchConfiguration {
   /** Base URL of the cluster, e.g. http://localhost:9200 */
@@ -42,7 +43,7 @@ export interface SearchConfiguration {
 export function loadSearchConfig(env: NodeJS.ProcessEnv = process.env): SearchConfiguration {
   return {
     node: env.ELASTICSEARCH_HOST || 'http://localhost:9200',
-    index: env.ELASTICSEARCH_INDEX || 'products',
+    index: env.ELASTICSEARCH_INDEX || ELASTICSEARCH_INDEX_DEFAULT,
     enabled: env.ELASTICSEARCH_ENABLED !== 'false',
   }
 }

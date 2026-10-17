@@ -1,4 +1,5 @@
 import type { EnforceMode } from './types'
+import { AUTH_AUDIENCE_DEFAULT, RATE_LIMIT_DEFAULTS } from '@ecommerce/shared-constants'
 
 /**
  * Everything the security layer reads from the environment, in one place.
@@ -58,7 +59,7 @@ export function loadSecurityConfig(env: NodeJS.ProcessEnv = process.env): Securi
     supabaseUrl: base,
     issuer: base ? `${base}/auth/v1` : null,
     jwksUrl: base ? `${base}/auth/v1/.well-known/jwks.json` : null,
-    audience: env.AUTH_AUDIENCE?.trim() || 'authenticated',
+    audience: env.AUTH_AUDIENCE?.trim() || AUTH_AUDIENCE_DEFAULT,
     serviceAuthSecret: env.SERVICE_AUTH_SECRET?.trim() || null,
     corsOrigins: (env.CORS_ORIGINS ?? '')
       .split(',')
@@ -67,13 +68,13 @@ export function loadSecurityConfig(env: NodeJS.ProcessEnv = process.env): Securi
     trustProxy: trustProxy(env.TRUST_PROXY),
     production: env.NODE_ENV === 'production',
     limits: {
-      ipPerMin: int(env.RATE_LIMIT_IP_PER_MIN, 300),
-      authIpPerMin: int(env.RATE_LIMIT_AUTH_IP_PER_MIN, 20),
-      authEmailPerMin: int(env.RATE_LIMIT_AUTH_EMAIL_PER_MIN, 5),
-      userReadPerMin: int(env.RATE_LIMIT_USER_READ_PER_MIN, 120),
-      userWritePerMin: int(env.RATE_LIMIT_USER_WRITE_PER_MIN, 30),
-      expensivePerMin: int(env.RATE_LIMIT_EXPENSIVE_PER_MIN, 20),
-      adminPerMin: int(env.RATE_LIMIT_ADMIN_PER_MIN, 10),
+      ipPerMin: int(env.RATE_LIMIT_IP_PER_MIN, RATE_LIMIT_DEFAULTS.ipPerMin),
+      authIpPerMin: int(env.RATE_LIMIT_AUTH_IP_PER_MIN, RATE_LIMIT_DEFAULTS.authIpPerMin),
+      authEmailPerMin: int(env.RATE_LIMIT_AUTH_EMAIL_PER_MIN, RATE_LIMIT_DEFAULTS.authEmailPerMin),
+      userReadPerMin: int(env.RATE_LIMIT_USER_READ_PER_MIN, RATE_LIMIT_DEFAULTS.userReadPerMin),
+      userWritePerMin: int(env.RATE_LIMIT_USER_WRITE_PER_MIN, RATE_LIMIT_DEFAULTS.userWritePerMin),
+      expensivePerMin: int(env.RATE_LIMIT_EXPENSIVE_PER_MIN, RATE_LIMIT_DEFAULTS.expensivePerMin),
+      adminPerMin: int(env.RATE_LIMIT_ADMIN_PER_MIN, RATE_LIMIT_DEFAULTS.adminPerMin),
     },
   }
 }

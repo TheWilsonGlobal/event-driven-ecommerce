@@ -8,6 +8,7 @@ import {
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { STORAGE_DEFAULTS } from '@ecommerce/shared-constants'
 
 export type StorageProvider = 'rustfs' | 's3' | 'local'
 
@@ -37,7 +38,7 @@ export interface StorageConfiguration {
 
 export function loadStorageConfig(env: NodeJS.ProcessEnv = process.env): StorageConfiguration {
   const provider: StorageProvider =
-    (env.STORAGE_PROVIDER?.toLowerCase() as StorageProvider) || 'rustfs'
+    (env.STORAGE_PROVIDER?.toLowerCase() as StorageProvider) || STORAGE_DEFAULTS.provider
 
   return {
     provider,
@@ -48,9 +49,9 @@ export function loadStorageConfig(env: NodeJS.ProcessEnv = process.env): Storage
       consoleEndpoint: env.RUSTFS_CONSOLE_ENDPOINT ?? 'http://localhost:6381',
       accessKey: env.RUSTFS_ACCESS_KEY ?? 'rustfsadmin',
       secretKey: env.RUSTFS_SECRET_KEY ?? 'rustfspassword',
-      bucket: env.RUSTFS_BUCKET ?? 'ecommerce-uploads',
-      region: env.RUSTFS_REGION ?? 'us-east-1',
-      useSSL: env.RUSTFS_USE_SSL === 'true',
+      bucket: env.RUSTFS_BUCKET ?? STORAGE_DEFAULTS.bucket,
+      region: env.RUSTFS_REGION ?? STORAGE_DEFAULTS.region,
+      useSSL: env.RUSTFS_USE_SSL ? env.RUSTFS_USE_SSL === 'true' : STORAGE_DEFAULTS.useSSL,
     },
     s3: {
       accessKeyId: env.AWS_ACCESS_KEY_ID ?? '',

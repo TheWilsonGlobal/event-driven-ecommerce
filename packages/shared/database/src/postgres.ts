@@ -1,4 +1,5 @@
 import { Pool, type PoolClient, type QueryResultRow } from 'pg'
+import { DB_POOL_MAX_DEFAULT } from '@ecommerce/shared-constants'
 
 /**
  * Postgres access for the single Supabase database.
@@ -107,7 +108,7 @@ export function getServicePool(
   }
   const pool = new Pool({
     connectionString,
-    max: parseInt(env.DB_POOL_MAX ?? '3', 10),
+    max: parseInt(env.DB_POOL_MAX ?? String(DB_POOL_MAX_DEFAULT), 10),
     ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,

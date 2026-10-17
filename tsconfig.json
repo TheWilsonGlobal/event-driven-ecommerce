@@ -30,6 +30,7 @@
     "emitDecoratorMetadata": true,
     "paths": {
       "@ecommerce/shared": ["./packages/shared/src"],
+      "@ecommerce/shared-constants": ["./packages/shared/constants/src"],
       "@ecommerce/shared-types": ["./packages/shared/types/src"],
       "@ecommerce/shared-utils": ["./packages/shared/utils/src"],
       "@ecommerce/shared-database": ["./packages/shared/database/src"],

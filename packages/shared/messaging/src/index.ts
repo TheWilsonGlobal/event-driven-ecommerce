@@ -168,3 +168,4 @@ export {
   type OutboxStats,
   type ClaimedOutboxRow,
 } from './outbox/relay'
+export { OUTBOX_DEFAULTS } from '@ecommerce/shared-constants'

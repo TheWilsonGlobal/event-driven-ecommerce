@@ -19,6 +19,7 @@ export {
   type QueueDefinition as GenericQueueDefinition,
 } from '@ecommerce/shared-messaging'
 import type { BackoffType } from '@ecommerce/shared-messaging'
+import { ORDER_EXPIRATION_MINUTES_DEFAULT } from '@ecommerce/shared-constants'
 
 export type QueueName =
   'order-expiration' | 'payment-retry' | 'notification-dispatch' | 'saga-compensation'
@@ -78,11 +79,11 @@ export function getQueueDefinition(name: QueueName): QueueDefinition {
 
 /**
  * Delay applied to `expire-order` jobs, from BULLMQ_ORDER_EXPIRATION_MINUTES
- * (root .env, default 15 minutes).
+ * (optional env override, default ORDER_EXPIRATION_MINUTES_DEFAULT = 15 minutes).
  */
 export function orderExpirationDelayMs(): number {
-  const minutes = parseInt(process.env.BULLMQ_ORDER_EXPIRATION_MINUTES ?? '15', 10)
-  const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : 15
+  const minutes = parseInt(process.env.BULLMQ_ORDER_EXPIRATION_MINUTES ?? String(ORDER_EXPIRATION_MINUTES_DEFAULT), 10)
+  const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : ORDER_EXPIRATION_MINUTES_DEFAULT
   return safeMinutes * 60 * 1000
 }
 

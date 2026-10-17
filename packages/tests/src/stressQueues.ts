@@ -478,7 +478,7 @@ async function drainAndReport(
   )
 
   console.log(
-    '\nNote: order-expiration jobs are delayed BULLMQ_ORDER_EXPIRATION_MINUTES (15 by default) ' +
+    '\nNote: order-expiration jobs are delayed BULLMQ_ORDER_EXPIRATION_MINUTES (15 by default, ORDER_EXPIRATION_MINUTES_DEFAULT; no longer set in .env) ' +
       'before they even enter "waiting" — a default --drain-timeout-ms will always show them ' +
       'sitting in "delayed" below. That is expected, not a stall.\n' +
       'Note: this script forces every payment-retry job to fail (outcome: "fail"), which drives ' +

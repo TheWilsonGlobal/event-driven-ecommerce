@@ -11,6 +11,7 @@
  */
 export * from './types'
 export * from './config'
+export { RATE_LIMIT_DEFAULTS, AUTH_AUDIENCE_DEFAULT } from '@ecommerce/shared-constants'
 export * from './errors'
 export * from './audit'
 export * from './correlation'

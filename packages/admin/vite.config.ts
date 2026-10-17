@@ -49,6 +49,8 @@ export default defineConfig(({ mode }) => {
     // infra-hub -- which owns the container these values describe.
     VITE_RUSTFS_ENDPOINT: env.RUSTFS_ENDPOINT || 'http://localhost:6380',
     VITE_RUSTFS_CONSOLE_ENDPOINT: env.RUSTFS_CONSOLE_ENDPOINT || 'http://localhost:6381',
+    // RUSTFS_BUCKET is no longer in .env; this literal mirrors STORAGE_DEFAULTS.bucket in
+    // packages/shared/constants/src/storage.ts (the admin does not depend on that package).
     VITE_RUSTFS_BUCKET: env.RUSTFS_BUCKET || 'ecommerce-uploads',
     VITE_RUSTFS_DATA_PATH: env.RUSTFS_DATA_PATH || 'C:\\Hub\\RustFS',
     VITE_PROMETHEUS_URL: `http://${host}:${port('PROMETHEUS_PORT', '9090')}`,
