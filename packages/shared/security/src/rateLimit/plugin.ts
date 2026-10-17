@@ -56,7 +56,9 @@ export interface RateLimitOptions {
 
 const MINUTE = 60_000
 
-export function tierRules(limits: SecurityConfig['limits']): Record<Exclude<RateTier, 'none'>, TierRule> {
+export function tierRules(
+  limits: SecurityConfig['limits']
+): Record<Exclude<RateTier, 'none'>, TierRule> {
   return {
     read: { max: limits.userReadPerMin, windowMs: MINUTE, failOpen: true },
     write: { max: limits.userWritePerMin, windowMs: MINUTE, failOpen: true },
@@ -78,7 +80,9 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex').slice(0,
 function emailOf(request: FastifyRequest): string | null {
   const body = request.body as Record<string, unknown> | undefined
   const raw = body && typeof body === 'object' ? body.email : undefined
-  return typeof raw === 'string' && raw.length > 0 && raw.length <= 320 ? raw.trim().toLowerCase() : null
+  return typeof raw === 'string' && raw.length > 0 && raw.length <= 320
+    ? raw.trim().toLowerCase()
+    : null
 }
 
 export const rateLimitPlugin = fp<RateLimitOptions>(
@@ -101,13 +105,27 @@ export const rateLimitPlugin = fp<RateLimitOptions>(
       } catch (err) {
         if (failOpen) {
           stats.failOpen += 1
-          audit(request, 'rate_limit.unavailable', { bucket: label, policy: 'fail-open', reason: String(err) })
+          audit(request, 'rate_limit.unavailable', {
+            bucket: label,
+            policy: 'fail-open',
+            reason: String(err),
+          })
           return
         }
         stats.failClosed += 1
-        audit(request, 'rate_limit.unavailable', { bucket: label, policy: 'fail-closed', reason: String(err) })
+        audit(request, 'rate_limit.unavailable', {
+          bucket: label,
+          policy: 'fail-closed',
+          reason: String(err),
+        })
         if (opts.mode === 'enforce') {
-          throw new AppError(503, 'RATE_LIMIT_UNAVAILABLE', 'Service temporarily unavailable', {}, { 'retry-after': '5' })
+          throw new AppError(
+            503,
+            'RATE_LIMIT_UNAVAILABLE',
+            'Service temporarily unavailable',
+            {},
+            { 'retry-after': '5' }
+          )
         }
         return
       }
@@ -116,15 +134,27 @@ export const rateLimitPlugin = fp<RateLimitOptions>(
       const retryAfter = Math.max(1, Math.ceil(hit.resetMs / 1000))
       reply.header('x-ratelimit-limit', String(rule.max))
       reply.header('x-ratelimit-remaining', String(remaining))
-      reply.header('x-ratelimit-reset', String(retryAfter))
+      // Unix timestamp (seconds since epoch) at which the window resets; `retry-after`
+      // below stays relative (seconds until reset), as RFC 9110 requires.
+      reply.header('x-ratelimit-reset', String(Math.ceil((Date.now() + hit.resetMs) / 1000)))
 
       if (hit.count > rule.max) {
         stats.limited += 1
-        audit(request, 'rate_limit.exceeded', { bucket: label, limit: rule.max, enforced: opts.mode === 'enforce' })
+        audit(request, 'rate_limit.exceeded', {
+          bucket: label,
+          limit: rule.max,
+          enforced: opts.mode === 'enforce',
+        })
         if (opts.mode === 'enforce') {
-          throw new AppError(429, 'RATE_LIMITED', 'Too many requests', { retryAfterSeconds: retryAfter }, {
-            'retry-after': String(retryAfter),
-          })
+          throw new AppError(
+            429,
+            'RATE_LIMITED',
+            'Too many requests',
+            { retryAfterSeconds: retryAfter },
+            {
+              'retry-after': String(retryAfter),
+            }
+          )
         }
         return
       }

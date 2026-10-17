@@ -379,3 +379,95 @@ export async function recordDuplicate(tx: Tx): Promise<void> {
      ON CONFLICT (id) DO UPDATE SET duplicates_skipped = t.duplicates_skipped + 1`
   )
 }
+
+// ─── Sales lines (windowed rankings) ───────────────────────────────────────
+
+export interface SalesLine {
+  productId: string
+  categoryId: string | null
+  quantity: number
+}
+
+/**
+ * Persists the order lines behind the windowed rankings. Call inside the
+ * event's transaction, after the claim: a redelivery never reaches this.
+ * One row per (event, product); the caller has already merged duplicate lines.
+ */
+export async function recordSalesLines(
+  tx: Tx,
+  eventId: string,
+  occurredAt: Date,
+  lines: SalesLine[]
+): Promise<void> {
+  for (const line of lines) {
+    await tx.query(
+      `INSERT INTO ${tx.schema}.sales_lines (event_id, product_id, category_id, quantity, occurred_at)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (event_id, product_id) DO NOTHING`,
+      [eventId, line.productId, line.categoryId, line.quantity, occurredAt.toISOString()]
+    )
+  }
+}
+
+export interface SalesBucketRow {
+  productId: string
+  categoryId: string | null
+  /** floor(epoch_ms / bucketMs) */
+  bucket: number
+  units: number
+}
+
+/**
+ * Units per (product, category, time bucket) since `since`. The bucketing is
+ * done by the database so a rebuild moves one row per bucket, not one per line.
+ * `bucketMs` is a service constant, never request input.
+ */
+export async function readSalesBuckets(
+  store: AnalyticsStore,
+  since: Date,
+  bucketMs: number
+): Promise<SalesBucketRow[]> {
+  const { rows } = await store.db.query(
+    `SELECT product_id, category_id,
+            floor(extract(epoch from occurred_at) * 1000 / $2)::bigint AS bucket,
+            sum(quantity) AS units
+       FROM ${store.schema}.sales_lines
+      WHERE occurred_at >= $1
+      GROUP BY product_id, category_id, bucket`,
+    [since.toISOString(), bucketMs]
+  )
+  return rows.map((r) => ({
+    productId: r.product_id as string,
+    categoryId: (r.category_id as string | null) ?? null,
+    bucket: num(r.bucket),
+    units: num(r.units),
+  }))
+}
+
+/** Units per product since `since`, optionally for one category, best first. */
+export async function readSalesTotals(
+  store: AnalyticsStore,
+  since: Date,
+  categoryId: string | null,
+  limit: number
+): Promise<{ productId: string; units: number }[]> {
+  const { rows } = await store.db.query(
+    `SELECT product_id, sum(quantity) AS units
+       FROM ${store.schema}.sales_lines
+      WHERE occurred_at >= $1 AND ($2::text IS NULL OR category_id = $2)
+      GROUP BY product_id
+      ORDER BY units DESC, product_id ASC
+      LIMIT $3`,
+    [since.toISOString(), categoryId, limit]
+  )
+  return rows.map((r) => ({ productId: r.product_id as string, units: num(r.units) }))
+}
+
+/** Drops lines older than `before`. Returns how many were removed. */
+export async function pruneSalesLines(store: AnalyticsStore, before: Date): Promise<number> {
+  const result = await store.db.query(
+    `DELETE FROM ${store.schema}.sales_lines WHERE occurred_at < $1`,
+    [before.toISOString()]
+  )
+  return result.rowCount ?? 0
+}

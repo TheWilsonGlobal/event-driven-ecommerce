@@ -1,4 +1,11 @@
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type JWK, type JWTVerifyGetKey } from 'jose'
+import {
+  SignJWT,
+  createLocalJWKSet,
+  exportJWK,
+  generateKeyPair,
+  type JWK,
+  type JWTVerifyGetKey,
+} from 'jose'
 import type { Role } from './types'
 
 /**
@@ -27,29 +34,33 @@ export interface TestClaims {
   extra?: Record<string, unknown>
 }
 
-export async function createTestAuth(issuer = 'https://test-project.supabase.co/auth/v1'): Promise<TestAuth> {
+export async function createTestAuth(
+  issuer = 'https://test-project.supabase.co/auth/v1'
+): Promise<TestAuth> {
   const { publicKey, privateKey } = await generateKeyPair('ES256')
   const forged = await generateKeyPair('ES256')
   const jwk: JWK = { ...(await exportJWK(publicKey)), kid: 'test-key', alg: 'ES256', use: 'sig' }
 
-  const make = (key: CryptoKey | Uint8Array | object, kid: string) => async (c: TestClaims = {}) => {
-    const claims: Record<string, unknown> = {
-      role: 'authenticated', // the Postgres role claim: must be ignored for RBAC
-      aal: c.aal ?? 'aal1',
-      session_id: 'sess-' + (c.sub ?? 'user-1'),
-      ...(c.email ? { email: c.email } : {}),
-      ...(c.role === null ? {} : { app_role: c.role ?? 'CUSTOMER' }),
-      ...(c.extra ?? {}),
+  const make =
+    (key: CryptoKey | Uint8Array | object, kid: string) =>
+    async (c: TestClaims = {}) => {
+      const claims: Record<string, unknown> = {
+        role: 'authenticated', // the Postgres role claim: must be ignored for RBAC
+        aal: c.aal ?? 'aal1',
+        session_id: `sess-${c.sub ?? 'user-1'}`,
+        ...(c.email ? { email: c.email } : {}),
+        ...(c.role === null ? {} : { app_role: c.role ?? 'CUSTOMER' }),
+        ...(c.extra ?? {}),
+      }
+      return new SignJWT(claims)
+        .setProtectedHeader({ alg: 'ES256', kid })
+        .setIssuer(c.issuer ?? issuer)
+        .setAudience(c.audience ?? 'authenticated')
+        .setSubject(c.sub ?? 'user-1')
+        .setIssuedAt()
+        .setExpirationTime(Math.floor(Date.now() / 1000) + (c.expiresInSec ?? 600))
+        .sign(key as CryptoKey)
     }
-    return new SignJWT(claims)
-      .setProtectedHeader({ alg: 'ES256', kid })
-      .setIssuer(c.issuer ?? issuer)
-      .setAudience(c.audience ?? 'authenticated')
-      .setSubject(c.sub ?? 'user-1')
-      .setIssuedAt()
-      .setExpirationTime(Math.floor(Date.now() / 1000) + (c.expiresInSec ?? 600))
-      .sign(key as CryptoKey)
-  }
 
   return {
     jwks: createLocalJWKSet({ keys: [jwk] }),

@@ -12,6 +12,7 @@ import {
 } from '@ecommerce/shared-security'
 import type { ProductDoc } from '../types'
 import type { QueueManager } from '../queues'
+import type { ProductCache } from '../cache/productCache'
 import {
   CreateProductBody,
   ListProductsQuery,
@@ -20,7 +21,6 @@ import {
   ProductParams,
   ProductResponse,
   SuccessResponse,
-  assertTwoDecimals,
   roundMoney,
 } from '../schemas'
 
@@ -31,6 +31,11 @@ interface ProductRouteDeps {
     QueueManager,
     'queuesAvailable' | 'tryEnqueue' | 'enqueueReindexProduct' | 'enqueueRemoveFromIndex'
   >
+  /**
+   * Cache-aside for GET /products/:id. Absent = direct store reads (the tests that
+   * predate the cache, and any deployment with no Redis).
+   */
+  cache?: ProductCache<ProductDoc> | undefined
 }
 
 const errorResponses = {
@@ -57,7 +62,7 @@ function assertMayRate(req: FastifyRequest, ratings: unknown): void {
 // ─── Products ─────────────────────────────────────────────────────────────
 export function registerProductRoutes(
   server: FastifyInstance,
-  { productsStore, search, queueManager }: ProductRouteDeps
+  { productsStore, search, queueManager, cache }: ProductRouteDeps
 ): void {
   // The listing is registered twice on the same path. `hasSearch` is a routing
   // constraint (see security.ts): a request carrying a non-empty ?search= lands on
@@ -147,13 +152,17 @@ export function registerProductRoutes(
       config: { policy: { public: true }, rateTier: 'read' },
       schema: {
         tags: ['products'],
-        description: 'Fetch a single product by id.',
+        description:
+          'Fetch a single product by id. Served cache-aside from Redis when available; ' +
+          'every product write invalidates the entry.',
         params: ProductParams,
         response: { 200: ProductResponse, 400: ErrorResponse, 404: ErrorResponse },
       },
     },
     async (req) => {
-      const product = await productsStore.findOne({ id: req.params.id })
+      const { id } = req.params
+      const load = () => productsStore.findOne({ id })
+      const product = cache ? await cache.getOrLoad(id, load) : await load()
       if (!product) throw notFound('Product not found')
       return product
     }
@@ -174,7 +183,6 @@ export function registerProductRoutes(
     },
     async (req, reply) => {
       const body = req.body
-      assertTwoDecimals(body.price, 'price')
       assertMayRate(req, body.ratings)
 
       // `prod-${Date.now()}` used to be the fallback here: under concurrent
@@ -209,6 +217,7 @@ export function registerProductRoutes(
         ...(owner ? { vendorId: owner } : {}),
       }
       const created = await productsStore.insert(doc)
+      await cache?.invalidate(id)
       // Mirror into the search index via the reindex-search queue rather than
       // an inline call: this gets automatic retry (5 attempts, exponential
       // backoff) if Elasticsearch is briefly down, instead of the product
@@ -254,13 +263,15 @@ export function registerProductRoutes(
       requireOwnerOrAny(req, existing.vendorId, 'products:write')
 
       const patch = { ...req.body }
-      assertTwoDecimals(patch.price, 'price')
       assertMayRate(req, patch.ratings)
       if (patch.compareAtPrice !== undefined) {
         patch.compareAtPrice = roundMoney(patch.compareAtPrice)
       }
 
       const numUpdated = await productsStore.update({ id: req.params.id }, patch)
+      // Price/stock/any field: drop the cached copy as soon as the write commits so
+      // PriceVerifier (ms-order) and shoppers never read the old value afterwards.
+      await cache?.invalidate(req.params.id)
       if (numUpdated === 0) throw notFound('Product not found')
       const updated = await productsStore.findOne({ id: req.params.id })
       if (updated) {
@@ -295,6 +306,7 @@ export function registerProductRoutes(
       requireOwnerOrAny(req, existing.vendorId, 'products:write')
 
       const numRemoved = await productsStore.delete({ id: req.params.id })
+      await cache?.invalidate(req.params.id)
       if (numRemoved === 0) throw notFound('Product not found')
       if (queueManager.queuesAvailable) {
         await queueManager.tryEnqueue('remove-from-index', () =>

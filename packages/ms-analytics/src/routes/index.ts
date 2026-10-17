@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { AnalyticsStore } from '../aggregates/store'
+import type { RankingEngine } from '../rankings/engine'
 import { registerEventRoutes } from '../events'
 import { registerAnalyticsRoutes } from './analytics'
 import { registerHealthRoutes, type HealthRouteDeps } from './health'
@@ -9,6 +10,7 @@ export { registerAnalyticsRoutes, type AnalyticsRouteDeps } from './analytics'
 
 export interface ServiceRouteDeps extends HealthRouteDeps {
   store: AnalyticsStore
+  rankings?: RankingEngine | undefined
   consumer: HealthRouteDeps['consumer'] & Parameters<typeof registerEventRoutes>[1]
 }
 
@@ -18,6 +20,6 @@ export interface ServiceRouteDeps extends HealthRouteDeps {
  */
 export function registerServiceRoutes(server: FastifyInstance, deps: ServiceRouteDeps): void {
   registerHealthRoutes(server, deps)
-  registerAnalyticsRoutes(server, { store: deps.store })
+  registerAnalyticsRoutes(server, { store: deps.store, rankings: deps.rankings })
   registerEventRoutes(server, deps.consumer)
 }

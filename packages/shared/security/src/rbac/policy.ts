@@ -54,14 +54,24 @@ export function decide(
   authError: string | null
 ): PolicyDecision {
   if (!policy) {
-    return { allowed: false, status: 403, code: 'POLICY_MISSING', message: 'Route has no access policy' }
+    return {
+      allowed: false,
+      status: 403,
+      code: 'POLICY_MISSING',
+      message: 'Route has no access policy',
+    }
   }
   if (policy.public) return ALLOW
 
   if (!identity) {
     return authError
       ? { allowed: false, status: 401, code: 'TOKEN_INVALID', message: 'Invalid or expired token' }
-      : { allowed: false, status: 401, code: 'AUTHENTICATION_REQUIRED', message: 'Authentication required' }
+      : {
+          allowed: false,
+          status: 401,
+          code: 'AUTHENTICATION_REQUIRED',
+          message: 'Authentication required',
+        }
   }
   if (!policy.permission) {
     // Authenticated-only route (no specific permission): any signed-in identity.
@@ -71,10 +81,20 @@ export function decide(
   const anyPerm = anyVariant(policy.permission)
   const any = anyPerm ? identityHas(identity, anyPerm) : false
   if (!own && !any) {
-    return { allowed: false, status: 403, code: 'FORBIDDEN', message: 'You do not have permission to do this' }
+    return {
+      allowed: false,
+      status: 403,
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to do this',
+    }
   }
   if (policy.mfa && identity.kind === 'user' && identity.aal !== 'aal2') {
-    return { allowed: false, status: 403, code: 'MFA_REQUIRED', message: 'A second factor is required for this action' }
+    return {
+      allowed: false,
+      status: 403,
+      code: 'MFA_REQUIRED',
+      message: 'A second factor is required for this action',
+    }
   }
   return ALLOW
 }
@@ -141,7 +161,10 @@ export const policyPlugin = fp<PolicyPluginOptions>(
       }
 
       if (policy?.audit) {
-        audit(request, 'access.granted', { service: opts.service, permission: policy.permission ?? null })
+        audit(request, 'access.granted', {
+          service: opts.service,
+          permission: policy.permission ?? null,
+        })
       }
     })
   },
@@ -167,7 +190,12 @@ export function requireOwnerOrAny(
   const anyPerm = anyVariant(permission)
   if (anyPerm && identityHas(identity, anyPerm)) return
 
-  audit(request, 'access.denied', { code: 'NOT_OWNER', status: 404, enforced: mode === 'enforce', permission })
+  audit(request, 'access.denied', {
+    code: 'NOT_OWNER',
+    status: 404,
+    enforced: mode === 'enforce',
+    permission,
+  })
   if (mode === 'enforce') throw notFound()
 }
 
@@ -186,7 +214,10 @@ function enforceModeOf(request: FastifyRequest): EnforceMode {
  * Fails when any registered route has no policy. Run it in a test and (outside
  * production) at boot, after all routes are registered.
  */
-export function assertPolicyCoverage(server: FastifyInstance, allowUnpolicied: string[] = []): void {
+export function assertPolicyCoverage(
+  server: FastifyInstance,
+  allowUnpolicied: string[] = []
+): void {
   const missing = server.routePolicies
     .filter((r) => !r.policy && !allowUnpolicied.includes(r.url))
     .map((r) => `${r.method} ${r.url}`)
@@ -197,5 +228,7 @@ export function assertPolicyCoverage(server: FastifyInstance, allowUnpolicied: s
 
 /** The policy table, for documentation and the generated matrix test. */
 export function describePolicies(server: FastifyInstance): RegisteredRoute[] {
-  return [...server.routePolicies].sort((a, b) => (a.url + a.method).localeCompare(b.url + b.method))
+  return [...server.routePolicies].sort((a, b) =>
+    (a.url + a.method).localeCompare(b.url + b.method)
+  )
 }

@@ -3,6 +3,7 @@ import { SignJWT, generateKeyPair } from 'jose'
 import {
   AuthFailure,
   MemoryRateStore,
+  Money,
   PERMISSIONS,
   ROLES,
   ROLE_PERMISSIONS,
@@ -84,8 +85,16 @@ describe('TokenVerifier', () => {
   }
 
   it('accepts a valid token and reads the business role from app_role', async () => {
-    const id = await v().verify(await ta.sign({ sub: 'u1', role: 'VENDOR', email: 'a@b.co', aal: 'aal2' }))
-    expect(id).toMatchObject({ userId: 'u1', role: 'VENDOR', aal: 'aal2', kind: 'user', email: 'a@b.co' })
+    const id = await v().verify(
+      await ta.sign({ sub: 'u1', role: 'VENDOR', email: 'a@b.co', aal: 'aal2' })
+    )
+    expect(id).toMatchObject({
+      userId: 'u1',
+      role: 'VENDOR',
+      aal: 'aal2',
+      kind: 'user',
+      email: 'a@b.co',
+    })
   })
 
   it('ignores the Postgres `role: authenticated` claim and defaults to CUSTOMER', async () => {
@@ -103,7 +112,9 @@ describe('TokenVerifier', () => {
   })
 
   it('rejects the wrong issuer and the wrong audience', async () => {
-    expect(await code(v().verify(await ta.sign({ issuer: 'https://evil.example/auth/v1' })))).toBe('token_claims_invalid')
+    expect(await code(v().verify(await ta.sign({ issuer: 'https://evil.example/auth/v1' })))).toBe(
+      'token_claims_invalid'
+    )
     expect(await code(v().verify(await ta.sign({ audience: 'anon' })))).toBe('token_claims_invalid')
   })
 
@@ -143,7 +154,13 @@ describe('TokenVerifier', () => {
 
   describe('service tokens', () => {
     const secret = 'unit-test-internal-secret-0123456789'
-    const sv = () => new TokenVerifier({ issuer: ta.issuer, audience: ta.audience, jwks: ta.jwks, serviceSecret: secret })
+    const sv = () =>
+      new TokenVerifier({
+        issuer: ta.issuer,
+        audience: ta.audience,
+        jwks: ta.jwks,
+        serviceSecret: secret,
+      })
 
     it('accepts a service token and assigns role SERVICE', async () => {
       const id = await sv().verify(await signServiceToken(secret, 'ms-order'))
@@ -151,13 +168,17 @@ describe('TokenVerifier', () => {
     })
 
     it('rejects a service token signed with the wrong secret', async () => {
-      expect(await code(sv().verify(await signServiceToken('some-other-secret-value-xxxxxxxx', 'ms-order')))).toBe(
-        'token_signature_invalid'
-      )
+      expect(
+        await code(
+          sv().verify(await signServiceToken('some-other-secret-value-xxxxxxxx', 'ms-order'))
+        )
+      ).toBe('token_signature_invalid')
     })
 
     it('refuses internal tokens entirely when no service secret is configured', async () => {
-      expect(await code(v().verify(await signServiceToken(secret, 'ms-order')))).toBe('auth_not_configured')
+      expect(await code(v().verify(await signServiceToken(secret, 'ms-order')))).toBe(
+        'auth_not_configured'
+      )
     })
 
     it('a user token cannot be passed off as a service token', async () => {
@@ -188,18 +209,47 @@ describe('RBAC decision table', () => {
   })
 
   it('SERVICE cannot touch users or the operator surface', () => {
-    for (const p of ['users:update:role', 'users:create', 'users:delete', 'ops:write', 'ops:read'] as const) {
+    for (const p of [
+      'users:update:role',
+      'users:create',
+      'users:delete',
+      'ops:write',
+      'ops:read',
+    ] as const) {
       expect(ROLE_PERMISSIONS.SERVICE.has(p)).toBe(false)
     }
   })
 
+  it('VENDOR can read storage but holds no storage write; CUSTOMER has no storage access', () => {
+    expect(ROLE_PERMISSIONS.VENDOR.has('storage:read')).toBe(true)
+    expect(ROLE_PERMISSIONS.CUSTOMER.has('storage:read')).toBe(false)
+    const storageWrite = PERMISSIONS.filter((p) => p.startsWith('storage:') && p !== 'storage:read')
+    expect(storageWrite).toEqual([]) // no storage write permission exists to grant
+    for (const p of storageWrite) expect(ROLE_PERMISSIONS.VENDOR.has(p)).toBe(false)
+    expect(decide({ permission: 'storage:read' }, user('VENDOR'), null).status).toBe(200)
+    expect(decide({ permission: 'storage:read' }, user('CUSTOMER'), null).status).toBe(403)
+  })
+
   it('CUSTOMER cannot change roles, create users, or use operator routes', () => {
-    for (const p of ['users:update:role', 'users:create', 'users:delete', 'ops:read', 'ops:write', 'orders:read:any'] as const) {
+    for (const p of [
+      'users:update:role',
+      'users:create',
+      'users:delete',
+      'ops:read',
+      'ops:write',
+      'orders:read:any',
+    ] as const) {
       expect(ROLE_PERMISSIONS.CUSTOMER.has(p)).toBe(false)
     }
   })
 
-  const cases: [string, RoutePolicy | undefined, ReturnType<typeof user> | null, string | null, number][] = [
+  const cases: [
+    string,
+    RoutePolicy | undefined,
+    ReturnType<typeof user> | null,
+    string | null,
+    number,
+  ][] = [
     ['no policy -> default deny', undefined, user('ADMIN'), null, 403],
     ['public, anonymous', { public: true }, null, null, 200],
     ['protected, anonymous', { permission: 'orders:read' }, null, null, 401],
@@ -207,8 +257,20 @@ describe('RBAC decision table', () => {
     ['customer reads orders', { permission: 'orders:read' }, user('CUSTOMER'), null, 200],
     ['customer on admin route', { permission: 'ops:write' }, user('CUSTOMER'), null, 403],
     ['vendor on admin route', { permission: 'ops:read' }, user('VENDOR'), null, 403],
-    ['admin aal1 on mfa route', { permission: 'ops:write', mfa: true }, user('ADMIN', 'aal1'), null, 403],
-    ['admin aal2 on mfa route', { permission: 'ops:write', mfa: true }, user('ADMIN', 'aal2'), null, 200],
+    [
+      'admin aal1 on mfa route',
+      { permission: 'ops:write', mfa: true },
+      user('ADMIN', 'aal1'),
+      null,
+      403,
+    ],
+    [
+      'admin aal2 on mfa route',
+      { permission: 'ops:write', mfa: true },
+      user('ADMIN', 'aal2'),
+      null,
+      200,
+    ],
     ['authenticated-only route', {}, user('CUSTOMER'), null, 200],
   ]
   it.each(cases)('%s', (_n, policy, id, err, status) => {
@@ -216,15 +278,21 @@ describe('RBAC decision table', () => {
   })
 
   it('reports MFA_REQUIRED (not a generic 403) so the client can prompt', () => {
-    expect(decide({ permission: 'ops:write', mfa: true }, user('ADMIN', 'aal1'), null).code).toBe('MFA_REQUIRED')
+    expect(decide({ permission: 'ops:write', mfa: true }, user('ADMIN', 'aal1'), null).code).toBe(
+      'MFA_REQUIRED'
+    )
   })
 })
 
 describe('policy enforcement on a live server', () => {
   const routes = (s: FastifyInstance) => {
     s.get('/public', { config: { policy: { public: true } } }, async () => ({ ok: true }))
-    s.get('/orders', { config: { policy: { permission: 'orders:read' } } }, async () => ({ ok: true }))
-    s.post('/ops', { config: { policy: { permission: 'ops:write', mfa: true } } }, async () => ({ ok: true }))
+    s.get('/orders', { config: { policy: { permission: 'orders:read' } } }, async () => ({
+      ok: true,
+    }))
+    s.post('/ops', { config: { policy: { permission: 'ops:write', mfa: true } } }, async () => ({
+      ok: true,
+    }))
     s.get('/orders/:owner', { config: { policy: { permission: 'orders:read' } } }, async (req) => {
       requireOwnerOrAny(req, (req.params as { owner: string }).owner, 'orders:read')
       return { ok: true }
@@ -247,7 +315,10 @@ describe('policy enforcement on a live server', () => {
     const r = await s.inject({ url: '/orders', headers: bearer(expired) })
     expect(r.statusCode).toBe(401)
     expect(r.json().code).toBe('TOKEN_INVALID')
-    const forged = await s.inject({ url: '/orders', headers: bearer(await ta.signForged({ role: 'ADMIN' })) })
+    const forged = await s.inject({
+      url: '/orders',
+      headers: bearer(await ta.signForged({ role: 'ADMIN' })),
+    })
     expect(forged.statusCode).toBe(401)
     await s.close()
   })
@@ -257,17 +328,24 @@ describe('policy enforcement on a live server', () => {
     const customer = bearer(await ta.sign({ role: 'CUSTOMER' }))
     const admin1 = bearer(await ta.sign({ role: 'ADMIN', aal: 'aal1' }))
     const admin2 = bearer(await ta.sign({ role: 'ADMIN', aal: 'aal2' }))
-    expect((await s.inject({ method: 'POST', url: '/ops', headers: customer, payload: {} })).statusCode).toBe(403)
+    expect(
+      (await s.inject({ method: 'POST', url: '/ops', headers: customer, payload: {} })).statusCode
+    ).toBe(403)
     const mfa = await s.inject({ method: 'POST', url: '/ops', headers: admin1, payload: {} })
     expect(mfa.statusCode).toBe(403)
     expect(mfa.json().code).toBe('MFA_REQUIRED')
-    expect((await s.inject({ method: 'POST', url: '/ops', headers: admin2, payload: {} })).statusCode).toBe(200)
+    expect(
+      (await s.inject({ method: 'POST', url: '/ops', headers: admin2, payload: {} })).statusCode
+    ).toBe(200)
     await s.close()
   })
 
   it('identity headers are never trusted', async () => {
     const s = await build({ routes })
-    const r = await s.inject({ url: '/orders', headers: { 'x-user-id': 'u', 'x-user-role': 'ADMIN' } })
+    const r = await s.inject({
+      url: '/orders',
+      headers: { 'x-user-id': 'u', 'x-user-role': 'ADMIN' },
+    })
     expect(r.statusCode).toBe(401)
     await s.close()
   })
@@ -284,7 +362,10 @@ describe('policy enforcement on a live server', () => {
 
   it('default deny: a route without a policy is refused in enforce mode', async () => {
     const s = await build({ routes })
-    const r = await s.inject({ url: '/no-policy', headers: bearer(await ta.sign({ role: 'ADMIN' })) })
+    const r = await s.inject({
+      url: '/no-policy',
+      headers: bearer(await ta.sign({ role: 'ADMIN' })),
+    })
     expect(r.statusCode).toBe(403)
     expect(r.json().code).toBe('POLICY_MISSING')
     expect(() => assertPolicyCoverage(s)).toThrow(/no-policy/)
@@ -320,7 +401,12 @@ describe('rate limiting', () => {
     s.get('/health', { config: { policy: { public: true } } }, async () => ({ ok: true }))
   }
   const post = (s: FastifyInstance, email: string, ip = '10.0.0.1') =>
-    s.inject({ method: 'POST', url: '/login', remoteAddress: ip, payload: { email, password: 'x' } })
+    s.inject({
+      method: 'POST',
+      url: '/login',
+      remoteAddress: ip,
+      payload: { email, password: 'x' },
+    })
 
   it('429 with Retry-After once the per-IP auth bucket is exhausted', async () => {
     const s = await build({ routes: authRoute, limits: { authIpPerMin: 3, authEmailPerMin: 100 } })
@@ -329,6 +415,22 @@ describe('rate limiting', () => {
     expect(r.statusCode).toBe(429)
     expect(r.headers['retry-after']).toBeDefined()
     expect(r.json().code).toBe('RATE_LIMITED')
+    await s.close()
+  })
+
+  it('x-ratelimit-reset is a Unix timestamp (seconds); retry-after stays seconds-until-reset', async () => {
+    const s = await build({ routes: authRoute, limits: { authIpPerMin: 1, authEmailPerMin: 100 } })
+    const before = Math.floor(Date.now() / 1000)
+    expect((await post(s, 'ts1@x.co')).headers['x-ratelimit-reset']).toBeDefined()
+    const r = await post(s, 'ts2@x.co')
+    expect(r.statusCode).toBe(429)
+    const reset = Number(r.headers['x-ratelimit-reset'])
+    expect(Number.isInteger(reset)).toBe(true)
+    expect(reset).toBeGreaterThanOrEqual(before)
+    expect(reset).toBeLessThanOrEqual(before + 61)
+    const retryAfter = Number(r.headers['retry-after'])
+    expect(retryAfter).toBeGreaterThanOrEqual(1)
+    expect(retryAfter).toBeLessThanOrEqual(60)
     await s.close()
   })
 
@@ -345,13 +447,19 @@ describe('rate limiting', () => {
     const s = await build({ routes: authRoute, limits: { authIpPerMin: 2, authEmailPerMin: 100 } })
     for (let i = 0; i < 2; i++) {
       await s.inject({
-        method: 'POST', url: '/login', remoteAddress: '10.0.0.1',
-        headers: { 'x-forwarded-for': `203.0.113.${i}` }, payload: { email: `a${i}@x.co`, password: 'x' },
+        method: 'POST',
+        url: '/login',
+        remoteAddress: '10.0.0.1',
+        headers: { 'x-forwarded-for': `203.0.113.${i}` },
+        payload: { email: `a${i}@x.co`, password: 'x' },
       })
     }
     const r = await s.inject({
-      method: 'POST', url: '/login', remoteAddress: '10.0.0.1',
-      headers: { 'x-forwarded-for': '203.0.113.99' }, payload: { email: 'z@x.co', password: 'x' },
+      method: 'POST',
+      url: '/login',
+      remoteAddress: '10.0.0.1',
+      headers: { 'x-forwarded-for': '203.0.113.99' },
+      payload: { email: 'z@x.co', password: 'x' },
     })
     expect(r.statusCode).toBe(429)
     await s.close()
@@ -364,13 +472,21 @@ describe('rate limiting', () => {
   })
 
   it('report mode counts but does not block', async () => {
-    const s = await build({ routes: authRoute, rate: 'report', limits: { authIpPerMin: 1, authEmailPerMin: 100 } })
+    const s = await build({
+      routes: authRoute,
+      rate: 'report',
+      limits: { authIpPerMin: 1, authEmailPerMin: 100 },
+    })
     for (let i = 0; i < 4; i++) expect((await post(s, `r${i}@x.co`)).statusCode).toBe(200)
     expect(s.rateLimitStats.limited).toBeGreaterThan(0)
     await s.close()
   })
 
-  const broken: RateStore = { hit: async () => { throw new Error('redis down') } }
+  const broken: RateStore = {
+    hit: async () => {
+      throw new Error('redis down')
+    },
+  }
 
   it('store down: reads FAIL OPEN, login FAILS CLOSED with 503', async () => {
     const s = await build({ routes: authRoute, store: broken })
@@ -385,8 +501,16 @@ describe('rate limiting', () => {
 
   it('a shared store makes two server instances share one counter', async () => {
     const store = new MemoryRateStore()
-    const a = await build({ routes: authRoute, store, limits: { authIpPerMin: 2, authEmailPerMin: 100 } })
-    const b = await build({ routes: authRoute, store, limits: { authIpPerMin: 2, authEmailPerMin: 100 } })
+    const a = await build({
+      routes: authRoute,
+      store,
+      limits: { authIpPerMin: 2, authEmailPerMin: 100 },
+    })
+    const b = await build({
+      routes: authRoute,
+      store,
+      limits: { authIpPerMin: 2, authEmailPerMin: 100 },
+    })
     expect((await post(a, 'p@x.co')).statusCode).toBe(200)
     expect((await post(b, 'q@x.co')).statusCode).toBe(200)
     expect((await post(a, 'r@x.co')).statusCode).toBe(429)
@@ -402,7 +526,10 @@ describe('input validation and the error shape', () => {
       {
         config: { policy: { public: true } },
         schema: {
-          body: Strict({ name: Type.String({ minLength: 1, maxLength: 10 }), qty: Type.Integer({ minimum: 1, maximum: 5 }) }),
+          body: Strict({
+            name: Type.String({ minLength: 1, maxLength: 10 }),
+            qty: Type.Integer({ minimum: 1, maximum: 5 }),
+          }),
         },
       },
       async (req) => req.body
@@ -411,7 +538,9 @@ describe('input validation and the error shape', () => {
       '/list',
       {
         config: { policy: { public: true } },
-        schema: { querystring: Strict({ limit: Type.Integer({ minimum: 1, maximum: 100, default: 20 }) }) },
+        schema: {
+          querystring: Strict({ limit: Type.Integer({ minimum: 1, maximum: 100, default: 20 }) }),
+        },
       },
       async (req) => req.query
     )
@@ -422,7 +551,11 @@ describe('input validation and the error shape', () => {
 
   it('rejects unknown fields instead of silently stripping them', async () => {
     const s = await build({ routes })
-    const r = await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 1, role: 'ADMIN' } })
+    const r = await s.inject({
+      method: 'POST',
+      url: '/things',
+      payload: { name: 'a', qty: 1, role: 'ADMIN' },
+    })
     expect(r.statusCode).toBe(400)
     expect(r.json()).toMatchObject({ code: 'VALIDATION_FAILED' })
     expect(r.json().fields[0].rule).toBe('unknownField:role')
@@ -431,18 +564,60 @@ describe('input validation and the error shape', () => {
 
   it('does not coerce body types ("5" is not 5)', async () => {
     const s = await build({ routes })
-    expect((await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: '5' } })).statusCode).toBe(400)
+    expect(
+      (await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: '5' } }))
+        .statusCode
+    ).toBe(400)
+    await s.close()
+  })
+
+  it('Money accepts every valid 2-decimal amount (multipleOfPrecision) and rejects 3-decimal ones', async () => {
+    const s = await build({
+      rate: 'report', // thousands of requests below; the limiter is not under test
+      routes: (r) => {
+        r.post(
+          '/price',
+          { config: { policy: { public: true } }, schema: { body: Strict({ price: Money }) } },
+          async (req) => req.body
+        )
+      },
+    })
+    const post = (price: number) => s.inject({ method: 'POST', url: '/price', payload: { price } })
+    for (const price of [0, 0.01, 0.07, 0.29, 19.99, 33.33, 349.99, 1234.56, 1_000_000]) {
+      expect((await post(price)).statusCode).toBe(200)
+    }
+    // Every cent value up to 100.00 (about one in nine fail under plain float modulo).
+    for (let cents = 0; cents <= 10_000; cents++) {
+      const price = cents / 100
+      if ((await post(price)).statusCode !== 200) throw new Error(`rejected valid price ${price}`)
+    }
+    for (const price of [0.001, 1.005, 19.999, -0.01, 1_000_000.01]) {
+      expect((await post(price)).statusCode).toBe(400)
+    }
     await s.close()
   })
 
   it('enforces bounds and never echoes the offending value', async () => {
     const s = await build({ routes })
-    const r = await s.inject({ method: 'POST', url: '/things', payload: { name: 'x'.repeat(11), qty: 1 } })
+    const r = await s.inject({
+      method: 'POST',
+      url: '/things',
+      payload: { name: 'x'.repeat(11), qty: 1 },
+    })
     expect(r.statusCode).toBe(400)
     expect(JSON.stringify(r.json())).not.toContain('xxxxxxxxxx')
-    expect((await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 0 } })).statusCode).toBe(400)
-    expect((await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 1.5 } })).statusCode).toBe(400)
-    expect((await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 1e308 * 10 } })).statusCode).toBe(400)
+    expect(
+      (await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 0 } }))
+        .statusCode
+    ).toBe(400)
+    expect(
+      (await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 1.5 } }))
+        .statusCode
+    ).toBe(400)
+    expect(
+      (await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 1e308 * 10 } }))
+        .statusCode
+    ).toBe(400)
     await s.close()
   })
 
@@ -457,7 +632,11 @@ describe('input validation and the error shape', () => {
 
   it('rejects an oversized body with 413', async () => {
     const s = await build({ routes })
-    const r = await s.inject({ method: 'POST', url: '/things', payload: { name: 'a', qty: 1, pad: 'x'.repeat(200 * 1024) } })
+    const r = await s.inject({
+      method: 'POST',
+      url: '/things',
+      payload: { name: 'a', qty: 1, pad: 'x'.repeat(200 * 1024) },
+    })
     expect(r.statusCode).toBe(413)
     expect(r.json().code).toBe('PAYLOAD_TOO_LARGE')
     await s.close()
@@ -465,7 +644,12 @@ describe('input validation and the error shape', () => {
 
   it('rejects a non-JSON content type with 415', async () => {
     const s = await build({ routes })
-    const r = await s.inject({ method: 'POST', url: '/things', headers: { 'content-type': 'text/plain' }, payload: 'hello' })
+    const r = await s.inject({
+      method: 'POST',
+      url: '/things',
+      headers: { 'content-type': 'text/plain' },
+      payload: 'hello',
+    })
     expect(r.statusCode).toBe(415)
     await s.close()
   })
@@ -473,7 +657,9 @@ describe('input validation and the error shape', () => {
   it('does not allow prototype pollution through __proto__', async () => {
     const s = await build({ routes })
     const r = await s.inject({
-      method: 'POST', url: '/things', headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      url: '/things',
+      headers: { 'content-type': 'application/json' },
       payload: '{"name":"a","qty":1,"__proto__":{"isAdmin":true}}',
     })
     expect(r.statusCode).toBe(400)
@@ -509,14 +695,25 @@ describe('loadSecurityConfig', () => {
   })
 
   it('treats an unknown AUTH_ENFORCE value as the safe rollout default, not as off', () => {
-    expect(loadSecurityConfig({ AUTH_ENFORCE: 'banana' } as NodeJS.ProcessEnv).authMode).toBe('report')
-    expect(loadSecurityConfig({ AUTH_ENFORCE: 'enforce' } as NodeJS.ProcessEnv).authMode).toBe('enforce')
+    expect(loadSecurityConfig({ AUTH_ENFORCE: 'banana' } as NodeJS.ProcessEnv).authMode).toBe(
+      'report'
+    )
+    expect(loadSecurityConfig({ AUTH_ENFORCE: 'enforce' } as NodeJS.ProcessEnv).authMode).toBe(
+      'enforce'
+    )
   })
 
   it('with no SUPABASE_URL a presented token fails closed (auth_not_configured), it does not pass', async () => {
     const server = fastify({ logger: false })
-    await registerSecurity(server, { service: 't', overrides: { config: { authMode: 'enforce', supabaseUrl: null, issuer: null, jwksUrl: null } } })
-    server.get('/p', { config: { policy: { permission: 'orders:read' } } }, async () => ({ ok: true }))
+    await registerSecurity(server, {
+      service: 't',
+      overrides: {
+        config: { authMode: 'enforce', supabaseUrl: null, issuer: null, jwksUrl: null },
+      },
+    })
+    server.get('/p', { config: { policy: { permission: 'orders:read' } } }, async () => ({
+      ok: true,
+    }))
     await server.ready()
     const r = await server.inject({ url: '/p', headers: bearer(await ta.sign()) })
     expect(r.statusCode).toBe(401)

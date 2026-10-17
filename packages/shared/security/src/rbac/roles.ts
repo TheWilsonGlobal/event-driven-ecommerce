@@ -59,6 +59,7 @@ const VENDOR: readonly Permission[] = [
   ...CUSTOMER,
   'products:write',
   'uploads:write',
+  'storage:read', // read-only: listing/downloading objects; never storage write
   'inventory:read',
   'analytics:read',
 ]
@@ -70,11 +71,7 @@ const ADMIN: readonly Permission[] = [...PERMISSIONS]
  * read what another service legitimately needs and nothing that changes a user
  * or touches the operator surface.
  */
-const SERVICE: readonly Permission[] = [
-  'orders:read:any',
-  'inventory:read',
-  'saga:report',
-]
+const SERVICE: readonly Permission[] = ['orders:read:any', 'inventory:read', 'saga:report']
 
 export const ROLE_PERMISSIONS: Readonly<Record<Role, ReadonlySet<Permission>>> = {
   ADMIN: new Set(ADMIN),

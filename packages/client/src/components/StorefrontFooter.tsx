@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useAuth } from './authContext'
 import { getTopology, type ServiceLocation } from '../lib/api'
 
 // Every port badge and link below used to be a hand-typed literal. That is
@@ -29,8 +30,15 @@ function urlOf(services: ServiceLocation[], name: string): string | null {
 
 export default function StorefrontFooter() {
   const [services, setServices] = useState<ServiceLocation[] | null>(null)
+  // /topology needs ops:read + MFA; only fetch for such sessions so ordinary
+  // visitors never trigger a 403. Badges then show the placeholder port.
+  const { isOps } = useAuth()
 
   useEffect(() => {
+    if (!isOps) {
+      setServices(null)
+      return
+    }
     let cancelled = false
     getTopology()
       .then((s) => {
@@ -45,7 +53,7 @@ export default function StorefrontFooter() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isOps])
 
   const list = services ?? []
   const adminUrl = urlOf(list, 'admin') ?? 'http://localhost:5461'

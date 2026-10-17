@@ -8,6 +8,7 @@ export interface ShutdownDeps {
   consumer: EventConsumer
   producer: EventProducer
   security: SecurityHandle
+  rankings?: { close(): Promise<void> } | undefined
 }
 
 /**
@@ -31,6 +32,7 @@ export function registerShutdownHandlers({
   consumer,
   producer,
   security,
+  rankings,
 }: ShutdownDeps): void {
   let shuttingDown = false
 
@@ -67,6 +69,13 @@ export function registerShutdownHandlers({
       await producer.close()
     } catch (err) {
       console.warn(`[Analytics Service] Error closing event producer: ${(err as Error).message}`)
+    }
+
+    // After the consumer: an in-flight handler still writes ranks post-commit.
+    try {
+      await rankings?.close()
+    } catch (err) {
+      console.warn(`[Analytics Service] Error closing rank Redis: ${(err as Error).message}`)
     }
 
     try {

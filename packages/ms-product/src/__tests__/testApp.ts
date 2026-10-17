@@ -25,10 +25,14 @@ import { QueueManager, registerQueueRoutes } from '../queues'
 import { MULTIPART_LIMITS } from '../routes/uploads'
 import { applySharedRoutePolicies, searchConstraint } from '../security'
 import type { CategoryDoc, ProductDoc } from '../types'
+import { ProductCache, type CacheRedis, type CacheResult } from '../cache/productCache'
 
 /** Equality-only in-memory stand-in for the Postgres/NeDB document store. */
 export class MemoryStore<T extends { id?: string }> implements DocumentDatabaseAdapter<T> {
   docs: T[] = []
+  /** findOne calls, and an artificial latency so concurrent requests overlap. */
+  findOneCalls = 0
+  findOneDelayMs = 0
   constructor(private readonly seed: () => T[]) {
     this.reset()
   }
@@ -39,6 +43,8 @@ export class MemoryStore<T extends { id?: string }> implements DocumentDatabaseA
     return (d: T) => Object.entries(q).every(([k, v]) => (d as Record<string, unknown>)[k] === v)
   }
   async findOne(q: Record<string, unknown>) {
+    this.findOneCalls += 1
+    if (this.findOneDelayMs) await new Promise((r) => setTimeout(r, this.findOneDelayMs))
     const d = this.docs.find(this.match(q))
     return d ? structuredClone(d) : null
   }
@@ -104,13 +110,20 @@ export interface TestApp {
   products: MemoryStore<ProductDoc>
   uploads: { key: string; type: string; size: number }[]
   signedKeys: string[]
+  cache: ProductCache<ProductDoc>
+  cacheResults: Record<CacheResult, number>
   tokens: () => Promise<
     Record<'ANON' | 'CUSTOMER' | 'VENDOR' | 'ADMIN_AAL1' | 'ADMIN_AAL2', string | undefined>
   >
 }
 
 export async function buildApp(
-  opts: { auth?: 'report' | 'enforce'; limits?: Partial<typeof roomy> } = {}
+  opts: {
+    auth?: 'report' | 'enforce'
+    limits?: Partial<typeof roomy>
+    /** Redis stand-in for the product cache; null/absent = no Redis. */
+    redis?: CacheRedis | null
+  } = {}
 ): Promise<TestApp> {
   const ta = await createTestAuth()
   const products = new MemoryStore<ProductDoc>(fixtures)
@@ -169,6 +182,11 @@ export async function buildApp(
     healthCheck: async () => ({ healthy: true, latencyMs: 1, endpoint: 'http://storage.test' }),
   }
   const queueManager = new QueueManager(false)
+  const cacheResults: Record<CacheResult, number> = { hit: 0, miss: 0, coalesced: 0, bypass: 0 }
+  const cache = new ProductCache<ProductDoc>({
+    redis: opts.redis ?? null,
+    counter: { inc: ({ result }) => void (cacheResults[result] += 1) },
+  })
 
   registerHealthRoutes(server, {
     dbConfig: { mode: 'embedded', document: { driver: 'nedb' } } as never,
@@ -179,6 +197,7 @@ export async function buildApp(
     productsStore: products,
     search: search as never,
     queueManager,
+    cache,
   })
   registerCategoryRoutes(server, { categoriesStore: categories })
   registerUploadRoutes(server, { rustfs: rustfs as never })
@@ -203,6 +222,8 @@ export async function buildApp(
     products,
     uploads,
     signedKeys,
+    cache,
+    cacheResults,
     tokens: async () => ({
       ANON: undefined,
       CUSTOMER: await ta.sign({ sub: 'cust-1', role: 'CUSTOMER' }),

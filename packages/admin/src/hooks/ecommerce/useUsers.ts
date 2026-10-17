@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { UserRecord } from '../../types'
 import { USER_SERVICE_URL } from '../../data/serviceUrls'
 import { FETCH_ALL_LIMIT, mapUser } from './mappers'
-import { apiFetch, toApiError } from '../../data/apiFetch'
+import { apiFetch, errorText, toApiError } from '../../data/apiFetch'
+import { applyUserEdit, setUserStatus, type UserRole } from './userUpdates'
 
 export function useUsers(showToast: (msg: string) => void) {
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -23,12 +24,12 @@ export function useUsers(showToast: (msg: string) => void) {
     setUsersError(null)
     try {
       const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users?page=1&limit=${FETCH_ALL_LIMIT}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) throw await toApiError(res)
       const data = await res.json()
       setUsers((data.users ?? []).map(mapUser))
     } catch (err) {
       setUsersError(
-        err instanceof Error ? err.message : 'Failed to load users — is ms-user (5463) running?'
+        err instanceof Error ? errorText(err) : 'Failed to load users — is ms-user (5463) running?'
       )
     } finally {
       setUsersLoading(false)
@@ -46,7 +47,7 @@ export function useUsers(showToast: (msg: string) => void) {
     const lastName = formData.get('lastName') as string
     const email = formData.get('email') as string
     // A disabled <select> is absent from FormData; omit role rather than send null.
-    const role = (formData.get('role') ?? undefined) as 'ADMIN' | 'CUSTOMER' | 'VENDOR' | undefined
+    const role = (formData.get('role') ?? undefined) as UserRole | undefined
     const isActive = formData.get('isActive') === 'on'
     const addressLine1 = formData.get('addressLine1') as string
     const city = formData.get('city') as string
@@ -61,15 +62,12 @@ export function useUsers(showToast: (msg: string) => void) {
 
     try {
       if (editingUser) {
-        const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users/${editingUser.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ firstName, lastName, role, isActive }),
-        })
-        if (!res.ok) {
-          throw await toApiError(res)
+        const failures = await applyUserEdit(editingUser, { firstName, lastName, role, isActive })
+        if (failures.length > 0) {
+          showToast(`User ${firstName} not fully saved -- ${failures.join(' | ')}`)
+        } else {
+          showToast(`User ${firstName} updated!`)
         }
-        showToast(`User ${firstName} updated!`)
       } else {
         const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users`, {
           method: 'POST',
@@ -93,7 +91,7 @@ export function useUsers(showToast: (msg: string) => void) {
       }
       await fetchUsers()
     } catch (err) {
-      showToast(`Failed to save user: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      showToast(`Failed to save user: ${errorText(err)}`)
     }
   }
 
@@ -107,26 +105,17 @@ export function useUsers(showToast: (msg: string) => void) {
       showToast('User deleted')
       await fetchUsers()
     } catch (err) {
-      showToast(`Failed to delete user: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      showToast(`Failed to delete user: ${errorText(err)}`)
     }
   }
 
   const handleToggleUserStatus = async (user: UserRecord) => {
     try {
-      const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users/${user.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !user.isActive }),
-      })
-      if (!res.ok) {
-        throw await toApiError(res)
-      }
+      await setUserStatus(user.id, !user.isActive)
       showToast(`User ${user.firstName} status toggled`)
       await fetchUsers()
     } catch (err) {
-      showToast(
-        `Failed to toggle user status: ${err instanceof Error ? err.message : 'Unknown error'}`
-      )
+      showToast(`Failed to toggle user status: ${errorText(err)}`)
     }
   }
 

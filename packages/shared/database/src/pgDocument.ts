@@ -19,9 +19,9 @@ import { SERVICE_SCHEMAS, getServicePool, type ServiceName } from './postgres'
  * use typed repositories with `withTransaction`, because this adapter has no
  * transaction concept.
  */
-export class PostgresDocumentStore<T extends { id?: string | undefined; _id?: string | undefined }>
-  implements DocumentDatabaseAdapter<T>
-{
+export class PostgresDocumentStore<
+  T extends { id?: string | undefined; _id?: string | undefined },
+> implements DocumentDatabaseAdapter<T> {
   private readyPromise: Promise<void> | undefined
   private readonly table: string
 
@@ -30,7 +30,8 @@ export class PostgresDocumentStore<T extends { id?: string | undefined; _id?: st
     private readonly pool: Pool,
     private readonly schema: string
   ) {
-    if (!/^[a-z_][a-z0-9_]*$/i.test(collection)) throw new Error(`bad collection name: ${collection}`)
+    if (!/^[a-z_][a-z0-9_]*$/i.test(collection))
+      throw new Error(`bad collection name: ${collection}`)
     this.table = `${schema}."${collection}"`
   }
 
@@ -63,7 +64,9 @@ export class PostgresDocumentStore<T extends { id?: string | undefined; _id?: st
   private where(query: Record<string, unknown>): { sql: string; params: unknown[] } {
     for (const [k, v] of Object.entries(query)) {
       if (k.startsWith('$') || PostgresDocumentStore.hasOperator(v)) {
-        throw new Error(`PostgresDocumentStore supports equality filters only; got operator in "${k}"`)
+        throw new Error(
+          `PostgresDocumentStore supports equality filters only; got operator in "${k}"`
+        )
       }
     }
     const keys = Object.keys(query)
@@ -78,7 +81,10 @@ export class PostgresDocumentStore<T extends { id?: string | undefined; _id?: st
   async findOne(query: Record<string, unknown>): Promise<T | null> {
     await this.ready()
     const w = this.where(query)
-    const r = await this.pool.query(`SELECT doc FROM ${this.table} WHERE ${w.sql} LIMIT 1`, w.params)
+    const r = await this.pool.query(
+      `SELECT doc FROM ${this.table} WHERE ${w.sql} LIMIT 1`,
+      w.params
+    )
     return (r.rows[0]?.doc as T | undefined) ?? null
   }
 

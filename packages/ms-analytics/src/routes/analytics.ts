@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { ErrorResponse, Strict, Type, type Static } from '@ecommerce/shared-security'
+import { EntityId, ErrorResponse, Strict, Type, type Static } from '@ecommerce/shared-security'
 import type { AnalyticsStore } from '../aggregates/store'
 import { funnelView, revenueView, summaryView, topProductsView } from '../aggregates/views'
+import { postgresRanking, type RankingEngine, type RankingResult } from '../rankings/engine'
+import type { RankWindow } from '../rankings/windows'
 import {
   funnelResponseSchema,
+  rankingResponseSchema,
   revenueResponseSchema,
   summaryResponseSchema,
   topProductsResponseSchema,
@@ -38,14 +41,99 @@ const TopProductsQuery = Strict({
 })
 const NoQuery = Strict({})
 
+const RankingQuery = Strict({
+  limit: Type.Integer({ minimum: 1, maximum: MAX_LIMIT, default: DEFAULT_LIMIT }),
+  window: Type.Optional(Type.Union([Type.Literal('1h'), Type.Literal('24h'), Type.Literal('7d')])),
+})
+const CategoryParams = Strict({ categoryId: EntityId })
+
 export interface AnalyticsRouteDeps {
   store: AnalyticsStore
+  /** Redis rank engine; absent when the KV driver is not Redis (Postgres only). */
+  rankings?: RankingEngine | undefined
 }
 
 export function registerAnalyticsRoutes(
   server: FastifyInstance,
-  { store }: AnalyticsRouteDeps
+  { store, rankings }: AnalyticsRouteDeps
 ): void {
+  // Redis first; on ANY Redis/rebuild failure (or no Redis engine at all) the
+  // answer comes from Postgres and says so in `source`.
+  async function ranked(
+    query: { window: RankWindow; limit: number; categoryId?: string },
+    log: FastifyInstance['log']
+  ): Promise<RankingResult> {
+    if (rankings) {
+      try {
+        return await rankings.top(query)
+      } catch (err) {
+        log.warn({ err: (err as Error).message }, 'rank engine unavailable, using Postgres')
+      }
+    }
+    return postgresRanking(store, query)
+  }
+
+  server.get(
+    '/api/v1/analytics/rankings/top-products',
+    {
+      config: { policy: { permission: 'analytics:read' }, rateTier: 'read' },
+      schema: {
+        tags: ['analytics'],
+        description:
+          'Real-time top products by units sold in the last window (1h, 24h or 7d; ' +
+          'default 24h), from Redis sorted sets. `source` is redis or postgres; the ' +
+          'Postgres fallback is the all-time view (windowApplied all-time).',
+        querystring: RankingQuery,
+        response: {
+          200: rankingResponseSchema,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Querystring: Static<typeof RankingQuery> }>) =>
+      ranked({ window: request.query.window ?? '24h', limit: request.query.limit }, request.log)
+  )
+
+  server.get(
+    '/api/v1/analytics/rankings/category/:categoryId',
+    {
+      config: { policy: { permission: 'analytics:read' }, rateTier: 'read' },
+      schema: {
+        tags: ['analytics'],
+        description:
+          'Top products by units sold within one category over the window (default 24h). ' +
+          'Only orders whose lines carried a categoryId are counted. `source` is ' +
+          'redis or postgres.',
+        params: CategoryParams,
+        querystring: RankingQuery,
+        response: {
+          200: rankingResponseSchema,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{
+        Params: Static<typeof CategoryParams>
+        Querystring: Static<typeof RankingQuery>
+      }>
+    ) => {
+      const result = await ranked(
+        {
+          window: request.query.window ?? '24h',
+          limit: request.query.limit,
+          categoryId: request.params.categoryId,
+        },
+        request.log
+      )
+      return { ...result, categoryId: request.params.categoryId }
+    }
+  )
+
   server.get(
     '/api/v1/analytics/summary',
     {

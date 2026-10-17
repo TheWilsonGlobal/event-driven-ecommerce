@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getBrowserSupabase } from '../lib/supabase/browser'
+import { hasOpsAccess } from '../lib/claims'
 import { onAuthRequired } from '../lib/authEvents'
 import AuthModal from './AuthModal'
 import {
@@ -45,6 +46,7 @@ function friendlyAuthError(err: {
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => getBrowserSupabase(), [])
   const [user, setUser] = useState<AuthContextValue['user']>(null)
+  const [isOps, setIsOps] = useState(false)
   const [loading, setLoading] = useState<boolean>(!!supabase)
   const [modalOpen, setModalOpen] = useState(false)
   const [reason, setReason] = useState<string | undefined>()
@@ -65,11 +67,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (!active) return
       const u = data.session?.user
       setUser(u ? { id: u.id, email: u.email ?? '' } : null)
+      setIsOps(hasOpsAccess(data.session?.access_token))
       setLoading(false)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user
       setUser(u ? { id: u.id, email: u.email ?? '' } : null)
+      setIsOps(hasOpsAccess(session?.access_token))
       setLoading(false)
       if (event === 'SIGNED_IN' && u) finishSignIn()
     })
@@ -145,6 +149,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     // Local cart state lives outside auth and is deliberately left alone.
     await supabase.auth.signOut()
     setUser(null)
+    setIsOps(false)
   }, [supabase])
 
   const value = useMemo<AuthContextValue>(
@@ -152,6 +157,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       configured: !!supabase,
       loading,
       user,
+      isOps,
       openAuthModal,
       closeAuthModal,
       signInWithPassword,
@@ -163,6 +169,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       supabase,
       loading,
       user,
+      isOps,
       openAuthModal,
       closeAuthModal,
       signInWithPassword,

@@ -131,6 +131,8 @@ describe('policy matrix (role x route)', () => {
       '/api/v1/analytics/revenue',
       '/api/v1/analytics/top-products',
       '/api/v1/analytics/funnel',
+      '/api/v1/analytics/rankings/top-products',
+      '/api/v1/analytics/rankings/category/:categoryId',
     ].map((url): Row => ({ url, allow: BI })),
     ...['/api/v1/events', '/api/v1/endpoints'].map((url): Row => ({
       url,

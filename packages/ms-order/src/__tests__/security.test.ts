@@ -423,6 +423,8 @@ describe('object-level authorization (BOLA)', () => {
   })
 })
 
+const line0 = ORDER_BODY.items[0]!
+
 describe('POST /api/v1/orders: ownership and hostile input', () => {
   let server: FastifyInstance
   let prisma: FakePrisma
@@ -448,6 +450,28 @@ describe('POST /api/v1/orders: ownership and hostile input', () => {
     expect(res.statusCode).toBe(201)
     expect(res.json().customerId).toBe('cust-a')
     expect(prisma.orders.at(-1)!.userId).toBe('cust-a')
+  })
+
+  it('validates real catalogue prices (0.07, 19.99, 33.33) and unrounded client-derived tax/total', async () => {
+    for (const unitPrice of [0.07, 19.99, 33.33]) {
+      const res = await post({
+        ...ORDER_BODY,
+        items: [{ ...line0, unitPrice, quantity: 1 }],
+        subtotal: unitPrice,
+        // The storefront sends float-derived values unrounded.
+        taxAmount: unitPrice * 0.08,
+        totalAmount: unitPrice + unitPrice * 0.08,
+      })
+      expect(res.statusCode).not.toBe(400)
+    }
+  })
+
+  it('rejects a three-decimal unit price, subtotal or shipping amount', async () => {
+    expect(
+      (await post({ ...ORDER_BODY, items: [{ ...line0, unitPrice: 10.001 }] })).statusCode
+    ).toBe(400)
+    expect((await post({ ...ORDER_BODY, subtotal: 20.001 })).statusCode).toBe(400)
+    expect((await post({ ...ORDER_BODY, shippingAmount: 1.005 })).statusCode).toBe(400)
   })
 
   it('rejects a body userId (no impersonation, no guest owner)', async () => {

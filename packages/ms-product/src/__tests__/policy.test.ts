@@ -39,10 +39,30 @@ const MATRIX: Row[] = [
   ['DELETE', '/api/v1/products/prod-admin', 'none', 401, 403, 404, 200, 200],
   ['POST', '/api/v1/products/upload', 'png', 401, 403, 201, 201, 201],
   ['POST', '/api/v1/receipts/upload', 'png', 401, 403, 201, 201, 201],
-  // storage:read is ADMIN-only in rbac/roles.ts
-  ['GET', '/api/v1/storage/health', 'none', 401, 403, 403, 200, 200],
-  ['GET', '/api/v1/storage/objects', 'none', 401, 403, 403, 200, 200],
-  ['GET', '/api/v1/storage/download?key=products/a.png', 'none', 401, 403, 403, 302, 302],
+  // storage:read is held by ADMIN and VENDOR (not CUSTOMER) in rbac/roles.ts
+  ['GET', '/api/v1/storage/health', 'none', 401, 403, 200, 200, 200],
+  ['GET', '/api/v1/storage/objects', 'none', 401, 403, 200, 200, 200],
+  ['GET', '/api/v1/storage/download?key=products/a.png', 'none', 401, 403, 302, 302, 302],
+  [
+    'GET',
+    '/api/v1/storage/download?key=products/a.png&format=json',
+    'none',
+    401,
+    403,
+    200,
+    200,
+    200,
+  ],
+  [
+    'GET',
+    '/api/v1/storage/download?key=products/a.png&format=redirect',
+    'none',
+    401,
+    403,
+    302,
+    302,
+    302,
+  ],
   // ops:read with mfa: an aal1 admin is refused. /queues answers 503 (no Redis in the test).
   ['GET', '/api/v1/queues', 'none', 401, 403, 403, 403, 503],
   ['GET', '/api/v1/logs', 'none', 401, 403, 403, 403, 200],
@@ -231,9 +251,9 @@ describe('validation of hostile and legitimate input', () => {
     expect(res.json().compareAtPrice).toBe(419.99)
   })
 
-  it('accepts every valid 2-decimal price (Ajv multipleOf would reject 0.07)', async () => {
+  it('accepts every valid 2-decimal price (shared Money, multipleOfPrecision: 0.07, 19.99)', async () => {
     const a = await app()
-    for (const price of [0.07, 0.29, 349.99, 1234.56, 0]) {
+    for (const price of [0.07, 0.29, 19.99, 33.33, 349.99, 1234.56, 0]) {
       expect((await create(a, { title: 't', price })).statusCode).toBe(201)
     }
   })

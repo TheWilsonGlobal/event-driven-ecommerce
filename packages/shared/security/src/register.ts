@@ -18,7 +18,12 @@ export interface RegisterSecurityOptions {
    * or in tests) a per-process memory store is used, which is NOT an effective
    * limit across replicas.
    */
-  redis?: { host: string; port: number; password?: string | undefined; db?: number | undefined } | null
+  redis?: {
+    host: string
+    port: number
+    password?: string | undefined
+    db?: number | undefined
+  } | null
   /** Tests may inject a key set / store / config instead of the network ones. */
   overrides?: {
     config?: Partial<SecurityConfig>

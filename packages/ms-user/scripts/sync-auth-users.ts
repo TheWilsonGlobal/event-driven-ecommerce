@@ -19,6 +19,7 @@
  */
 import * as dotenv from 'dotenv'
 import * as path from 'path'
+import { loadDatabaseConfig } from '@ecommerce/shared-database'
 import { PrismaClient } from '../node_modules/.prisma-ms-user/client'
 import {
   SupabaseAuthError,
@@ -29,6 +30,11 @@ import {
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') })
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
+
+// The Prisma schema reads USER_DATABASE_URL / USER_DIRECT_URL, which the root .env only
+// implies through SUPABASE_DB_URL. loadDatabaseConfig derives them into process.env (the
+// same applyServiceUrlDefaults the service itself runs) before PrismaClient is built.
+loadDatabaseConfig(process.env)
 
 const MIN_PASSWORD_LENGTH = 12
 const PAGE_SIZE = 200

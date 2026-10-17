@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify'
 import type { RustFSStorageClient } from '@ecommerce/shared-database'
 import { ErrorResponse, Strict, Type, notFound } from '@ecommerce/shared-security'
-import { DownloadQuery } from '../schemas'
+import { DownloadQuery, DownloadUrlResponse } from '../schemas'
+
+const DOWNLOAD_URL_TTL_SECONDS = 3600
 
 interface StorageRouteDeps {
   rustfs: Pick<RustFSStorageClient, 'healthCheck' | 'listObjects' | 'getSignedDownloadUrl'>
@@ -79,28 +81,35 @@ export function registerStorageRoutes(server: FastifyInstance, { rustfs }: Stora
   )
 
   // GET /api/v1/storage/download?key=... → redirect to a pre-signed RustFS GET URL
-  server.get<{ Querystring: { key: string } }>(
+  server.get<{ Querystring: DownloadQuery }>(
     '/api/v1/storage/download',
     {
       config: STORAGE_CONFIG,
       schema: {
         tags: ['storage'],
         description:
-          'Redirect to a pre-signed download URL for the given object key. The key must be ' +
+          'Redirect (302, default) to a pre-signed download URL for the given object key. ' +
+          'With ?format=json answer 200 `{ url, expiresIn }` instead, for browsers that must ' +
+          'send an Authorization header (a navigation cannot). The key must be ' +
           'one of the generated `products/<id>.<ext>` / `receipts/<id>.<ext>` keys: path ' +
           'traversal and any other prefix are refused with 400.',
         // The key is client input that ends up inside a signed URL and a
         // Content-Disposition header, so it is validated against a strict pattern
         // (see OBJECT_KEY_PATTERN) before the handler runs.
         querystring: DownloadQuery,
-        response: { 400: ErrorResponse, 404: ErrorResponse },
+        response: { 200: DownloadUrlResponse, 400: ErrorResponse, 404: ErrorResponse },
       },
     },
     async (req, reply) => {
       const key = req.query.key
       try {
         const filename = key.split('/').pop() ?? key
-        const url = await rustfs.getSignedDownloadUrl(key, 3600, filename)
+        const url = await rustfs.getSignedDownloadUrl(key, DOWNLOAD_URL_TTL_SECONDS, filename)
+        if (req.query.format === 'json') {
+          // A signed URL is a bearer credential: never let an intermediary store it.
+          reply.header('cache-control', 'no-store')
+          return { url, expiresIn: DOWNLOAD_URL_TTL_SECONDS }
+        }
         return reply.redirect(url)
       } catch (err) {
         server.log.warn(`[RustFS] Could not sign download URL for ${key}: ${err}`)

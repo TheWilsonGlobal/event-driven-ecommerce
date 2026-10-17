@@ -95,6 +95,14 @@ export async function toApiError(res: Response): Promise<ApiError> {
   })
 }
 
+/** Display text for any caught error; appends the request id of an ApiError for support. */
+export function errorText(err: unknown, fallback = 'Unknown error'): string {
+  if (err instanceof ApiError) {
+    return err.requestId ? `${err.message} (ref ${err.requestId})` : err.message
+  }
+  return err instanceof Error ? err.message : fallback
+}
+
 let refreshing: Promise<string | null> | null = null
 function refreshOnce(): Promise<string | null> {
   refreshing ??= getBridge()

@@ -37,8 +37,10 @@ const REASONS: Record<number, string> = {
   503: 'Service Unavailable',
 }
 
-export const unauthorized = (code = 'AUTHENTICATION_REQUIRED', message = 'Authentication required') =>
-  new AppError(401, code, message)
+export const unauthorized = (
+  code = 'AUTHENTICATION_REQUIRED',
+  message = 'Authentication required'
+) => new AppError(401, code, message)
 export const forbidden = (code = 'FORBIDDEN', message = 'You do not have permission to do this') =>
   new AppError(403, code, message)
 /** Used instead of 403 for another user's record, so ids cannot be enumerated. */
@@ -65,61 +67,63 @@ function fieldsFrom(validation: unknown): { path: string; rule: string }[] {
 }
 
 export function registerErrorHandling(server: FastifyInstance): void {
-  server.setErrorHandler((error: FastifyError | AppError, request: FastifyRequest, reply: FastifyReply) => {
-    const requestId = request.id
+  server.setErrorHandler(
+    (error: FastifyError | AppError, request: FastifyRequest, reply: FastifyReply) => {
+      const requestId = request.id
 
-    if (error instanceof AppError) {
-      for (const [k, v] of Object.entries(error.headers)) reply.header(k, v)
-      return reply.status(error.statusCode).send({
-        statusCode: error.statusCode,
-        error: REASONS[error.statusCode] ?? 'Error',
-        code: error.code,
-        message: error.message,
-        requestId,
-        ...error.extra,
-      })
-    }
+      if (error instanceof AppError) {
+        for (const [k, v] of Object.entries(error.headers)) reply.header(k, v)
+        return reply.status(error.statusCode).send({
+          statusCode: error.statusCode,
+          error: REASONS[error.statusCode] ?? 'Error',
+          code: error.code,
+          message: error.message,
+          requestId,
+          ...error.extra,
+        })
+      }
 
-    const fe = error as FastifyError
-    if (fe.validation) {
-      return reply.status(400).send({
-        statusCode: 400,
-        error: 'Bad Request',
-        code: 'VALIDATION_FAILED',
-        message: 'Request validation failed',
-        fields: fieldsFrom(fe.validation),
-        requestId,
-      })
-    }
+      const fe = error as FastifyError
+      if (fe.validation) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          code: 'VALIDATION_FAILED',
+          message: 'Request validation failed',
+          fields: fieldsFrom(fe.validation),
+          requestId,
+        })
+      }
 
-    const status = typeof fe.statusCode === 'number' ? fe.statusCode : 500
-    if (status >= 400 && status < 500) {
-      const code =
-        fe.code === 'FST_ERR_CTP_BODY_TOO_LARGE'
-          ? 'PAYLOAD_TOO_LARGE'
-          : fe.code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE'
-            ? 'UNSUPPORTED_MEDIA_TYPE'
-            : 'BAD_REQUEST'
+      const status = typeof fe.statusCode === 'number' ? fe.statusCode : 500
+      if (status >= 400 && status < 500) {
+        const code =
+          fe.code === 'FST_ERR_CTP_BODY_TOO_LARGE'
+            ? 'PAYLOAD_TOO_LARGE'
+            : fe.code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE'
+              ? 'UNSUPPORTED_MEDIA_TYPE'
+              : 'BAD_REQUEST'
+        return reply.status(status).send({
+          statusCode: status,
+          error: REASONS[status] ?? 'Error',
+          code,
+          // Fastify's own 4xx messages are safe (no values); keep them.
+          message: fe.message,
+          requestId,
+        })
+      }
+
+      // 5xx: log everything, tell the caller nothing.
+      request.log.error({ err: error, requestId }, 'unhandled error')
       return reply.status(status).send({
         statusCode: status,
-        error: REASONS[status] ?? 'Error',
-        code,
-        // Fastify's own 4xx messages are safe (no values); keep them.
-        message: fe.message,
+        error: REASONS[status] ?? 'Internal Server Error',
+        code: 'INTERNAL_ERROR',
+        message: 'Something went wrong',
         requestId,
       })
     }
-
-    // 5xx: log everything, tell the caller nothing.
-    request.log.error({ err: error, requestId }, 'unhandled error')
-    return reply.status(status).send({
-      statusCode: status,
-      error: REASONS[status] ?? 'Internal Server Error',
-      code: 'INTERNAL_ERROR',
-      message: 'Something went wrong',
-      requestId,
-    })
-  })
+  )
 
   server.setNotFoundHandler((request, reply) => {
     return reply.status(404).send({

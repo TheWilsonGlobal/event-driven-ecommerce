@@ -5,6 +5,7 @@ import {
   Email,
   EntityId,
   ErrorResponse,
+  Money,
   Quantity,
   Str,
   Strict,
@@ -21,13 +22,15 @@ import {
  */
 
 /**
- * A money amount in major units. Bounded, but deliberately NOT `multipleOf:
- * 0.01` (what shared-security's `Money` does): Ajv evaluates that with plain
- * floating-point division, so it rejects valid prices (19.99, 0.07, 33.33), and
- * the web client sends unrounded tax/total values. Amounts are rounded to cents
- * on the server and compared with a 0.01 tolerance instead (see pricing/).
+ * A client-DERIVED money amount in major units: bounded and non-negative, but
+ * deliberately NOT two-decimal. The storefront computes tax (8%), discount and
+ * total from float arithmetic and sends them unrounded (e.g. 12.3456), so
+ * shared-security's `Money` (`multipleOf: 0.01`) would reject real checkouts.
+ * They are rounded to cents on the server and compared with a 0.01 tolerance
+ * (see pricing/). Catalogue-sourced amounts (unitPrice, subtotal, shipping) use
+ * the shared `Money`.
  */
-export const Amount = Type.Number({ minimum: 0, maximum: 1_000_000 })
+export const ClientAmount = Type.Number({ minimum: 0, maximum: 1_000_000 })
 
 export const PAYMENT_METHODS = ['STRIPE', 'PAYPAL', 'MOCK'] as const
 export const PaymentMethodField = Type.Unsafe<(typeof PAYMENT_METHODS)[number]>({
@@ -54,7 +57,7 @@ export const OrderLineBody = Strict({
   productId: EntityId,
   sku: Str(64),
   title: Str(200),
-  unitPrice: Amount,
+  unitPrice: Money,
   quantity: Quantity,
 })
 
@@ -75,11 +78,11 @@ export const CreateOrderBodySchema = Strict({
   items: Bounded(OrderLineBody, 100, 1),
   shippingAddress: ShippingAddressBody,
   paymentMethod: PaymentMethodField,
-  subtotal: Amount,
-  taxAmount: Type.Optional(Amount),
-  shippingAmount: Type.Optional(Amount),
-  discountAmount: Type.Optional(Amount),
-  totalAmount: Amount,
+  subtotal: Money,
+  taxAmount: Type.Optional(ClientAmount),
+  shippingAmount: Type.Optional(Money),
+  discountAmount: Type.Optional(ClientAmount),
+  totalAmount: ClientAmount,
   currency: Type.Optional(CurrencyCode),
 })
 export type CreateOrderBodyT = Static<typeof CreateOrderBodySchema>

@@ -60,7 +60,9 @@ export const ErrorResponse = Type.Object(
     message: Type.String(),
     requestId: Type.Optional(Type.String()),
     fields: Type.Optional(
-      Type.Array(Type.Object({ path: Type.String(), rule: Type.String() }, { additionalProperties: false }))
+      Type.Array(
+        Type.Object({ path: Type.String(), rule: Type.String() }, { additionalProperties: false })
+      )
     ),
   },
   { additionalProperties: true }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { apiFetch, apiFetchJson, ApiError } from '../data/apiFetch'
+import { apiFetch, apiFetchJson, ApiError, errorText } from '../data/apiFetch'
 import { setAuthBridge, type AuthBridge } from '../auth/bridge'
 import {
   USER_SERVICE_URL,
@@ -185,5 +185,53 @@ describe('apiFetch', () => {
     fetchMock.mockResolvedValue(json(200, {}))
     await apiFetch(`${USER_SERVICE_URL}/health`)
     expect(authHeader(fetchMock.mock.calls[0])).toBeNull()
+  })
+})
+
+describe('error display', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+    setAuthBridge({
+      getToken: () => 't',
+      refresh: async () => null,
+      requestMfa: async () => false,
+      onSessionExpired: () => {},
+      notify: () => {},
+    })
+  })
+  afterEach(() => setAuthBridge(null))
+
+  const failWith = (status: number, body: unknown) => {
+    vi.mocked(fetch).mockResolvedValue(json(status, body))
+    return apiFetchJson(`${USER_SERVICE_URL}/api/v1/users/1/role`, { method: 'PATCH' }).catch(
+      (e) => e as ApiError
+    ) as Promise<ApiError>
+  }
+
+  it('shows message (not the HTTP reason in error) and appends the request id', async () => {
+    const err = await failWith(403, {
+      statusCode: 403,
+      error: 'Forbidden',
+      code: 'SELF_ROLE_CHANGE',
+      message: 'You cannot change your own role',
+      requestId: 'req-9',
+    })
+    expect(err.message).toBe('You cannot change your own role')
+    expect(err.code).toBe('SELF_ROLE_CHANGE')
+    expect(errorText(err)).toBe('You cannot change your own role (ref req-9)')
+  })
+
+  it('maps MFA_REQUIRED and FORBIDDEN to readable text', async () => {
+    expect((await failWith(403, { code: 'MFA_REQUIRED', message: 'x' })).message).toMatch(
+      /Two-factor/
+    )
+    expect((await failWith(403, { code: 'FORBIDDEN', message: 'x' })).message).toMatch(
+      /Not allowed/
+    )
+  })
+
+  it('errorText tolerates plain errors and non-errors', () => {
+    expect(errorText(new Error('boom'))).toBe('boom')
+    expect(errorText('x', 'fallback')).toBe('fallback')
   })
 })

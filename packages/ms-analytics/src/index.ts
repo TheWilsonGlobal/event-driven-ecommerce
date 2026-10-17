@@ -27,6 +27,8 @@ import {
   type SecurityHandle,
 } from '@ecommerce/shared-security'
 import { registerAnalyticsSecurity } from './security'
+import { RankingEngine } from './rankings/engine'
+import { createRankRedis } from './rankings/redis'
 
 /**
  * ms-analytics — the PURE CONSUMER that demonstrates fan-out.
@@ -78,7 +80,15 @@ const store = createAnalyticsStore()
 // Consumer construction opens nothing and never throws; with KAFKA_ENABLED
 // unset it does not even build a Kafka client. start() is called at the end of
 // bootstrap, after the HTTP server is listening.
-const consumer = createAnalyticsConsumer(store)
+// Real-time sales rank engine: only when the KV driver is Redis. Otherwise the
+// rankings endpoints answer from Postgres and say so (source: postgres).
+const rankings =
+  dbConfig.keyValue.driver === 'redis'
+    ? new RankingEngine(createRankRedis(dbConfig.keyValue.redis), store, {
+        log: (m) => console.log(`[Analytics Service] ${m}`),
+      })
+    : undefined
+const consumer = createAnalyticsConsumer(store, rankings)
 
 let server: FastifyInstance
 let security: SecurityHandle
@@ -172,7 +182,7 @@ async function bootstrap() {
     uiConfig: { docExpansion: 'list', deepLinking: true },
   })
 
-  registerServiceRoutes(server, { dbConfig, consumer, store })
+  registerServiceRoutes(server, { dbConfig, consumer, store, rankings })
   registerEndpointsRoute(server, routeRegistry, 'ms-analytics')
 
   // Default deny, checked at boot outside production: a route someone adds
@@ -180,7 +190,7 @@ async function bootstrap() {
   // answering 403 (or, in report mode, 200) to everyone.
   if (!security.config.production) assertPolicyCoverage(server)
 
-  registerShutdownHandlers({ server, consumer, producer: eventProducer, security })
+  registerShutdownHandlers({ server, consumer, producer: eventProducer, security, rankings })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })
@@ -189,6 +199,12 @@ async function bootstrap() {
     server.log.error(err)
     process.exit(1)
   }
+
+  // Warm the rank ZSETs (rebuilds from Postgres when the keys are missing).
+  // Background and non-fatal: the endpoints fall back to Postgres meanwhile.
+  void rankings?.ensureReady().catch((err: Error) => {
+    console.warn(`[Analytics Service] Rank warm-up failed: ${err.message}`)
+  })
 
   // Started only AFTER the server is listening. start() never throws and
   // returns false when the broker is unreachable, so an outage costs this

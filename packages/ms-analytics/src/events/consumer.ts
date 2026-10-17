@@ -11,6 +11,7 @@ import {
   type TopicName,
 } from '@ecommerce/shared-messaging'
 import type { AnalyticsStore } from '../aggregates/store'
+import type { RankingSink } from '../rankings/engine'
 import {
   handleInventoryInsufficient,
   handleInventoryReleased,
@@ -90,9 +91,13 @@ const SUBSCRIBED_TOPICS: TopicName[] = [TOPICS.orders, TOPICS.payments, TOPICS.i
  * idempotency ledger would otherwise reject the whole replay as duplicates,
  * which is a correct outcome but not the one someone resetting offsets wants.
  */
-export function createAnalyticsConsumer(store: AnalyticsStore): EventConsumer {
+export function createAnalyticsConsumer(
+  store: AnalyticsStore,
+  rankings?: RankingSink
+): EventConsumer {
   const deps: HandlerDeps = {
     store,
+    rankings,
     // eslint-disable-next-line no-console
     log: (message: string) => console.log(`${LOG_PREFIX} ${message}`),
   }

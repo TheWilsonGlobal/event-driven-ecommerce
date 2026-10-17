@@ -36,6 +36,8 @@ import {
   registerUploadRoutes,
 } from './routes'
 import { seedAndIndex } from './seed'
+import { Counter } from 'prom-client'
+import { ProductCache, createCacheRedis } from './cache/productCache'
 import { QueueManager, registerQueueRoutes } from './queues'
 import {
   SERVICE_CSP,
@@ -128,7 +130,29 @@ async function bootstrap() {
   })
 
   // After registerSecurity so the metrics hook sits behind the rate limiter's.
-  registerMetrics(server, { service: 'ms-product' })
+  const metrics = registerMetrics(server, { service: 'ms-product' })
+
+  // Cache-aside for GET /products/:id. Redis only when the KV driver is Redis; any
+  // other driver (embedded/rocksdb) means direct reads with the single-flight map.
+  const cacheResults = new Counter({
+    name: 'product_cache_requests_total',
+    help: 'GET /products/:id lookups by cache outcome (hit, miss, coalesced, bypass).',
+    labelNames: ['result'],
+    registers: [metrics.registry],
+  })
+  for (const result of ['hit', 'miss', 'coalesced', 'bypass']) cacheResults.inc({ result }, 0)
+  const cacheLog = { warn: (m: string) => server.log.warn(m) }
+  const productCache = new ProductCache<ProductDoc>({
+    redis:
+      dbConfig.keyValue.driver === 'redis'
+        ? createCacheRedis(dbConfig.keyValue.redis, cacheLog)
+        : null,
+    counter: cacheResults,
+    log: cacheLog,
+  })
+  server.addHook('onClose', async () => {
+    await productCache.close()
+  })
 
   await server.register(multipart, { limits: MULTIPART_LIMITS })
 
@@ -174,7 +198,7 @@ async function bootstrap() {
 
   registerHealthRoutes(server, { dbConfig, search })
   registerStorageRoutes(server, { rustfs })
-  registerProductRoutes(server, { productsStore, search, queueManager })
+  registerProductRoutes(server, { productsStore, search, queueManager, cache: productCache })
   registerCategoryRoutes(server, { categoriesStore })
   registerUploadRoutes(server, { rustfs })
   registerQueueRoutes(server, queueManager)

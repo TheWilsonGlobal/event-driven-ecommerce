@@ -64,6 +64,7 @@ const dbDescribe = HAS_DB ? describe : describe.skip
 
 const TEST_SCHEMA = `test_analytics_${crypto.randomBytes(6).toString('hex')}`
 const TABLES = [
+  'sales_lines',
   'processed_events',
   'hour_buckets',
   'product_counters',
@@ -77,11 +78,16 @@ let dbStore: AnalyticsStore | undefined
 beforeAll(async () => {
   if (!HAS_DB) return
   const pool = getServicePool('analytics').pool
-  const sql = fs
-    .readFileSync(path.join(MIGRATIONS_DIR, '001_init.sql'), 'utf8')
-    .replace(/\{\{schema\}\}/g, TEST_SCHEMA)
   await pool.query(`CREATE SCHEMA ${TEST_SCHEMA}`)
-  await pool.query(sql)
+  for (const file of fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()) {
+    const sql = fs
+      .readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')
+      .replace(/\{\{schema\}\}/g, TEST_SCHEMA)
+    await pool.query(sql)
+  }
   dbStore = createAnalyticsStoreOn(pool, TEST_SCHEMA)
 })
 

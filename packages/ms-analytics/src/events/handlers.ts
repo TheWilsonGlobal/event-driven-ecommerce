@@ -17,9 +17,13 @@ import {
   hourKeyOf,
   recordDuplicate,
   recordProgress,
+  recordSalesLines,
   type AnalyticsStore,
+  type SalesLine,
   type Tx,
 } from '../aggregates/store'
+import { mergeLines, type RankingSink } from '../rankings/engine'
+import { KEY_ID } from '../rankings/windows'
 
 /**
  * Applies backbone events to the analytics aggregates.
@@ -65,6 +69,8 @@ export const getRejectedEventCount = (): number => rejectedEvents
 export interface HandlerDeps {
   store: AnalyticsStore
   log: (message: string) => void
+  /** Windowed sales rank (Redis). Absent when the KV driver is not Redis. */
+  rankings?: RankingSink | undefined
 }
 
 /**
@@ -95,7 +101,7 @@ async function applyOnce(
   envelope: EventEnvelope,
   context: EventContext,
   apply: (tx: Tx) => Promise<void>
-): Promise<void> {
+): Promise<'duplicate' | 'rejected' | 'applied'> {
   const outcome = await store.transaction(
     async (tx): Promise<'duplicate' | 'rejected' | 'applied'> => {
       const claimed = await claimEvent(tx, {
@@ -137,6 +143,7 @@ async function applyOnce(
         `redelivered at ${context.topic}[${context.partition}]@${context.offset}`
     )
   }
+  return outcome
 }
 
 /**
@@ -166,7 +173,8 @@ export async function handleOrderCreated(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async (tx) => {
+  const salesLines: SalesLine[] = []
+  const outcome = await applyOnce(deps, envelope, context, async (tx) => {
     const payload = envelope.payload as Partial<OrderCreatedPayload>
     const amount = usableAmount(payload.totalAmount)
     const currency = usableString(payload.currency)
@@ -221,7 +229,40 @@ export async function handleOrderCreated(
           : {}),
       })
     }
+
+    // Windowed rank history. Written in this transaction so the claim guards it;
+    // an unparseable occurredAt writes nothing (never filed under "now").
+    const occurredMs = Date.parse(envelope.occurredAt)
+    if (Number.isFinite(occurredMs)) {
+      for (const item of items) {
+        const productId = usableString(item?.productId)
+        const quantity = usableAmount(item?.quantity)
+        if (!productId || quantity === undefined || quantity <= 0) continue
+        // categoryId is not part of OrderLineItem today; take it when a
+        // publisher sends one, and skip the category set when it is absent.
+        const rawCategory = (item as { categoryId?: unknown }).categoryId
+        salesLines.push({
+          productId,
+          categoryId:
+            typeof rawCategory === 'string' && KEY_ID.test(rawCategory) ? rawCategory : null,
+          quantity,
+        })
+      }
+      const merged = mergeLines(salesLines)
+      salesLines.length = 0
+      salesLines.push(...merged)
+      await recordSalesLines(tx, envelope.eventId, new Date(occurredMs), merged)
+    }
   })
+
+  // After the commit, and only for a freshly applied event: a duplicate or
+  // rejected delivery must not move the ranking. The sink never throws.
+  if (outcome === 'applied' && deps.rankings && salesLines.length > 0) {
+    await deps.rankings.recordOrder({
+      occurredAt: new Date(Date.parse(envelope.occurredAt)),
+      lines: salesLines,
+    })
+  }
 }
 
 export async function handleOrderConfirmed(

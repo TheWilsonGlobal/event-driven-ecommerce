@@ -279,3 +279,35 @@ export const badRequestSchema = {
   },
   required: ['error', 'message'],
 } as const
+
+/**
+ * Sales rankings. `source` says which store answered; `windowApplied` says what
+ * the numbers actually cover, which differs from `window` only for the global
+ * Postgres fallback (the all-time product_counters view).
+ */
+export const rankingResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    source: { type: 'string', enum: ['redis', 'postgres'] },
+    window: { type: 'string', enum: ['1h', '24h', '7d'] },
+    windowApplied: { type: 'string', enum: ['1h', '24h', '7d', 'all-time'] },
+    categoryId: { type: 'string' },
+    limit: { type: 'number' },
+    generatedAt: { type: 'string', format: 'date-time' },
+    products: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          rank: { type: 'number' },
+          productId: { type: 'string' },
+          unitsSold: { type: 'number' },
+        },
+        required: ['rank', 'productId', 'unitsSold'],
+      },
+    },
+  },
+  required: ['source', 'window', 'windowApplied', 'limit', 'generatedAt', 'products'],
+} as const

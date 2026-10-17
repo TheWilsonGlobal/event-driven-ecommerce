@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProductRecord } from '../../types'
 import { PRODUCT_SERVICE_URL, RUSTFS_BUCKET_URL } from '../../data/serviceUrls'
-import { apiFetch } from '../../data/apiFetch'
+import { ApiError, apiFetch, errorText, toApiError } from '../../data/apiFetch'
 
 export const DEFAULT_IMAGE_URL =
   'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'
@@ -52,15 +52,20 @@ export default function ImagePicker({ isOpen, editingProduct, imageUrl, onImageU
     setObjectsLoading(true)
     setObjectsError(null)
     apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      .then(async (res) => {
+        if (!res.ok) throw await toApiError(res)
         return res.json()
       })
       .then((data) => {
         if (!cancelled) setExistingObjects(data.objects ?? [])
       })
-      .catch(() => {
-        if (!cancelled) setObjectsError('Could not load existing images from RustFS.')
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setObjectsError(
+          err instanceof ApiError && err.statusCode === 403
+            ? errorText(err)
+            : 'Could not load existing images from RustFS.'
+        )
       })
       .finally(() => {
         if (!cancelled) setObjectsLoading(false)
@@ -89,8 +94,8 @@ export default function ImagePicker({ isOpen, editingProduct, imageUrl, onImageU
         method: 'POST',
         body,
       })
+      if (!res.ok) throw await toApiError(res)
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? `Upload failed (${res.status})`)
       onImageUrlChange(data.url as string)
       setExistingObjects((prev) => [
         {
@@ -103,7 +108,7 @@ export default function ImagePicker({ isOpen, editingProduct, imageUrl, onImageU
     } catch (err) {
       setUploadError(
         err instanceof Error
-          ? err.message
+          ? errorText(err)
           : 'Upload failed — is ms-product (port 5464) and RustFS running?'
       )
     } finally {

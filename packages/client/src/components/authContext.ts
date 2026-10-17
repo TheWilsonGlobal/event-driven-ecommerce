@@ -22,6 +22,8 @@ export interface AuthContextValue {
   configured: boolean
   loading: boolean
   user: { id: string; email: string } | null
+  /** ADMIN role (app_role claim) with aal2: may read /topology. UI hint only. */
+  isOps: boolean
   openAuthModal: (opts?: OpenAuthOptions) => void
   closeAuthModal: () => void
   signInWithPassword: (email: string, password: string) => Promise<AuthResult>
@@ -36,6 +38,7 @@ const defaultValue: AuthContextValue = {
   configured: false,
   loading: false,
   user: null,
+  isOps: false,
   openAuthModal: () => undefined,
   closeAuthModal: () => undefined,
   signInWithPassword: noop,

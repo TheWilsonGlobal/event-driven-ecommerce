@@ -129,6 +129,26 @@ describe('apiFetch', () => {
     expect(err.fields).toEqual([{ path: 'items.0.quantity', rule: 'maximum' }])
   })
 
+  it('reads message and code, not the HTTP reason in error', async () => {
+    mockSupabase(null)
+    fetchMock.mockResolvedValue(
+      res(403, { statusCode: 403, error: 'Forbidden', code: 'MFA_REQUIRED', message: 'Use MFA' })
+    )
+    const err = (await apiFetch('/x').catch((e) => e)) as ApiError
+    expect(err.message).toBe('Use MFA')
+    expect(err.code).toBe('MFA_REQUIRED')
+  })
+
+  it('falls back to error when message is absent, and to a generic text', async () => {
+    mockSupabase(null)
+    fetchMock.mockResolvedValueOnce(res(500, { error: 'Internal Server Error' }))
+    expect(((await apiFetch('/x').catch((e) => e)) as ApiError).message).toBe(
+      'Internal Server Error'
+    )
+    fetchMock.mockResolvedValueOnce(res(500, {}))
+    expect(((await apiFetch('/x').catch((e) => e)) as ApiError).message).toContain('status 500')
+  })
+
   it('surfaces 429 with the retry-after wait time', async () => {
     mockSupabase(null)
     fetchMock.mockResolvedValue(

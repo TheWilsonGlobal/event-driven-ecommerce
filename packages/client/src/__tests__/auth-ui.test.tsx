@@ -13,6 +13,7 @@ function ctx(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
     configured: true,
     loading: false,
     user: null,
+    isOps: false,
     openAuthModal: jest.fn(),
     closeAuthModal: jest.fn(),
     signInWithPassword: jest.fn().mockResolvedValue({ ok: true }),

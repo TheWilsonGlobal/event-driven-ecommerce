@@ -276,3 +276,46 @@ describe('content sniffer', () => {
     expect(verifyUpload('image/png', JPEG, ['image/png']).ok).toBe(false)
   })
 })
+
+describe('storage download ?format=json', () => {
+  it('returns { url, expiresIn } with no-store instead of a redirect', async () => {
+    const a = await app()
+    const t = await a.tokens()
+    const res = await a.server.inject({
+      url: '/api/v1/storage/download?key=products/a.png&format=json',
+      headers: bearer(t.VENDOR),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({
+      url: 'http://storage.test/signed/products/a.png',
+      expiresIn: 3600,
+    })
+    expect(res.headers['cache-control']).toBe('no-store')
+    expect(res.headers.location).toBeUndefined()
+  })
+
+  it('keeps the 302 default', async () => {
+    const a = await app()
+    const t = await a.tokens()
+    const res = await a.server.inject({
+      url: '/api/v1/storage/download?key=products/a.png',
+      headers: bearer(t.ADMIN_AAL1),
+    })
+    expect(res.statusCode).toBe(302)
+  })
+
+  it.each([
+    ['unknown format', 'key=products/a.png&format=xml'],
+    ['traversal key', 'key=products/..%2Fx&format=json'],
+    ['other prefix', 'key=secrets/a.png&format=json'],
+    ['extra param', 'key=products/a.png&format=json&x=1'],
+  ])('rejects %s with 400', async (_n, qs) => {
+    const a = await app()
+    const t = await a.tokens()
+    const res = await a.server.inject({
+      url: `/api/v1/storage/download?${qs}`,
+      headers: bearer(t.ADMIN_AAL1),
+    })
+    expect(res.statusCode).toBe(400)
+  })
+})

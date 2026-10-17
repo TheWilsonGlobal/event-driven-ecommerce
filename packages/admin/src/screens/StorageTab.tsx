@@ -6,7 +6,7 @@ import {
   RUSTFS_CONSOLE_ENDPOINT,
   RUSTFS_CONSOLE_PORT,
 } from '../data/serviceUrls'
-import { apiFetch } from '../data/apiFetch'
+import { ApiError, apiFetch, errorText, toApiError } from '../data/apiFetch'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const DEFAULT_PAGE_SIZE = 25
@@ -70,18 +70,26 @@ export default function StorageTab() {
   }
   const [allObjects, setAllObjects] = useState<StorageObject[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadObjects = useCallback(async () => {
     setLoading(true)
     try {
       const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) throw await toApiError(res)
       const data = await res.json()
       setAllObjects(data.objects ?? [])
-      setLoadError(false)
-    } catch {
-      setLoadError(true)
+      setLoadError(null)
+    } catch (err) {
+      setAllObjects([])
+      // 401/403/429 etc. carry a server message; only a network failure means "unreachable".
+      setLoadError(
+        err instanceof ApiError
+          ? err.statusCode === 403
+            ? `You do not have access to storage. ${errorText(err)}`
+            : errorText(err)
+          : 'Could not reach ms-product to list objects. Is it running?'
+      )
     } finally {
       setLoading(false)
     }
@@ -134,7 +142,7 @@ export default function StorageTab() {
       {loading ? (
         <EmptyState message="Loading objects from RustFS…" />
       ) : loadError ? (
-        <EmptyState message="Could not reach ms-product to list objects. Is it running?" />
+        <EmptyState message={loadError} />
       ) : objects.length === 0 ? (
         <EmptyState
           message={
