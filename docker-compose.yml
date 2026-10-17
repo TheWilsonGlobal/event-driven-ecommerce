@@ -52,8 +52,8 @@ services:
       DB_MODE: supabase
       RELATIONAL_DB_DRIVER: postgres
       DOCUMENT_DB_DRIVER: postgres
-      USER_DATABASE_URL: ${USER_DATABASE_URL:?set USER_DATABASE_URL in .env}
-      USER_DIRECT_URL: ${USER_DIRECT_URL:?set USER_DIRECT_URL in .env}
+      USER_DATABASE_URL: ${USER_DATABASE_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_user}
+      USER_DIRECT_URL: ${USER_DIRECT_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_user}
       DB_POOL_MAX: ${DB_POOL_MAX:-3}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -79,8 +79,8 @@ services:
       DB_MODE: supabase
       RELATIONAL_DB_DRIVER: postgres
       DOCUMENT_DB_DRIVER: postgres
-      PRODUCT_DATABASE_URL: ${PRODUCT_DATABASE_URL:?set PRODUCT_DATABASE_URL in .env}
-      PRODUCT_DIRECT_URL: ${PRODUCT_DIRECT_URL:?set PRODUCT_DIRECT_URL in .env}
+      PRODUCT_DATABASE_URL: ${PRODUCT_DATABASE_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_product}
+      PRODUCT_DIRECT_URL: ${PRODUCT_DIRECT_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_product}
       DB_POOL_MAX: ${DB_POOL_MAX:-3}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -106,8 +106,8 @@ services:
       DB_MODE: supabase
       RELATIONAL_DB_DRIVER: postgres
       DOCUMENT_DB_DRIVER: postgres
-      ORDER_DATABASE_URL: ${ORDER_DATABASE_URL:?set ORDER_DATABASE_URL in .env}
-      ORDER_DIRECT_URL: ${ORDER_DIRECT_URL:?set ORDER_DIRECT_URL in .env}
+      ORDER_DATABASE_URL: ${ORDER_DATABASE_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_order}
+      ORDER_DIRECT_URL: ${ORDER_DIRECT_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_order}
       DB_POOL_MAX: ${DB_POOL_MAX:-3}
       OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-500}
       OUTBOX_LEASE_MS: ${OUTBOX_LEASE_MS:-60000}
@@ -153,8 +153,8 @@ services:
       DB_MODE: supabase
       RELATIONAL_DB_DRIVER: postgres
       DOCUMENT_DB_DRIVER: postgres
-      INVENTORY_DATABASE_URL: ${INVENTORY_DATABASE_URL:?set INVENTORY_DATABASE_URL in .env}
-      INVENTORY_DIRECT_URL: ${INVENTORY_DIRECT_URL:?set INVENTORY_DIRECT_URL in .env}
+      INVENTORY_DATABASE_URL: ${INVENTORY_DATABASE_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_inventory}
+      INVENTORY_DIRECT_URL: ${INVENTORY_DIRECT_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_inventory}
       DB_POOL_MAX: ${DB_POOL_MAX:-3}
       OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-500}
       OUTBOX_LEASE_MS: ${OUTBOX_LEASE_MS:-60000}
@@ -182,8 +182,8 @@ services:
       DB_MODE: supabase
       RELATIONAL_DB_DRIVER: postgres
       DOCUMENT_DB_DRIVER: postgres
-      ANALYTICS_DATABASE_URL: ${ANALYTICS_DATABASE_URL:?set ANALYTICS_DATABASE_URL in .env}
-      ANALYTICS_DIRECT_URL: ${ANALYTICS_DIRECT_URL:?set ANALYTICS_DIRECT_URL in .env}
+      ANALYTICS_DATABASE_URL: ${ANALYTICS_DATABASE_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_analytics}
+      ANALYTICS_DIRECT_URL: ${ANALYTICS_DIRECT_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_analytics}
       DB_POOL_MAX: ${DB_POOL_MAX:-3}
     ports:
       - "5467:5467"

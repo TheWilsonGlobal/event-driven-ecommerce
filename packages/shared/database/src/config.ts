@@ -1,3 +1,4 @@
+import { applyServiceUrlDefaults } from './postgres'
 export type DatabaseMode = 'server' | 'embedded' | 'supabase'
 export type RelationalDriver = 'postgres' | 'sqlite'
 export type DocumentDriver = 'mongodb' | 'nedb' | 'postgres'
@@ -68,6 +69,9 @@ function parseKeyValueDriver(raw: string | undefined, fallback: KeyValueDriver):
 }
 
 export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): DatabaseConfiguration {
+  // Derive per-service Postgres URLs from SUPABASE_DB_URL before Prisma is constructed.
+  applyServiceUrlDefaults(env)
+
   const rawMode = env.DB_MODE?.toLowerCase()
   const mode: DatabaseMode =
     rawMode === 'embedded' ? 'embedded' : rawMode === 'supabase' ? 'supabase' : 'server'

@@ -2,7 +2,7 @@ import * as crypto from 'crypto'
 import * as dotenv from 'dotenv'
 import * as fs from 'fs'
 import * as path from 'path'
-import { closeServicePools, getServicePool } from '@ecommerce/shared-database'
+import { applyServiceUrlDefaults, closeServicePools, getServicePool } from '@ecommerce/shared-database'
 import { OutboxRelay, TOPICS, type EventEnvelope } from '@ecommerce/shared-messaging'
 import {
   MIGRATIONS_DIR,
@@ -35,6 +35,7 @@ import { handleOrderCancelled, handleOrderCreated, type HandlerDeps } from '../h
 dotenv.config({ path: path.resolve(__dirname, '../../../../../.env') })
 jest.setTimeout(60_000)
 
+applyServiceUrlDefaults(process.env)
 const HAS_DB = Boolean(process.env.INVENTORY_DATABASE_URL)
 const dbDescribe = HAS_DB ? describe : describe.skip
 

@@ -5,6 +5,7 @@ import * as path from 'path'
 import { Client } from 'pg'
 import fastify from 'fastify'
 import { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
+import { applyServiceUrlDefaults } from '@ecommerce/shared-database'
 import { registerOrderCreateRoute } from '../routes/ordersCreate'
 import { registerPaymentRoutes } from '../routes/payments'
 import { makeExpireOrderProcessor } from '../queues/workers'
@@ -24,6 +25,7 @@ import type { QueueManager } from '../queues'
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') })
 jest.setTimeout(120_000)
 
+applyServiceUrlDefaults(process.env)
 const BASE = process.env.ORDER_DATABASE_URL
 const dbDescribe = BASE ? describe : describe.skip
 const SCHEMA = `test_order_${crypto.randomBytes(6).toString('hex')}`

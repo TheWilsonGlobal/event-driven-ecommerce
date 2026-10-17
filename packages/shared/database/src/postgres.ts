@@ -41,12 +41,37 @@ export function parsePgUrl(raw: string): ParsedPgUrl {
   return { connectionString: url.toString(), schema }
 }
 
+/**
+ * Writes the connection base ONCE, as SUPABASE_DB_URL
+ * (`postgresql://user:encoded-password@host:5432`), and derives every service's
+ * `<SERVICE>_DATABASE_URL` / `<SERVICE>_DIRECT_URL` from it:
+ * `${SUPABASE_DB_URL}/postgres?schema=ms_<service>`.
+ *
+ * An explicit per-service value always wins, so one service can still point at
+ * the transaction pooler (or another database) without touching the rest.
+ * Fills `env` in place because Prisma reads its datasource URL straight from
+ * process.env when the client is constructed — this must therefore run before
+ * `new PrismaClient()` (loadDatabaseConfig calls it).
+ */
+export function applyServiceUrlDefaults(env: NodeJS.ProcessEnv = process.env): void {
+  const base = env.SUPABASE_DB_URL?.trim().replace(/\/+$/, '')
+  if (!base) return
+  const dbName = env.SUPABASE_DB_NAME?.trim() || 'postgres'
+  for (const service of Object.keys(SERVICE_SCHEMAS) as ServiceName[]) {
+    const prefix = service.toUpperCase()
+    const url = `${base}/${dbName}?schema=${SERVICE_SCHEMAS[service]}`
+    if (!env[`${prefix}_DATABASE_URL`]) env[`${prefix}_DATABASE_URL`] = url
+    if (!env[`${prefix}_DIRECT_URL`]) env[`${prefix}_DIRECT_URL`] = url
+  }
+}
+
 /** `USER_DATABASE_URL` / `ORDER_DIRECT_URL` etc. Throws rather than guessing. */
 export function resolveServiceUrl(
   service: ServiceName,
   kind: 'DATABASE' | 'DIRECT' = 'DATABASE',
   env: NodeJS.ProcessEnv = process.env
 ): string {
+  applyServiceUrlDefaults(env)
   const key = `${service.toUpperCase()}_${kind}_URL`
   let value = env[key]
   // DIRECT falls back to the runtime URL; a missing DATABASE url is an error.
@@ -54,7 +79,7 @@ export function resolveServiceUrl(
   if (!value || !/^postgres(ql)?:\/\//i.test(value)) {
     throw new Error(
       `${key} is missing or is not a postgres:// URL. ` +
-        `Set it in the repo-root .env — see .env.example (Supabase section).`
+        `Set SUPABASE_DB_URL (or this variable) in the repo-root .env — see .env.example (Supabase section).`
     )
   }
   return value

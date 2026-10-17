@@ -31,6 +31,10 @@ const { Pool } = require(
 
 jest.setTimeout(120_000)
 
+// Same derivation as shared-database's applyServiceUrlDefaults (messaging does not depend on it).
+if (!process.env.ORDER_DATABASE_URL && process.env.SUPABASE_DB_URL) {
+  process.env.ORDER_DATABASE_URL = `${process.env.SUPABASE_DB_URL.replace(/\/+$/, '')}/${process.env.SUPABASE_DB_NAME || 'postgres'}?schema=ms_order`
+}
 const URL_ENV = process.env.ORDER_DATABASE_URL
 const dbDescribe = URL_ENV ? describe : describe.skip
 const SCHEMA = `test_outbox_${crypto.randomBytes(6).toString('hex')}`

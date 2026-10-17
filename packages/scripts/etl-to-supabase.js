@@ -30,6 +30,18 @@ const dotenv = need('dotenv', [path.join(ROOT, 'packages/ms-order')])
 const { Client } = need('pg', [path.join(ROOT, 'packages/shared/database')])
 dotenv.config({ path: path.join(ROOT, '.env') })
 
+// Same derivation as shared-database's applyServiceUrlDefaults: the connection base is
+// written once (SUPABASE_DB_URL); explicit per-service values still win.
+if (process.env.SUPABASE_DB_URL) {
+  const base = process.env.SUPABASE_DB_URL.trim().replace(/\/+$/, '')
+  const db = process.env.SUPABASE_DB_NAME || 'postgres'
+  for (const s of ['user', 'order', 'product', 'inventory', 'analytics']) {
+    const url = `${base}/${db}?schema=ms_${s}`
+    process.env[`${s.toUpperCase()}_DATABASE_URL`] ||= url
+    process.env[`${s.toUpperCase()}_DIRECT_URL`] ||= url
+  }
+}
+
 const args = process.argv.slice(2)
 const APPLY = args.includes('--apply')
 const onlyArg = args.find((a) => a.startsWith('--only='))
