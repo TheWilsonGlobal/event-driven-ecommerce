@@ -1,8 +1,9 @@
 name: Build & Publish Containers
 
 on:
+  # Full build/publish only for a release (version tag) or a manual run.
+  # Plain commits get the CI Pipeline only.
   push:
-    branches: [main, master]
     tags:
       - 'v*.*.*'
   workflow_dispatch:
