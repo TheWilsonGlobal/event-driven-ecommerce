@@ -50,8 +50,23 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(2)
   }
   try {
-    const now = Math.floor(Date.now() / 1000)
-    console.log(`code: ${totp(secret, now)}  (valid for ${30 - (now % 30)}s)`)
+    const show = () => {
+      const now = Math.floor(Date.now() / 1000)
+      console.log(`code: ${totp(secret, now)}  (valid for ${30 - (now % 30)}s)`)
+    }
+    show()
+    // --watch: print a fresh code every time the window rolls over (Ctrl+C to stop), so the
+    // code is never already expired by the time you switch windows and type it.
+    if (process.argv.includes('--watch')) {
+      let last = Math.floor(Date.now() / 30000)
+      setInterval(() => {
+        const cur = Math.floor(Date.now() / 30000)
+        if (cur !== last) {
+          last = cur
+          show()
+        }
+      }, 500)
+    }
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err))
     process.exit(1)
