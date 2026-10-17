@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { UserRecord } from '../../types'
 import { USER_SERVICE_URL } from '../../data/serviceUrls'
 import { FETCH_ALL_LIMIT, mapUser } from './mappers'
+import { apiFetch, toApiError } from '../../data/apiFetch'
 
 export function useUsers(showToast: (msg: string) => void) {
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -21,7 +22,7 @@ export function useUsers(showToast: (msg: string) => void) {
     setUsersLoading(true)
     setUsersError(null)
     try {
-      const res = await fetch(`${USER_SERVICE_URL}/api/v1/users?page=1&limit=${FETCH_ALL_LIMIT}`)
+      const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users?page=1&limit=${FETCH_ALL_LIMIT}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setUsers((data.users ?? []).map(mapUser))
@@ -44,7 +45,8 @@ export function useUsers(showToast: (msg: string) => void) {
     const firstName = formData.get('firstName') as string
     const lastName = formData.get('lastName') as string
     const email = formData.get('email') as string
-    const role = formData.get('role') as 'ADMIN' | 'CUSTOMER' | 'VENDOR'
+    // A disabled <select> is absent from FormData; omit role rather than send null.
+    const role = (formData.get('role') ?? undefined) as 'ADMIN' | 'CUSTOMER' | 'VENDOR' | undefined
     const isActive = formData.get('isActive') === 'on'
     const addressLine1 = formData.get('addressLine1') as string
     const city = formData.get('city') as string
@@ -59,18 +61,17 @@ export function useUsers(showToast: (msg: string) => void) {
 
     try {
       if (editingUser) {
-        const res = await fetch(`${USER_SERVICE_URL}/api/v1/users/${editingUser.id}`, {
+        const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users/${editingUser.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ firstName, lastName, role, isActive }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.message ?? `HTTP ${res.status}`)
+          throw await toApiError(res)
         }
         showToast(`User ${firstName} updated!`)
       } else {
-        const res = await fetch(`${USER_SERVICE_URL}/api/v1/users`, {
+        const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -86,8 +87,7 @@ export function useUsers(showToast: (msg: string) => void) {
           }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.message ?? `HTTP ${res.status}`)
+          throw await toApiError(res)
         }
         showToast(`User ${firstName} created!`)
       }
@@ -100,10 +100,9 @@ export function useUsers(showToast: (msg: string) => void) {
   const handleDeleteUser = async (id: string) => {
     if (!confirm('Are you sure you want to delete this user?')) return
     try {
-      const res = await fetch(`${USER_SERVICE_URL}/api/v1/users/${id}`, { method: 'DELETE' })
+      const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users/${id}`, { method: 'DELETE' })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.message ?? `HTTP ${res.status}`)
+        throw await toApiError(res)
       }
       showToast('User deleted')
       await fetchUsers()
@@ -114,14 +113,13 @@ export function useUsers(showToast: (msg: string) => void) {
 
   const handleToggleUserStatus = async (user: UserRecord) => {
     try {
-      const res = await fetch(`${USER_SERVICE_URL}/api/v1/users/${user.id}`, {
+      const res = await apiFetch(`${USER_SERVICE_URL}/api/v1/users/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !user.isActive }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.message ?? `HTTP ${res.status}`)
+        throw await toApiError(res)
       }
       showToast(`User ${user.firstName} status toggled`)
       await fetchUsers()

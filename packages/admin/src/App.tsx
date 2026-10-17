@@ -33,6 +33,8 @@ import ConfigTab from './screens/ConfigTab'
 import { useCacheKeys, useMergedQueueData } from './hooks/useQueueData'
 import { useMergedEventData } from './hooks/useEventData'
 import { CLIENT_URL } from './data/serviceUrls'
+import { useAuth } from './auth/AuthContext'
+import { allowedTabs } from './auth/permissions'
 
 // Modals
 import ServiceModal from './modals/ServiceModal'
@@ -49,6 +51,9 @@ type NavEntry = {
 
 export default function App() {
   const app = useAdminApp()
+  const auth = useAuth()
+  const allowed = allowedTabs(auth.role)
+  const activeTab = allowed.includes(app.tab) ? app.tab : 'dashboard'
   const data = useEcommerceData(app.autoPolling, app.showToast)
   // Sidebar job-count badge: live, merged across every service with queues
   // (ms-order + ms-product), and omitted entirely (rather than faked) while
@@ -114,6 +119,8 @@ export default function App() {
       className={`nav-item${app.tab === key ? ' active' : ''}`}
       onClick={() => app.setTab(key)}
       title={label}
+      disabled={!allowed.includes(key)}
+      aria-current={app.tab === key ? 'page' : undefined}
     >
       <Icon />
       <span className="nav-label">{label}</span>
@@ -167,6 +174,25 @@ export default function App() {
         </nav>
 
         <div className="sidebar-footer">
+          <div className="identity">
+            <span className="identity-email" title={auth.email ?? undefined}>
+              {auth.email}
+            </span>
+            <div className="identity-badges">
+              <span className={`role-badge${auth.role === 'ADMIN' ? ' role-admin' : ''}`}>
+                {auth.role}
+              </span>
+              <span
+                className={`role-badge ${auth.aal === 'aal2' ? 'aal-ok' : 'aal-low'}`}
+                title="Authenticator assurance level"
+              >
+                {auth.aal}
+              </span>
+            </div>
+            <button className="btn btn-ghost btn-sidebar" onClick={() => void auth.signOut()}>
+              Sign out
+            </button>
+          </div>
           <div className="refresh-row">
             <div className={`refresh-dot${app.autoPolling ? '' : ' paused'}`} />
             <span>{app.autoPolling ? 'Auto-probe: 5s' : 'Paused'}</span>
@@ -196,7 +222,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className={`main-content${app.collapsed ? ' sidebar-collapsed' : ''}`}>
-        {app.tab === 'dashboard' && (
+        {activeTab === 'dashboard' && (
           <Dashboard
             services={data.services}
             orders={data.orders}
@@ -208,7 +234,7 @@ export default function App() {
           />
         )}
 
-        {app.tab === 'products' && (
+        {activeTab === 'products' && (
           <ProductsTab
             filteredProducts={data.filteredProducts}
             productSearch={data.productSearch}
@@ -227,7 +253,7 @@ export default function App() {
           />
         )}
 
-        {app.tab === 'orders' && (
+        {activeTab === 'orders' && (
           <OrdersTab
             filteredOrders={data.filteredOrders}
             orderSearch={data.orderSearch}
@@ -239,7 +265,7 @@ export default function App() {
           />
         )}
 
-        {app.tab === 'users' && (
+        {activeTab === 'users' && (
           <UsersTab
             filteredUsers={data.filteredUsers}
             userSearch={data.userSearch}
@@ -260,15 +286,15 @@ export default function App() {
           />
         )}
 
-        {app.tab === 'task-queues' && <TaskQueuesTab />}
+        {activeTab === 'task-queues' && <TaskQueuesTab />}
 
-        {app.tab === 'events' && <EventsTab />}
+        {activeTab === 'events' && <EventsTab />}
 
-        {app.tab === 'kv-keys' && <KvKeysTab />}
+        {activeTab === 'kv-keys' && <KvKeysTab />}
 
-        {app.tab === 'storage' && <StorageTab />}
+        {activeTab === 'storage' && <StorageTab />}
 
-        {app.tab === 'persistence' && (
+        {activeTab === 'persistence' && (
           <InfraTab
             rustfsHealth={data.rustfsHealth}
             onPingRustFS={data.pingRustFS}
@@ -277,7 +303,7 @@ export default function App() {
           />
         )}
 
-        {app.tab === 'config' && (
+        {activeTab === 'config' && (
           <ConfigTab
             services={data.services}
             lastScanned={data.lastScanned}

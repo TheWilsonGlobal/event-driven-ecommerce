@@ -93,10 +93,7 @@ export function DatabaseCards({
       >
         <ReadOnlyRow label="Storage Driver" value="PostgreSQL / Supabase (jsonb)" />
         <ReadOnlyRow label="Engine" value="PostgreSQL 17" />
-        <ReadOnlyRow
-          label="Connection URL"
-          value="Supabase Postgres, schema ms_product"
-        />
+        <ReadOnlyRow label="Connection URL" value="Supabase Postgres, schema ms_product" />
         <div className="config-row">
           <span className="k">Target Services</span>
           <span className="v" style={{ color: 'var(--blue-light)' }}>

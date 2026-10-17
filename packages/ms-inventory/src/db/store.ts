@@ -90,11 +90,21 @@ function toInventoryDoc(r: InventoryRow): InventoryDoc {
 
 // ─── Reads ─────────────────────────────────────────────────────────────────
 
-export async function listInventory(store: InventoryStore): Promise<InventoryDoc[]> {
+/** Optional window for the list views; omitted = every row (what the tests rely on). */
+export interface Page {
+  limit: number
+  offset: number
+}
+
+export async function listInventory(store: InventoryStore, page?: Page): Promise<InventoryDoc[]> {
+  // LIMIT NULL means "no limit" in Postgres, so one statement serves both cases
+  // and the bounds stay parameters, never interpolated text.
   const { rows } = await store.db.query(
     `SELECT product_id, sku, available, reserved, updated_at
        FROM ${store.schema}.inventory
-      ORDER BY product_id`
+      ORDER BY product_id
+      LIMIT $1 OFFSET $2`,
+    [page?.limit ?? null, page?.offset ?? 0]
   )
   return rows.map(toInventoryDoc)
 }
@@ -115,14 +125,16 @@ export async function getInventory(
 /** Newest first, optionally narrowed to one order. */
 export async function listReservations(
   store: InventoryStore,
-  orderId?: string
+  orderId?: string,
+  page?: Page
 ): Promise<ReservationDoc[]> {
   const { rows } = await store.db.query(
     `SELECT order_id, order_number, event_id, items, status, created_at, released_at
        FROM ${store.schema}.reservations
       WHERE ($1::text IS NULL OR order_id = $1)
-      ORDER BY created_at DESC, order_id`,
-    [orderId ?? null]
+      ORDER BY created_at DESC, order_id
+      LIMIT $2 OFFSET $3`,
+    [orderId ?? null, page?.limit ?? null, page?.offset ?? 0]
   )
   return rows.map((r) => ({
     orderId: r.order_id as string,

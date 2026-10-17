@@ -1,4 +1,7 @@
 import type { FastifyInstance } from 'fastify'
+import type { RoutePolicy } from '@ecommerce/shared-security'
+
+const OPS_POLICY: RoutePolicy = { permission: 'ops:read', mfa: true }
 
 // GET /api/v1/services — the gateway-reported health rollup.
 //
@@ -63,6 +66,8 @@ export function registerServicesRoute(server: FastifyInstance, upstreams: Upstre
   server.get(
     '/api/v1/services',
     {
+      // Probes five upstreams per call, so operator-only and the expensive tier.
+      config: { policy: OPS_POLICY, rateTier: 'expensive' },
       schema: {
         tags: ['services'],
         description:

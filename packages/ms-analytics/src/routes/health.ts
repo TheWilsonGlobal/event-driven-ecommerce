@@ -4,11 +4,72 @@ import type { DatabaseConfiguration } from '@ecommerce/shared-database'
 import { checkKafkaHealth } from '@ecommerce/shared-messaging'
 import type { EventConsumer } from '@ecommerce/shared-messaging'
 import { kafkaAdminClient, kafkaSettings } from '../events'
+import { getRejectedEventCount } from '../events/handlers'
 
 export interface HealthRouteDeps {
   dbConfig: DatabaseConfiguration
-  consumer: EventConsumer
+  consumer: Pick<EventConsumer, 'groupId' | 'topics' | 'isRunning'>
+  /** Overridable so tests need no database. */
+  probe?: () => ReturnType<typeof pgHealth>
 }
+
+// Closed on purpose: /health is public, so only these fields can ever leave.
+// The raw database error text (host names, driver messages) is logged, never sent.
+const healthResponseSchema = {
+  type: 'object',
+  properties: {
+    status: { type: 'string' },
+    service: { type: 'string' },
+    timestamp: { type: 'string', format: 'date-time' },
+    database: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string' },
+        driver: { type: 'string' },
+        reachable: { type: 'boolean' },
+        schema: { type: 'string' },
+        latencyMs: { type: 'number' },
+      },
+      additionalProperties: false,
+    },
+    // Read from a ~10s cache so a liveness probe never blocks on an
+    // unreachable broker -- the lesson ms-product learned when an
+    // uncached Elasticsearch probe took ~2.5s during an outage.
+    // `reachable:false` with `enabled:false` is a healthy default,
+    // not an outage.
+    events: {
+      type: 'object',
+      properties: {
+        enabled: { type: 'boolean' },
+        reachable: { type: 'boolean' },
+        brokers: { type: 'array', items: { type: 'string' } },
+        reason: { type: ['string', 'null'] },
+        cachedAgeMs: { type: 'number' },
+      },
+      additionalProperties: false,
+    },
+    // Whether the consume loop is actually running, separate from
+    // whether the broker is reachable: a reachable broker with a
+    // stopped consumer is the state where aggregates silently stop
+    // advancing while everything else looks fine.
+    consumer: {
+      type: 'object',
+      properties: {
+        groupId: { type: 'string' },
+        topics: { type: 'array', items: { type: 'string' } },
+        running: { type: 'boolean' },
+        rejectedEvents: {
+          type: 'number',
+          description:
+            'Events whose payload failed the shared schema since this process started. ' +
+            'They are recorded in the ledger and contribute nothing to any aggregate.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  additionalProperties: false,
+} as const
 
 /**
  * `GET /health`.
@@ -29,69 +90,26 @@ export interface HealthRouteDeps {
  */
 export function registerHealthRoutes(
   server: FastifyInstance,
-  { dbConfig, consumer }: HealthRouteDeps
+  { dbConfig, consumer, probe = () => pgHealth(getServicePool('analytics')) }: HealthRouteDeps
 ): void {
   server.get(
     '/health',
     {
+      config: { policy: { public: true } },
       schema: {
         tags: ['health'],
         description:
           'Service liveness/status check, including the document driver and the ' +
           'event-backbone reachability probe.',
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              service: { type: 'string' },
-              timestamp: { type: 'string', format: 'date-time' },
-              database: {
-                type: 'object',
-                properties: {
-                  mode: { type: 'string' },
-                  driver: { type: 'string' },
-                  reachable: { type: 'boolean' },
-                  schema: { type: 'string' },
-                  latencyMs: { type: 'number' },
-                  error: { type: 'string' },
-                },
-              },
-              // Read from a ~10s cache so a liveness probe never blocks on an
-              // unreachable broker -- the lesson ms-product learned when an
-              // uncached Elasticsearch probe took ~2.5s during an outage.
-              // `reachable:false` with `enabled:false` is a healthy default,
-              // not an outage.
-              events: {
-                type: 'object',
-                properties: {
-                  enabled: { type: 'boolean' },
-                  reachable: { type: 'boolean' },
-                  brokers: { type: 'array', items: { type: 'string' } },
-                  reason: { type: ['string', 'null'] },
-                  cachedAgeMs: { type: 'number' },
-                },
-              },
-              // Whether the consume loop is actually running, separate from
-              // whether the broker is reachable: a reachable broker with a
-              // stopped consumer is the state where aggregates silently stop
-              // advancing while everything else looks fine.
-              consumer: {
-                type: 'object',
-                properties: {
-                  groupId: { type: 'string' },
-                  topics: { type: 'array', items: { type: 'string' } },
-                  running: { type: 'boolean' },
-                },
-              },
-            },
-          },
-        },
+        response: { 200: healthResponseSchema, 503: healthResponseSchema },
       },
     },
-    async (_request, reply) => {
-      const pg = await pgHealth(getServicePool('analytics'))
-      if (!pg.reachable) void reply.code(503)
+    async (request, reply) => {
+      const pg = await probe()
+      if (!pg.reachable) {
+        void reply.code(503)
+        request.log.error({ dbError: pg.error }, 'health: database unreachable')
+      }
       return {
         status: pg.reachable ? 'ok' : 'unhealthy',
         service: 'ms-analytics',
@@ -102,7 +120,6 @@ export function registerHealthRoutes(
           reachable: pg.reachable,
           schema: pg.schema,
           ...(pg.latencyMs !== null ? { latencyMs: pg.latencyMs } : {}),
-          ...(pg.error ? { error: pg.error } : {}),
         },
         events: await checkKafkaHealth(
           kafkaAdminClient,
@@ -113,6 +130,7 @@ export function registerHealthRoutes(
           groupId: consumer.groupId,
           topics: consumer.topics,
           running: consumer.isRunning,
+          rejectedEvents: getRejectedEventCount(),
         },
       }
     }

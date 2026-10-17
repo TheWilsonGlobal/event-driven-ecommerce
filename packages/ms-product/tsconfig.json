@@ -10,6 +10,7 @@
     { "path": "../shared/types" },
     { "path": "../shared/utils" },
     { "path": "../shared/database" },
-    { "path": "../shared/messaging" }
+    { "path": "../shared/messaging" },
+    { "path": "../shared/security" }
   ]
 }

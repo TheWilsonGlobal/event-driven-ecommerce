@@ -7,6 +7,7 @@ import {
   LOKI_ENABLED,
   GRAFANA_URL,
 } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 export interface ObservabilityTarget {
   /** Whether this repo's own config even wants this backend used (the
@@ -26,7 +27,7 @@ async function probe(url: string): Promise<{ ok: boolean; latencyMs: number; err
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    const res = await fetch(url, { signal: controller.signal })
+    const res = await apiFetch(url, { signal: controller.signal })
     clearTimeout(timeoutId)
     return {
       ok: res.ok,

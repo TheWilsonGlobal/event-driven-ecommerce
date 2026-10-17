@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { closeServicePools } from '@ecommerce/shared-database'
 import type { EventConsumer, EventProducer, OutboxRelay } from '@ecommerce/shared-messaging'
+import type { SecurityHandle } from '@ecommerce/shared-security'
 import type { QueueManager } from './queues'
 
 export interface ShutdownDeps {
@@ -9,6 +10,7 @@ export interface ShutdownDeps {
   eventProducer: EventProducer
   eventConsumer: EventConsumer
   outboxRelay: OutboxRelay
+  security: SecurityHandle
 }
 
 /**
@@ -41,6 +43,7 @@ export function registerShutdownHandlers({
   eventProducer,
   eventConsumer,
   outboxRelay,
+  security,
 }: ShutdownDeps): void {
   let shuttingDown = false
 
@@ -50,6 +53,13 @@ export function registerShutdownHandlers({
     }
     shuttingDown = true
     console.log(`[Inventory Service] Received ${signal}, shutting down...`)
+
+    // The rate-limit Redis handle is only needed while requests are served.
+    try {
+      await security.close()
+    } catch (err) {
+      console.warn(`[Inventory Service] Error closing security handle: ${(err as Error).message}`)
+    }
 
     try {
       await outboxRelay.stop()

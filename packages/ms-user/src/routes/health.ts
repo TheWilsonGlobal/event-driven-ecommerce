@@ -14,18 +14,22 @@ export function registerHealthRoute(
   server.get(
     '/health',
     {
+      // Public and unmetered: load balancers and Docker probe it constantly.
+      config: { policy: { public: true }, rateTier: 'none' },
       schema: {
         tags: ['health'],
         description: 'Service liveness/status check, including database mode/driver.',
         response: {
           200: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               status: { type: 'string' },
               service: { type: 'string' },
               timestamp: { type: 'string', format: 'date-time' },
               database: {
                 type: 'object',
+                additionalProperties: false,
                 properties: {
                   mode: { type: 'string' },
                   driver: { type: 'string' },

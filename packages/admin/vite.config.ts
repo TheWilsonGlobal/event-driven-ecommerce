@@ -62,6 +62,11 @@ export default defineConfig(({ mode }) => {
     // from an optional GRAFANA_PORT here too, so setting it in this repo's
     // own .env (to match a customized infra-hub) still works.
     VITE_GRAFANA_URL: `http://${host}:${port('GRAFANA_PORT', '3005')}`,
+    // Supabase Auth. ONLY the project URL and the PUBLISHABLE key are exposed
+    // to the bundle. The secret key (and any service signing secret) lives in
+    // the same root .env but is deliberately never read in this file.
+    VITE_SUPABASE_URL: env.SUPABASE_URL || '',
+    VITE_SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY || '',
   })
 
   return {

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { isFetchError, type FetchError } from './useQueueData'
 import { ORDER_SERVICE_URL } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 /**
  * Persisting KAFKA_ENABLED, and being honest about what that achieves.
@@ -66,7 +67,7 @@ export function useKafkaConfig(): KafkaConfigResource {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     try {
-      const res = await fetch(CONFIG_URL, {
+      const res = await apiFetch(CONFIG_URL, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),

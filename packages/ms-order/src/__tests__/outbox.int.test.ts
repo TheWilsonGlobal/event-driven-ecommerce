@@ -60,7 +60,7 @@ const BODY = {
   customerEmail: 't@example.com',
   items: [{ productId: 'p1', sku: 'S1', title: 'Thing', unitPrice: 10, quantity: 2 }],
   shippingAddress: { addressLine1: '1 A', city: 'C', state: 'S', postalCode: '1', country: 'US' },
-  paymentMethod: 'card',
+  paymentMethod: 'STRIPE',
   subtotal: 20,
   totalAmount: 20,
 }

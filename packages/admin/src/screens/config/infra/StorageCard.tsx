@@ -8,6 +8,7 @@ import {
   RUSTFS_DATA_PATH,
   RUSTFS_PORT,
 } from '../../../data/serviceUrls'
+import { apiFetch } from '../../../data/apiFetch'
 
 interface StorageObject {
   sizeBytes: number
@@ -28,7 +29,7 @@ export function StorageCard({
 
   const loadObjectSummary = useCallback(async () => {
     try {
-      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
+      const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       const objects: StorageObject[] = data.objects ?? []

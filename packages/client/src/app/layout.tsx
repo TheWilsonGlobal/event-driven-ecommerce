@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import AuthProvider from '../components/AuthProvider'
 
 export const metadata: Metadata = {
   title: 'E-Commerce Microservices Platform',
@@ -15,7 +16,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <main className="min-h-screen">{children}</main>
+        <AuthProvider>
+          <main className="min-h-screen">{children}</main>
+        </AuthProvider>
       </body>
     </html>
   )

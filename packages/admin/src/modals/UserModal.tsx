@@ -1,4 +1,6 @@
 import type { UserRecord } from '../types'
+import { useAuth } from '../auth/AuthContext'
+import { canEditRoles } from '../auth/permissions'
 
 interface Props {
   isOpen: boolean
@@ -8,6 +10,8 @@ interface Props {
 }
 
 export default function UserModal({ isOpen, editingUser, onClose, onSave }: Props) {
+  const { role: myRole } = useAuth()
+  const mayEditRole = canEditRoles(myRole)
   if (!isOpen) return null
 
   return (
@@ -58,9 +62,12 @@ export default function UserModal({ isOpen, editingUser, onClose, onSave }: Prop
 
           <div className="form-row">
             <div className="form-group">
-              <label>Role</label>
+              <label htmlFor="user-role">Role</label>
               <select
+                id="user-role"
                 name="role"
+                disabled={!mayEditRole}
+                title={mayEditRole ? undefined : 'Only ADMIN can change roles'}
                 defaultValue={editingUser?.role ?? 'CUSTOMER'}
                 className="input-field"
               >
@@ -68,6 +75,7 @@ export default function UserModal({ isOpen, editingUser, onClose, onSave }: Prop
                 <option value="ADMIN">ADMIN</option>
                 <option value="VENDOR">VENDOR</option>
               </select>
+              {!mayEditRole && <span className="inline-denied">Only ADMIN can change roles.</span>}
             </div>
             <div className="form-group" style={{ justifyContent: 'center', paddingTop: 18 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>

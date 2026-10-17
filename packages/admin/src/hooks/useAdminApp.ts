@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import { NOTICE_EVENT } from '../auth/notices'
 import type { Tab } from '../types'
 
 export function useAdminApp() {
@@ -25,6 +26,14 @@ export function useAdminApp() {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3000)
   }, [])
+
+  // Notices raised outside React (apiFetch: rate limited, ...) arrive as a
+  // window event and reuse the same toast.
+  useEffect(() => {
+    const onNotice = (e: Event) => showToast(String((e as CustomEvent).detail))
+    window.addEventListener(NOTICE_EVENT, onNotice)
+    return () => window.removeEventListener(NOTICE_EVENT, onNotice)
+  }, [showToast])
 
   return {
     tab,

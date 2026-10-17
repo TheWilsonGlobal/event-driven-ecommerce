@@ -42,6 +42,8 @@ export const cacheKeysQuerystringSchema = {
     pattern: {
       type: 'string',
       maxLength: 200,
+      // Printable ASCII only: it is handed to Redis SCAN MATCH as a glob.
+      pattern: '^[\x20-\x7E]*$',
       default: '*',
       description: 'Redis glob passed to SCAN MATCH (e.g. "bull:order-expiration:*").',
     },

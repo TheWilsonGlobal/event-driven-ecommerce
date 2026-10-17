@@ -21,6 +21,7 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
   server.get(
     '/api/v1/queues',
     {
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['queues'],
         description:

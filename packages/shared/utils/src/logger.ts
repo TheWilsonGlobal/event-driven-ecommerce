@@ -109,6 +109,25 @@ export function probeLokiReachable(lokiHost: string, timeoutMs = 500): Promise<b
  * Returns a plain config object rather than a constructed logger so Fastify
  * owns the logger's lifecycle, as it did before Loki was introduced.
  */
+/**
+ * Paths whose VALUE must never reach a log line (console, file or Loki):
+ * bearer tokens, cookies and credentials. Pino replaces them with "[Redacted]".
+ * Audit lines record who and what, never these.
+ */
+export const LOG_REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-api-key"]',
+  'res.headers["set-cookie"]',
+  'req.body.password',
+  'req.body.newPassword',
+  'req.body.token',
+  'req.body.refreshToken',
+  '*.password',
+  '*.accessToken',
+  '*.refreshToken',
+]
+
 export function buildLoggerOptions(options: LoggerOptions): PinoLoggerConfig {
   const env = options.env ?? process.env
   const level = options.level ?? env.LOG_LEVEL ?? 'info'
@@ -148,11 +167,16 @@ export function buildLoggerOptions(options: LoggerOptions): PinoLoggerConfig {
   }
 
   if (!lokiEnabled) {
-    return { level, transport: { targets: [prettyTarget, fileTarget] } }
+    return {
+      level,
+      redact: { paths: LOG_REDACT_PATHS, censor: '[Redacted]' },
+      transport: { targets: [prettyTarget, fileTarget] },
+    }
   }
 
   return {
     level,
+    redact: { paths: LOG_REDACT_PATHS, censor: '[Redacted]' },
     transport: {
       // All targets receive every line. pino runs transports in a worker
       // thread, so a slow disk or unreachable Loki does not block request

@@ -10,6 +10,7 @@ import {
   ORDER_SERVICE_URL,
   ORDER_SERVICE_PORT,
 } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 // Each service serves GET /api/v1/endpoints, built from the routes it
 // actually registered (an onRoute hook, not the OpenAPI doc — see
@@ -54,7 +55,7 @@ async function fetchEndpoints(url: string): Promise<ApiEndpointsResponse> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    const res = await fetch(`${url}/api/v1/endpoints`, { signal: controller.signal })
+    const res = await apiFetch(`${url}/api/v1/endpoints`, { signal: controller.signal })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return (await res.json()) as ApiEndpointsResponse
   } finally {

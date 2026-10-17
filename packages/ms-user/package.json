@@ -15,9 +15,11 @@
     "prisma:generate": "node ../scripts/prisma-env.js generate",
     "migrate": "node ../scripts/prisma-env.js migrate deploy",
     "migrate:dev": "node ../scripts/prisma-env.js migrate dev",
-    "db:seed": "node ../scripts/prisma-env.js db seed"
+    "db:seed": "node ../scripts/prisma-env.js db seed",
+    "auth:sync": "ts-node scripts/sync-auth-users.ts"
   },
   "dependencies": {
+    "@ecommerce/shared-security": "workspace:*",
     "@ecommerce/shared-types": "workspace:*",
     "@ecommerce/shared-utils": "workspace:*",
     "@ecommerce/shared-database": "workspace:*",

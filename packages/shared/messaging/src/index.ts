@@ -98,6 +98,7 @@ export type {
   InventoryReleasedPayload,
   InventoryInsufficientPayload,
 } from './kafka/events'
+export { PAYLOAD_SCHEMAS, validatePayload, type PayloadValidation } from './kafka/payloadSchemas'
 export { EventProducer, type PublishInput, type TopicCounters } from './kafka/producer'
 export {
   EventConsumer,

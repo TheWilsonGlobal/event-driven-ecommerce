@@ -1,5 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { listLogFiles, readLogFile } from '@ecommerce/shared-utils'
+import type { RoutePolicy } from '@ecommerce/shared-security'
+
+// Log files can contain request metadata: operator-only, second factor required,
+// and the expensive tier because each call reads files from disk.
+const OPS_POLICY: RoutePolicy = { permission: 'ops:read', mfa: true }
 
 const SERVICE = 'gateway'
 
@@ -27,6 +32,7 @@ export function registerLogRoutes(server: FastifyInstance): void {
   server.get(
     '/api/v1/logs',
     {
+      config: { policy: OPS_POLICY, rateTier: 'expensive' },
       schema: {
         tags: ['logs'],
         description:
@@ -53,6 +59,7 @@ export function registerLogRoutes(server: FastifyInstance): void {
   server.get(
     '/api/v1/logs/:filename',
     {
+      config: { policy: OPS_POLICY, rateTier: 'expensive' },
       schema: {
         tags: ['logs'],
         description:

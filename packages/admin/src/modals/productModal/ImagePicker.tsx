@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProductRecord } from '../../types'
 import { PRODUCT_SERVICE_URL, RUSTFS_BUCKET_URL } from '../../data/serviceUrls'
+import { apiFetch } from '../../data/apiFetch'
 
 export const DEFAULT_IMAGE_URL =
   'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80'
@@ -50,7 +51,7 @@ export default function ImagePicker({ isOpen, editingProduct, imageUrl, onImageU
     let cancelled = false
     setObjectsLoading(true)
     setObjectsError(null)
-    fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
+    apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
@@ -84,7 +85,7 @@ export default function ImagePicker({ isOpen, editingProduct, imageUrl, onImageU
     try {
       const body = new FormData()
       body.append('image', file)
-      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/upload`, {
+      const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/products/upload`, {
         method: 'POST',
         body,
       })

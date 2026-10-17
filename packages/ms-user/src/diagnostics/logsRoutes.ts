@@ -5,6 +5,7 @@ const SERVICE = 'ms-user'
 
 const logFileSchema = {
   type: 'object',
+  additionalProperties: false,
   properties: {
     filename: { type: 'string' },
     service: { type: 'string' },
@@ -27,6 +28,8 @@ export function registerLogRoutes(server: FastifyInstance): void {
   server.get(
     '/api/v1/logs',
     {
+      // Log files can hold request metadata for every user: operator surface.
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['logs'],
         description:
@@ -35,6 +38,7 @@ export function registerLogRoutes(server: FastifyInstance): void {
         response: {
           200: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               files: { type: 'array', items: logFileSchema },
               total: { type: 'number' },
@@ -53,6 +57,7 @@ export function registerLogRoutes(server: FastifyInstance): void {
   server.get(
     '/api/v1/logs/:filename',
     {
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['logs'],
         description:
@@ -61,12 +66,14 @@ export function registerLogRoutes(server: FastifyInstance): void {
           '(`..`, `/`, `\\`) and any name not already on disk are rejected with 400/404.',
         params: {
           type: 'object',
-          properties: { filename: { type: 'string' } },
+          additionalProperties: false,
+          properties: { filename: { type: 'string', minLength: 1, maxLength: 255 } },
           required: ['filename'],
         },
         response: {
           200: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               filename: { type: 'string' },
               sizeBytes: { type: 'number' },
@@ -74,8 +81,16 @@ export function registerLogRoutes(server: FastifyInstance): void {
             },
             required: ['filename', 'sizeBytes', 'content'],
           },
-          400: { type: 'object', properties: { error: { type: 'string' } } },
-          404: { type: 'object', properties: { error: { type: 'string' } } },
+          400: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { error: { type: 'string' } },
+          },
+          404: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { error: { type: 'string' } },
+          },
         },
       },
     },

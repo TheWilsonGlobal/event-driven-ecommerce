@@ -1,4 +1,4 @@
-import type { EventContext, EventEnvelope } from '@ecommerce/shared-messaging'
+import { validatePayload, type EventContext, type EventEnvelope } from '@ecommerce/shared-messaging'
 import type {
   InventoryInsufficientPayload,
   OrderCancelledPayload,
@@ -54,6 +54,14 @@ import {
 
 const CONTRIBUTES_NOTHING = undefined
 
+/**
+ * Events whose payload failed the shared schema, since this process started.
+ * Process-lifetime like the consumer's own counters: a durable column would
+ * need a migration of the live ms_analytics schema, which this change avoids.
+ */
+let rejectedEvents = 0
+export const getRejectedEventCount = (): number => rejectedEvents
+
 export interface HandlerDeps {
   store: AnalyticsStore
   log: (message: string) => void
@@ -88,27 +96,42 @@ async function applyOnce(
   context: EventContext,
   apply: (tx: Tx) => Promise<void>
 ): Promise<void> {
-  const duplicate = await store.transaction(async (tx) => {
-    const claimed = await claimEvent(tx, {
-      id: envelope.eventId,
-      eventType: envelope.eventType,
-      occurredAt: envelope.occurredAt,
-      topic: context.topic,
-      partition: context.partition,
-      offset: context.offset,
-    })
+  const outcome = await store.transaction(
+    async (tx): Promise<'duplicate' | 'rejected' | 'applied'> => {
+      const claimed = await claimEvent(tx, {
+        id: envelope.eventId,
+        eventType: envelope.eventType,
+        occurredAt: envelope.occurredAt,
+        topic: context.topic,
+        partition: context.partition,
+        offset: context.offset,
+      })
 
-    if (!claimed) {
-      await recordDuplicate(tx)
-      return true
+      if (!claimed) {
+        await recordDuplicate(tx)
+        return 'duplicate'
+      }
+
+      // Plan 4.4: a payload that breaks the shared contract is claimed (so a
+      // redelivery is a plain duplicate, never reprocessed) but contributes to NO
+      // aggregate and is not counted as progress. Retrying could never fix it.
+      const valid = validatePayload(envelope.eventType, envelope.payload)
+      if (!valid.ok) {
+        rejectedEvents += 1
+        log(
+          `Rejected malformed ${envelope.eventType} (eventId=${envelope.eventId}) at ` +
+            `${context.topic}[${context.partition}]@${context.offset}: ${valid.reason}`
+        )
+        return 'rejected'
+      }
+
+      await apply(tx)
+      await recordProgress(tx, envelope.occurredAt)
+      return 'applied'
     }
+  )
 
-    await apply(tx)
-    await recordProgress(tx, envelope.occurredAt)
-    return false
-  })
-
-  if (duplicate) {
+  if (outcome === 'duplicate') {
     log(
       `Skipped duplicate ${envelope.eventType} (eventId=${envelope.eventId}) ` +
         `redelivered at ${context.topic}[${context.partition}]@${context.offset}`

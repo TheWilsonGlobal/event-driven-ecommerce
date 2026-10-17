@@ -103,6 +103,7 @@ export function registerSchemaRoutes(server: FastifyInstance, prisma: PrismaClie
   server.get(
     '/api/v1/schema',
     {
+      config: { policy: { permission: 'ops:read', mfa: true } },
       schema: {
         tags: ['schema'],
         description:

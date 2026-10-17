@@ -1,11 +1,14 @@
 import type { FastifyInstance } from 'fastify'
 import type { DocumentDatabaseAdapter } from '@ecommerce/shared-database'
 import type { CategoryDoc } from '../types'
+import { CategoryResponse } from '../schemas'
 
 interface CategoryRouteDeps {
   categoriesStore: DocumentDatabaseAdapter<CategoryDoc>
 }
 
+// There is no category write endpoint today. When one is added it takes
+// `policy: { permission: 'categories:write' }` (ADMIN only, see rbac/roles.ts).
 export function registerCategoryRoutes(
   server: FastifyInstance,
   { categoriesStore }: CategoryRouteDeps
@@ -13,31 +16,11 @@ export function registerCategoryRoutes(
   server.get(
     '/api/v1/categories',
     {
+      config: { policy: { public: true }, rateTier: 'read' },
       schema: {
         tags: ['categories'],
         description: 'List product categories.',
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              categories: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  additionalProperties: true,
-                  properties: {
-                    id: { type: 'string' },
-                    name: { type: 'string' },
-                    slug: { type: 'string' },
-                    icon: { type: 'string' },
-                    description: { type: 'string' },
-                    productCount: { type: 'number' },
-                  },
-                },
-              },
-            },
-          },
-        },
+        response: { 200: CategoryResponse },
       },
     },
     async () => {

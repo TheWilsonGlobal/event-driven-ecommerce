@@ -103,6 +103,8 @@ export function registerSchemaRoutes(server: FastifyInstance, prisma: PrismaClie
   server.get(
     '/api/v1/schema',
     {
+      // Table names, columns and row counts: operator surface.
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['schema'],
         description:
@@ -112,11 +114,13 @@ export function registerSchemaRoutes(server: FastifyInstance, prisma: PrismaClie
         response: {
           200: {
             type: 'object',
+            additionalProperties: false,
             properties: {
               tables: {
                 type: 'array',
                 items: {
                   type: 'object',
+                  additionalProperties: false,
                   properties: {
                     name: { type: 'string' },
                     service: { type: 'string' },
@@ -126,6 +130,7 @@ export function registerSchemaRoutes(server: FastifyInstance, prisma: PrismaClie
                       type: 'array',
                       items: {
                         type: 'object',
+                        additionalProperties: false,
                         properties: {
                           name: { type: 'string' },
                           type: { type: 'string' },
@@ -150,6 +155,7 @@ export function registerSchemaRoutes(server: FastifyInstance, prisma: PrismaClie
                       type: 'array',
                       items: {
                         type: 'object',
+                        additionalProperties: false,
                         properties: {
                           name: { type: 'string' },
                           definition: { type: 'string' },
@@ -163,6 +169,7 @@ export function registerSchemaRoutes(server: FastifyInstance, prisma: PrismaClie
               },
               summary: {
                 type: 'object',
+                additionalProperties: false,
                 properties: {
                   tableCount: { type: 'number' },
                   columnCount: { type: 'number' },

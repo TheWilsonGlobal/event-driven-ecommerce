@@ -20,6 +20,13 @@ services:
       dockerfile: packages/gateway/Dockerfile
     container_name: ecommerce-api-gateway
     environment:
+      # API defense (change-05). Values come from the repo-root .env via interpolation.
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env}
+      AUTH_ENFORCE: ${AUTH_ENFORCE:-report}
+      RATE_LIMIT_ENFORCE: ${RATE_LIMIT_ENFORCE:-report}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?set SERVICE_AUTH_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5461,http://localhost:5462}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: development
       PORT: 5460
       REDIS_HOST: redis
@@ -45,6 +52,13 @@ services:
       dockerfile: packages/ms-user/Dockerfile
     container_name: ecommerce-user-service
     environment:
+      # API defense (change-05). Values come from the repo-root .env via interpolation.
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env}
+      AUTH_ENFORCE: ${AUTH_ENFORCE:-report}
+      RATE_LIMIT_ENFORCE: ${RATE_LIMIT_ENFORCE:-report}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?set SERVICE_AUTH_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5461,http://localhost:5462}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: development
       PORT: 5463
       # Single Supabase Postgres, one schema per service (change-03-db-upgrade).
@@ -57,9 +71,8 @@ services:
       DB_POOL_MAX: ${DB_POOL_MAX:-3}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      JWT_SECRET: your-super-secret-jwt-key
     ports:
-      - "5463:5463"
+      - "127.0.0.1:5463:5463"
     networks:
       - infra-network
     volumes:
@@ -72,6 +85,13 @@ services:
       dockerfile: packages/ms-product/Dockerfile
     container_name: ecommerce-product-service
     environment:
+      # API defense (change-05). Values come from the repo-root .env via interpolation.
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env}
+      AUTH_ENFORCE: ${AUTH_ENFORCE:-report}
+      RATE_LIMIT_ENFORCE: ${RATE_LIMIT_ENFORCE:-report}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?set SERVICE_AUTH_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5461,http://localhost:5462}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: development
       PORT: 5464
       # Single Supabase Postgres, one schema per service (change-03-db-upgrade).
@@ -86,7 +106,7 @@ services:
       REDIS_PORT: 6379
       ELASTICSEARCH_HOST: http://elasticsearch:9200
     ports:
-      - "5464:5464"
+      - "127.0.0.1:5464:5464"
     networks:
       - infra-network
     volumes:
@@ -99,6 +119,13 @@ services:
       dockerfile: packages/ms-order/Dockerfile
     container_name: ecommerce-order-service
     environment:
+      # API defense (change-05). Values come from the repo-root .env via interpolation.
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env}
+      AUTH_ENFORCE: ${AUTH_ENFORCE:-report}
+      RATE_LIMIT_ENFORCE: ${RATE_LIMIT_ENFORCE:-report}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?set SERVICE_AUTH_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5461,http://localhost:5462}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: development
       PORT: 5465
       # Single Supabase Postgres, one schema per service (change-03-db-upgrade).
@@ -114,9 +141,11 @@ services:
       OUTBOX_SEND_TIMEOUT_MS: ${OUTBOX_SEND_TIMEOUT_MS:-10000}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      STRIPE_SECRET_KEY: sk_test_your-stripe-secret-key
+      # ms-order stages events in its outbox and relays them to Kafka; it must reach the broker.
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKERS: redpanda:29092
     ports:
-      - "5465:5465"
+      - "127.0.0.1:5465:5465"
     networks:
       - infra-network
     volumes:
@@ -142,6 +171,13 @@ services:
       dockerfile: packages/ms-inventory/Dockerfile
     container_name: ecommerce-inventory-service
     environment:
+      # API defense (change-05). Values come from the repo-root .env via interpolation.
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env}
+      AUTH_ENFORCE: ${AUTH_ENFORCE:-report}
+      RATE_LIMIT_ENFORCE: ${RATE_LIMIT_ENFORCE:-report}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?set SERVICE_AUTH_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5461,http://localhost:5462}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: development
       INVENTORY_SERVICE_PORT: 5466
       REDIS_HOST: redis
@@ -160,7 +196,7 @@ services:
       OUTBOX_LEASE_MS: ${OUTBOX_LEASE_MS:-60000}
       OUTBOX_SEND_TIMEOUT_MS: ${OUTBOX_SEND_TIMEOUT_MS:-10000}
     ports:
-      - "5466:5466"
+      - "127.0.0.1:5466:5466"
     networks:
       - infra-network
     volumes:
@@ -173,6 +209,13 @@ services:
       dockerfile: packages/ms-analytics/Dockerfile
     container_name: ecommerce-analytics-service
     environment:
+      # API defense (change-05). Values come from the repo-root .env via interpolation.
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env}
+      AUTH_ENFORCE: ${AUTH_ENFORCE:-report}
+      RATE_LIMIT_ENFORCE: ${RATE_LIMIT_ENFORCE:-report}
+      SERVICE_AUTH_SECRET: ${SERVICE_AUTH_SECRET:?set SERVICE_AUTH_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5461,http://localhost:5462}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       NODE_ENV: development
       ANALYTICS_SERVICE_PORT: 5467
       KAFKA_ENABLED: "true"
@@ -186,7 +229,7 @@ services:
       ANALYTICS_DIRECT_URL: ${ANALYTICS_DIRECT_URL:-${SUPABASE_DB_URL:?set SUPABASE_DB_URL in .env}/postgres?schema=ms_analytics}
       DB_POOL_MAX: ${DB_POOL_MAX:-3}
     ports:
-      - "5467:5467"
+      - "127.0.0.1:5467:5467"
     networks:
       - infra-network
     volumes:
@@ -201,6 +244,9 @@ services:
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_URL: http://localhost:5460
+      # Only the project URL and the PUBLISHABLE key reach the browser; never the secret key.
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL in .env}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?set SUPABASE_PUBLISHABLE_KEY in .env}
     ports:
       - "5462:5462"
     depends_on:

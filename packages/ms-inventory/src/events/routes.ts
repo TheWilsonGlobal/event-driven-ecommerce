@@ -101,6 +101,7 @@ export function registerEventRoutes(server: FastifyInstance, consumer: EventCons
   server.get(
     '/api/v1/events',
     {
+      config: { policy: { permission: 'ops:read', mfa: true } },
       schema: {
         tags: ['events'],
         description:

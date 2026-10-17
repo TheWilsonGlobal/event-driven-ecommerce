@@ -1,0 +1,128 @@
+/* ── Auth screens (sign-in, MFA, access denied) ───────────────────────── */
+.auth-page,
+.auth-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.auth-page {
+  min-height: 100vh;
+}
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: blur(4px);
+}
+.auth-card {
+  width: 400px;
+  max-width: 95vw;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+.auth-brand {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+.auth-brand span {
+  color: var(--blue-light);
+}
+.auth-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 13px;
+}
+.auth-note {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.auth-error {
+  font-size: 12px;
+  color: var(--red-light);
+  min-height: 1.2em;
+}
+.auth-actions {
+  display: flex;
+  gap: 8px;
+}
+.auth-qr {
+  align-self: center;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px;
+}
+.auth-card :focus-visible,
+.header-bar :focus-visible,
+.nav-item:focus-visible {
+  outline: 2px solid var(--blue-light);
+  outline-offset: 2px;
+}
+.nav-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Signed-in identity strip in the sidebar footer. */
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 12px 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.identity-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-bright);
+}
+.identity-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.role-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--blue-border);
+  background: var(--blue-bg);
+  color: var(--blue-light);
+}
+.role-badge.role-admin {
+  border-color: var(--purple-border);
+  background: var(--purple-bg);
+  color: var(--purple);
+}
+.role-badge.aal-ok {
+  border-color: var(--green-border);
+  background: var(--green-bg);
+  color: var(--green-light);
+}
+.role-badge.aal-low {
+  border-color: var(--amber-border);
+  background: var(--amber-bg);
+  color: var(--amber-light);
+}
+.inline-denied {
+  font-size: 12px;
+  color: var(--amber-light);
+}

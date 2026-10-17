@@ -10,7 +10,7 @@ import * as path from 'path'
 import { PrismaClient } from '../node_modules/.prisma-ms-order/client'
 import { createKeyValueStore, loadDatabaseConfig } from '@ecommerce/shared-database'
 import { seedOrdersIfEmpty } from './seedOrders'
-import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS, redisEnabled } from './queues'
+import { QueueManager, QUEUE_DEFINITIONS, redisEnabled, redisSettings } from './queues'
 import {
   registerMetrics,
   buildLoggerOptions,
@@ -18,21 +18,20 @@ import {
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
-import { registerSchemaRoutes, registerLogRoutes } from './diagnostics'
 import { registerSwagger } from './bootstrap/swagger'
-import { registerOrderRoutes } from './routes/orders'
-import { registerPaymentRoutes } from './routes/payments'
-import { registerCartRoutes } from './routes/cart'
+import { registerServiceRoutes } from './routes'
 import { registerShutdownHandlers } from './shutdown'
-import { createOrderRelay, registerOutboxRoutes } from './outbox'
-import { checkKafkaHealth, registerKafkaMetrics } from '@ecommerce/shared-messaging'
 import {
-  eventProducer,
-  kafkaAdminClient,
-  kafkaSettings,
-  registerEventRoutes,
-  stageOrderCancelled,
-} from './events'
+  assertPolicyCoverage,
+  securityServerOptions,
+  type SecurityHandle,
+} from '@ecommerce/shared-security'
+import { registerOrderSecurity } from './security'
+import { createProductClientFromEnv } from './pricing/ProductClient'
+import { parsePriceCheckMode, type PriceVerifier } from './pricing/PriceVerifier'
+import { createOrderRelay } from './outbox'
+import { registerKafkaMetrics } from '@ecommerce/shared-messaging'
+import { eventProducer, kafkaAdminClient, kafkaSettings, stageOrderCancelled } from './events'
 
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.ORDER_SERVICE_PORT || '5465', 10)
@@ -67,6 +66,7 @@ const queueManager = new QueueManager(prisma, redisEnabled, kvStore)
 // constructed — an unreachable Loki then produces one quiet line here
 // instead of a stack trace per log line for the life of the process.
 let server: FastifyInstance
+let security: SecurityHandle
 
 async function bootstrap() {
   const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
@@ -74,7 +74,16 @@ async function bootstrap() {
     process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
 
   server = fastify({
+    ...securityServerOptions(),
     logger: buildLoggerOptions({ service: 'ms-order', lokiReachable }),
+  })
+
+  // FIRST, before any plugin or route: the policy hook only sees routes
+  // registered after it, and the strict validator / error handler must be in
+  // place for every route. Redis backs the rate limiter only when the KV driver
+  // is Redis; otherwise a per-process store is used (not shared across replicas).
+  security = await registerOrderSecurity(server, {
+    redis: redisEnabled ? redisSettings : null,
   })
 
   await seedOrdersIfEmpty(prisma)
@@ -97,98 +106,38 @@ async function bootstrap() {
   // registered after this hook is attached.
   const routeRegistry = createRouteRegistry(server)
 
-  await server.register(cors, { origin: '*' })
+  // An allow-list from CORS_ORIGINS; empty means no cross-origin access at all
+  // (never '*'). Bearer tokens travel in a header, so no credentials mode.
+  await server.register(cors, {
+    origin: security.config.corsOrigins.length > 0 ? security.config.corsOrigins : false,
+    allowedHeaders: ['Authorization', 'Content-Type', 'Idempotency-Key'],
+    exposedHeaders: [
+      'Retry-After',
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'Idempotent-Replay',
+    ],
+  })
   await server.register(helmet)
 
   await registerSwagger(server, PORT)
 
-  server.get(
-    '/health',
-    {
-      schema: {
-        tags: ['health'],
-        description: 'Service liveness/status check, including database/queue driver.',
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              service: { type: 'string' },
-              timestamp: { type: 'string', format: 'date-time' },
-              database: {
-                type: 'object',
-                properties: {
-                  mode: { type: 'string' },
-                  driver: { type: 'string' },
-                  queue: { type: 'string' },
-                  reachable: { type: 'boolean' },
-                  latencyMs: { type: ['number', 'null'] },
-                  error: { type: 'string' },
-                },
-              },
-              // Read from a ~10s cache so a liveness probe never blocks on an
-              // unreachable broker -- the lesson ms-product learned when an
-              // uncached Elasticsearch probe took ~2.5s during an outage.
-              // `reachable:false` with `enabled:false` is a healthy default,
-              // not an outage.
-              events: {
-                type: 'object',
-                properties: {
-                  enabled: { type: 'boolean' },
-                  reachable: { type: 'boolean' },
-                  brokers: { type: 'array', items: { type: 'string' } },
-                  reason: { type: ['string', 'null'] },
-                  cachedAgeMs: { type: 'number' },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    async (_request, reply) => {
-      // A real round trip: reachability is never inferred from configuration.
-      const dbStarted = Date.now()
-      let dbReachable = true
-      let dbError: string | undefined
-      try {
-        await prisma.$queryRaw`SELECT 1`
-      } catch (err) {
-        dbReachable = false
-        dbError = err instanceof Error ? err.message.trim().split('\n').pop() : String(err)
-      }
-      if (!dbReachable) reply.status(503)
-      return {
-        status: dbReachable ? 'ok' : 'unhealthy',
-        service: 'ms-order',
-        timestamp: new Date().toISOString(),
-        database: {
-          mode: dbConfig.mode,
-          driver: dbConfig.relational.driver,
-          queue: dbConfig.keyValue.driver,
-          reachable: dbReachable,
-          latencyMs: dbReachable ? Date.now() - dbStarted : null,
-          ...(dbError ? { error: dbError } : {}),
-        },
-        events: await checkKafkaHealth(
-          kafkaAdminClient,
-          kafkaSettings.brokers,
-          kafkaSettings.enabled
-        ),
-      }
-    }
-  )
+  // PRICE_CHECK=report (default) logs a catalogue mismatch and accepts the order;
+  // enforce rejects it (422) and answers 503 while ms-product is unreachable.
+  const priceVerifier: PriceVerifier = {
+    mode: parsePriceCheckMode(process.env.PRICE_CHECK),
+    client: createProductClientFromEnv(),
+  }
+  server.log.info({ priceCheck: priceVerifier.mode }, 'order price verification mode')
 
-  registerOrderRoutes(server, { prisma, queueManager })
-  registerPaymentRoutes(server, { prisma, queueManager })
-
-  registerQueueRoutes(server, queueManager)
-  registerEventRoutes(server, { repoRoot: REPO_ROOT })
-  registerOutboxRoutes(server, outboxRelay)
-  registerSchemaRoutes(server, prisma)
-  registerLogRoutes(server)
-
-  registerCartRoutes(server)
+  registerServiceRoutes(server, {
+    prisma,
+    queueManager,
+    priceVerifier,
+    outboxRelay,
+    dbConfig,
+    repoRoot: REPO_ROOT,
+  })
 
   try {
     const seededCount = await seedOrdersIfEmpty(prisma)
@@ -237,7 +186,20 @@ async function bootstrap() {
 
   registerEndpointsRoute(server, routeRegistry, 'ms-order')
 
-  registerShutdownHandlers({ server, queueManager, kvStore, prisma, eventProducer, outboxRelay })
+  // Default deny, checked at boot outside production: a route someone adds
+  // without a policy stops the service from starting instead of silently
+  // answering 403 (or, in report mode, 200) to everyone.
+  if (!security.config.production) assertPolicyCoverage(server)
+
+  registerShutdownHandlers({
+    server,
+    queueManager,
+    kvStore,
+    prisma,
+    eventProducer,
+    outboxRelay,
+    security,
+  })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

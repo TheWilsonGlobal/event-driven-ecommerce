@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import React from 'react'
+import { useAuth } from './AuthProvider'
 
 interface StorefrontHeaderProps {
   searchQuery: string
@@ -15,6 +16,7 @@ export default function StorefrontHeader({
   totalCartCount,
   onOpenCart,
 }: StorefrontHeaderProps) {
+  const { user, loading, configured, openAuthModal, signOut } = useAuth()
   return (
     <>
       {/* Top Banner */}
@@ -79,6 +81,35 @@ export default function StorefrontHeader({
             >
               <span>⚙️ Admin Portal</span>
             </a>
+
+            {user ? (
+              <div className="flex items-center gap-2 text-xs">
+                <span
+                  className="hidden sm:inline max-w-[10rem] truncate font-semibold text-slate-700"
+                  title={user.email}
+                >
+                  {user.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void signOut()}
+                  className="font-semibold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-200 transition focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              configured &&
+              !loading && (
+                <button
+                  type="button"
+                  onClick={() => openAuthModal()}
+                  className="text-xs font-semibold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-200 transition focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  Sign in
+                </button>
+              )
+            )}
 
             <button
               onClick={onOpenCart}

@@ -8,12 +8,7 @@ import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
-import {
-  getServicePool,
-  loadDatabaseConfig,
-  pgHealth,
-  runMigrations,
-} from '@ecommerce/shared-database'
+import { loadDatabaseConfig, runMigrations } from '@ecommerce/shared-database'
 import {
   registerMetrics,
   buildLoggerOptions,
@@ -21,25 +16,20 @@ import {
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
-import {
-  checkKafkaHealth,
-  describeError,
-  registerKafkaMetrics,
-  type KafkaHealth,
-} from '@ecommerce/shared-messaging'
+import { describeError, registerKafkaMetrics } from '@ecommerce/shared-messaging'
 import { MIGRATIONS_DIR, createInventoryStore } from './db/store'
-import { createInventoryOutboxRelay, registerOutboxRoutes } from './outbox'
-import { registerInventoryRoutes } from './routes/inventory'
+import { createInventoryOutboxRelay } from './outbox'
+import { registerServiceRoutes } from './routes'
 import { seedInventoryIfMissing } from './seed'
-import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS } from './queues'
-import {
-  createInventoryConsumer,
-  registerEventRoutes,
-  eventProducer,
-  kafkaAdminClient,
-  kafkaSettings,
-} from './events'
+import { QueueManager, QUEUE_DEFINITIONS } from './queues'
+import { createInventoryConsumer, eventProducer, kafkaAdminClient, kafkaSettings } from './events'
 import { registerShutdownHandlers } from './shutdown'
+import {
+  assertPolicyCoverage,
+  securityServerOptions,
+  type SecurityHandle,
+} from '@ecommerce/shared-security'
+import { registerInventorySecurity } from './security'
 
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.INVENTORY_SERVICE_PORT || '5466', 10)
@@ -76,60 +66,8 @@ const queueManager = new QueueManager()
 // consumer.
 const eventConsumer = createInventoryConsumer({ store, queueManager })
 
-/**
- * Ceiling on how long /health will wait for a Kafka reading.
- *
- * Slightly above the client's 3s connectionTimeout, so a broker that is merely
- * slow still gets to answer and produce a real cached reading.
- */
-const HEALTH_PROBE_BUDGET_MS = 4000
-
-/**
- * checkKafkaHealth with a hard deadline.
- *
- * The shared helper caches for ~10s and collapses concurrent probes, which is
- * what keeps a steady-state /health fast. What it does not do is bound the
- * FIRST probe: it awaits admin.connect(), and createKafkaClient configures
- * effectively infinite retries (`retries: MAX_SAFE_INTEGER`) so that the
- * service self-heals when the broker returns. Against a broker that is down,
- * that connect neither resolves nor rejects — measured still-pending at 20s —
- * so the first /health after boot would hang indefinitely.
- *
- * That is precisely the failure ms-product's Elasticsearch incident warns
- * about, in its worst form: a liveness probe blocking makes a
- * degraded-but-serving service look dead to whatever is probing it. So the
- * probe races a timer, and losing the race reports `reachable: false` with
- * reason `kafka_timeout` — which is the honest reading. It is NOT claimed as a
- * measured success, and the underlying probe is left running so its result
- * populates the shared cache for the next call.
- */
-async function kafkaHealthBounded(): Promise<KafkaHealth> {
-  const fallback: KafkaHealth = {
-    enabled: kafkaSettings.enabled,
-    reachable: false,
-    brokers: kafkaSettings.brokers,
-    reason: 'kafka_timeout',
-    cachedAgeMs: 0,
-  }
-
-  let timer: NodeJS.Timeout | undefined
-  try {
-    return await Promise.race([
-      checkKafkaHealth(kafkaAdminClient, kafkaSettings.brokers, kafkaSettings.enabled),
-      new Promise<KafkaHealth>((resolve) => {
-        timer = setTimeout(() => resolve(fallback), HEALTH_PROBE_BUDGET_MS)
-      }),
-    ])
-  } finally {
-    // Otherwise the pending timer keeps the event loop alive and delays
-    // shutdown by up to the budget on every /health that won the race.
-    if (timer) {
-      clearTimeout(timer)
-    }
-  }
-}
-
 let server: FastifyInstance
+let security: SecurityHandle
 
 async function bootstrap() {
   // Schema before anything that can write to it. Awaited before the server
@@ -152,7 +90,16 @@ async function bootstrap() {
     process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
 
   server = fastify({
+    ...securityServerOptions(),
     logger: buildLoggerOptions({ service: 'ms-inventory', lokiReachable }),
+  })
+
+  // FIRST, before any plugin or route: the policy hook only sees routes
+  // registered after it, and the strict validator / error handler must be in
+  // place for every route. Redis backs the rate limiter only when the KV driver
+  // is Redis; otherwise a per-process store is used (not shared across replicas).
+  security = await registerInventorySecurity(server, {
+    redis: dbConfig.keyValue.driver === 'redis' ? dbConfig.keyValue.redis : null,
   })
 
   // Before every other plugin, so the onResponse hook sees all traffic.
@@ -174,7 +121,13 @@ async function bootstrap() {
   // registered after this hook is attached.
   const routeRegistry = createRouteRegistry(server)
 
-  await server.register(cors, { origin: '*' })
+  // An allow-list from CORS_ORIGINS; empty means no cross-origin access at all
+  // (never '*'). Bearer tokens travel in a header, so no credentials mode.
+  await server.register(cors, {
+    origin: security.config.corsOrigins.length > 0 ? security.config.corsOrigins : false,
+    allowedHeaders: ['Authorization', 'Content-Type'],
+    exposedHeaders: ['Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+  })
   await server.register(helmet)
 
   await server.register(swagger, {
@@ -206,95 +159,18 @@ async function bootstrap() {
     uiConfig: { docExpansion: 'list', deepLinking: true },
   })
 
-  server.get(
-    '/health',
-    {
-      schema: {
-        tags: ['health'],
-        description:
-          'Service liveness/status check, including a real Postgres round trip and the ' +
-          'queue driver. Answers 503 (status "unhealthy") when Postgres is unreachable.',
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              service: { type: 'string' },
-              timestamp: { type: 'string', format: 'date-time' },
-              // Postgres is the only store, so `reachable` comes from a real
-              // SELECT 1 on every call (never from configuration) and an
-              // unreachable database answers 503.
-              database: {
-                type: 'object',
-                properties: {
-                  mode: { type: 'string' },
-                  driver: { type: 'string' },
-                  queue: { type: 'string' },
-                  reachable: { type: 'boolean' },
-                  schema: { type: 'string' },
-                  latencyMs: { type: 'number' },
-                  error: { type: 'string' },
-                },
-              },
-              // Read from a ~10s cache so a liveness probe never blocks on an
-              // unreachable broker -- the lesson ms-product learned when an
-              // uncached Elasticsearch probe took ~2.5s during an outage.
-              // `reachable:false` with `enabled:false` is a healthy default,
-              // not an outage.
-              events: {
-                type: 'object',
-                properties: {
-                  enabled: { type: 'boolean' },
-                  reachable: { type: 'boolean' },
-                  brokers: { type: 'array', items: { type: 'string' } },
-                  reason: { type: ['string', 'null'] },
-                  cachedAgeMs: { type: 'number' },
-                  // The consume loop's own state, which broker reachability
-                  // does not imply: a reachable broker with a consumer that
-                  // failed to start is exactly the silent-stall case /health
-                  // needs to expose.
-                  consumerRunning: { type: 'boolean' },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    async (_request, reply) => {
-      const pg = await pgHealth(getServicePool('inventory'))
-      if (!pg.reachable) void reply.code(503)
-      return {
-        status: pg.reachable ? 'ok' : 'unhealthy',
-        service: 'ms-inventory',
-        timestamp: new Date().toISOString(),
-        database: {
-          mode: dbConfig.mode,
-          driver: dbConfig.document.driver,
-          queue: dbConfig.keyValue.driver,
-          reachable: pg.reachable,
-          schema: pg.schema,
-          ...(pg.latencyMs !== null ? { latencyMs: pg.latencyMs } : {}),
-          ...(pg.error ? { error: pg.error } : {}),
-        },
-        events: {
-          ...(await kafkaHealthBounded()),
-          consumerRunning: eventConsumer.isRunning,
-        },
-      }
-    }
-  )
-
   const seeded = await seedInventoryIfMissing(store)
   if (seeded > 0) {
     console.log(`[Inventory Service] Self-seeded stock for ${seeded} product(s)`)
   }
 
-  registerInventoryRoutes(server, { store })
-  registerQueueRoutes(server, queueManager)
-  registerEventRoutes(server, eventConsumer)
-  registerOutboxRoutes(server, outboxRelay)
+  registerServiceRoutes(server, { store, queueManager, eventConsumer, outboxRelay, dbConfig })
   registerEndpointsRoute(server, routeRegistry, 'ms-inventory')
+
+  // Default deny, checked at boot outside production: a route someone adds
+  // without a policy stops the service from starting instead of silently
+  // answering 403 (or, in report mode, 200) to everyone.
+  if (!security.config.production) assertPolicyCoverage(server)
 
   // Started after routes are registered, same ordering ms-product and ms-order
   // use: the worker begins pulling jobs only once the service is otherwise
@@ -313,7 +189,14 @@ async function bootstrap() {
     )
   }
 
-  registerShutdownHandlers({ server, queueManager, eventProducer, eventConsumer, outboxRelay })
+  registerShutdownHandlers({
+    server,
+    queueManager,
+    eventProducer,
+    eventConsumer,
+    outboxRelay,
+    security,
+  })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

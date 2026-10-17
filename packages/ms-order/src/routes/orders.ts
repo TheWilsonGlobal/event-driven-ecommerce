@@ -1,63 +1,69 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { notFound, requireOwnerOrAny, type Static } from '@ecommerce/shared-security'
 import { PrismaClient, Prisma } from '../../node_modules/.prisma-ms-order/client'
 import { QueueManager } from '../queues'
-import { ORDER_STATUSES, toOrderRecord } from '../orderMapping'
+import { toOrderRecord } from '../orderMapping'
 import { stageOrderCancelled } from '../events'
+import { can, requireCapability } from '../security'
 import { registerOrderCreateRoute } from './ordersCreate'
+import type { PriceVerifier } from '../pricing/PriceVerifier'
+import {
+  ErrorResponse,
+  OrderListOut,
+  OrderListQuery,
+  OrderOut,
+  OrderRefParams,
+  OrderStatusBody,
+} from './schemas'
 
 export interface OrdersRouteDeps {
   prisma: PrismaClient
   queueManager: QueueManager
+  /** Server-side price verification (plan 4.3). Absent = not checked (bare test servers). */
+  priceVerifier?: PriceVerifier
 }
 
 /** Registers the `/api/v1/orders` list/get/create/update routes. */
 export function registerOrderRoutes(
   server: FastifyInstance,
-  { prisma, queueManager }: OrdersRouteDeps
+  { prisma, queueManager, priceVerifier }: OrdersRouteDeps
 ): void {
   server.get(
     '/api/v1/orders',
     {
+      config: { policy: { permission: 'orders:read' } },
       schema: {
         tags: ['orders'],
-        description: 'List orders (paginated).',
-        querystring: {
-          type: 'object',
-          properties: {
-            page: { type: 'string' },
-            limit: { type: 'string' },
-          },
-        },
+        description:
+          'List orders (paginated). A caller without orders:read:any sees only their own orders.',
+        querystring: OrderListQuery,
         response: {
-          200: {
-            type: 'object',
-            properties: {
-              orders: {
-                type: 'array',
-                items: { type: 'object', additionalProperties: true },
-              },
-              total: { type: 'number' },
-              page: { type: 'number' },
-              limit: { type: 'number' },
-            },
-          },
+          200: OrderListOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
         },
       },
     },
-    async (request: FastifyRequest<{ Querystring: { page?: string; limit?: string } }>) => {
-      const pageRaw = parseInt(request.query.page ?? '1', 10)
-      const limitRaw = parseInt(request.query.limit ?? '20', 10)
-      const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1
-      const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 20
+    async (request: FastifyRequest<{ Querystring: Static<typeof OrderListQuery> }>) => {
+      const { page, limit } = request.query
+
+      // The ownership filter lives IN the query, not after it: filtering a page
+      // afterwards would leak totals and return short or empty pages.
+      // An anonymous caller only reaches this line in AUTH_ENFORCE=report, whose
+      // contract is "log the would-be denial, change nothing".
+      const seesAll = !request.auth || can(request, 'orders:read:any')
+      const where: Prisma.OrderWhereInput = seesAll ? {} : { userId: request.auth?.userId ?? '' }
 
       const [orders, total] = await Promise.all([
         prisma.order.findMany({
+          where,
           skip: (page - 1) * limit,
           take: limit,
           include: { items: true, payments: true },
           orderBy: { createdAt: 'desc' },
         }),
-        prisma.order.count(),
+        prisma.order.count({ where }),
       ])
 
       return {
@@ -72,24 +78,22 @@ export function registerOrderRoutes(
   server.get(
     '/api/v1/orders/:id',
     {
+      config: { policy: { permission: 'orders:read' } },
       schema: {
         tags: ['orders'],
-        description: 'Fetch a single order by id or order number.',
-        params: {
-          type: 'object',
-          properties: { id: { type: 'string' } },
-          required: ['id'],
-        },
+        description:
+          "Fetch a single order by id or order number. Another user's order is a 404, not a 403.",
+        params: OrderRefParams,
         response: {
-          200: { type: 'object', additionalProperties: true },
-          404: {
-            type: 'object',
-            properties: { error: { type: 'string' } },
-          },
+          200: OrderOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+          404: ErrorResponse,
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: Static<typeof OrderRefParams> }>) => {
       const { id } = request.params
       const include = { items: true, payments: true } as const
 
@@ -98,54 +102,61 @@ export function registerOrderRoutes(
         order = await prisma.order.findUnique({ where: { orderNumber: id }, include })
       }
 
-      if (!order) {
-        return reply.status(404).send({ error: 'Order not found' })
-      }
+      if (!order) throw notFound()
+      requireOwnerOrAny(request, order.userId, 'orders:read')
 
       return toOrderRecord(order)
     }
   )
 
-  registerOrderCreateRoute(server, { prisma, queueManager })
+  registerOrderCreateRoute(server, {
+    prisma,
+    queueManager,
+    ...(priceVerifier ? { priceVerifier } : {}),
+  })
 
   server.patch(
     '/api/v1/orders/:id',
     {
+      config: { policy: { permission: 'orders:update' } },
       schema: {
         tags: ['orders'],
-        description: "Update an order's status.",
-        params: {
-          type: 'object',
-          properties: { id: { type: 'string' } },
-          required: ['id'],
-        },
-        body: {
-          type: 'object',
-          properties: { status: { type: 'string' } },
-          required: ['status'],
-        },
+        description:
+          "Update an order's status. The owner may only cancel (status CANCELLED); any other " +
+          'status needs orders:update:any.',
+        params: OrderRefParams,
+        body: OrderStatusBody,
         response: {
-          200: { type: 'object', additionalProperties: true },
-          400: {
-            type: 'object',
-            properties: { error: { type: 'string' } },
-          },
-          404: {
-            type: 'object',
-            properties: { error: { type: 'string' } },
-          },
+          200: OrderOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+          404: ErrorResponse,
         },
       },
     },
     async (
-      request: FastifyRequest<{ Params: { id: string }; Body: { status?: string } }>,
-      reply: FastifyReply
+      request: FastifyRequest<{
+        Params: Static<typeof OrderRefParams>
+        Body: Static<typeof OrderStatusBody>
+      }>
     ) => {
       const { status } = request.body
-      if (!status || !ORDER_STATUSES.includes(status as (typeof ORDER_STATUSES)[number])) {
-        return reply
-          .status(400)
-          .send({ error: `status must be one of: ${ORDER_STATUSES.join(', ')}` })
+
+      const existing = await prisma.order.findUnique({
+        where: { id: request.params.id },
+        select: { id: true, userId: true },
+      })
+      if (!existing) throw notFound()
+
+      // Ownership first (404 for a stranger), then what the caller may do to it (403).
+      requireOwnerOrAny(request, existing.userId, 'orders:update')
+      if (status !== 'CANCELLED') {
+        requireCapability(
+          request,
+          'orders:update:any',
+          'Customers can only cancel their own orders'
+        )
       }
 
       try {
@@ -181,7 +192,7 @@ export function registerOrderRoutes(
         return toOrderRecord(order)
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
-          return reply.status(404).send({ error: 'Order not found' })
+          throw notFound()
         }
         throw err
       }

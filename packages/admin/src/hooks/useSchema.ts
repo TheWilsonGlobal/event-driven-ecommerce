@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SchemaResponse, SchemaTable } from '../screens/config/schemaTypes'
 import { USER_SERVICE_URL, PRODUCT_SERVICE_URL, ORDER_SERVICE_URL } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 // Each of ms-user, ms-order (Prisma/SQLite, via DMMF) and ms-product (NeDB,
 // via a sampled document) serves its own real GET /api/v1/schema — the admin
@@ -42,7 +43,7 @@ async function fetchSchema(url: string): Promise<SchemaResponse> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    const res = await fetch(`${url}/api/v1/schema`, { signal: controller.signal })
+    const res = await apiFetch(`${url}/api/v1/schema`, { signal: controller.signal })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return (await res.json()) as SchemaResponse
   } finally {

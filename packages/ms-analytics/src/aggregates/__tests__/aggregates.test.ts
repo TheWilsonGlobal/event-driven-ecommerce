@@ -2,7 +2,11 @@ import * as crypto from 'crypto'
 import * as dotenv from 'dotenv'
 import * as fs from 'fs'
 import * as path from 'path'
-import { applyServiceUrlDefaults, closeServicePools, getServicePool } from '@ecommerce/shared-database'
+import {
+  applyServiceUrlDefaults,
+  closeServicePools,
+  getServicePool,
+} from '@ecommerce/shared-database'
 import type { EventContext, EventEnvelope } from '@ecommerce/shared-messaging'
 import {
   MIGRATIONS_DIR,
@@ -27,6 +31,7 @@ import {
   handlePaymentCaptured,
   handlePaymentFailed,
   handlePaymentRefunded,
+  getRejectedEventCount,
   type HandlerDeps,
 } from '../../events/handlers'
 
@@ -108,7 +113,67 @@ function harness(): Harness {
 
 const CONTEXT: EventContext = { topic: 'ecommerce.orders.v1', partition: 0, offset: '17' }
 
+/**
+ * A complete payload per event type, as the publishers send them. The consumer
+ * now validates payloads against the shared schema, so a test that wants a
+ * specific field to be odd overrides just that field on top of these.
+ */
+const COMPLETE: Record<string, Record<string, unknown>> = {
+  'order.created': {
+    orderId: 'o-1',
+    orderNumber: 'ORD-1',
+    userId: 'u-1',
+    customerEmail: 'a@example.com',
+    status: 'CONFIRMED',
+    totalAmount: 10,
+    currency: 'USD',
+    items: [],
+  },
+  'order.confirmed': {
+    orderId: 'o-1',
+    orderNumber: 'ORD-1',
+    customerEmail: 'a@example.com',
+    customerName: 'A',
+    totalAmount: 10,
+    currency: 'USD',
+  },
+  'order.cancelled': { orderId: 'o-1', orderNumber: 'ORD-1', reason: 'x', items: [] },
+  'payment.captured': {
+    orderId: 'o-1',
+    orderNumber: 'ORD-1',
+    paymentId: 'pay-1',
+    provider: 'stripe',
+    amount: 10,
+    currency: 'USD',
+  },
+  'payment.failed': {
+    orderId: 'o-1',
+    orderNumber: 'ORD-1',
+    paymentId: 'pay-1',
+    provider: 'stripe',
+    amount: 10,
+    currency: 'USD',
+    reason: 'declined',
+    attempt: 1,
+  },
+  'payment.refunded': {
+    orderId: 'o-1',
+    orderNumber: 'ORD-1',
+    paymentId: 'pay-1',
+    amount: 10,
+    currency: 'USD',
+    reason: 'x',
+  },
+  'inventory.reserved': { orderId: 'o-1', orderNumber: 'ORD-1', reservations: [] },
+  'inventory.released': { orderId: 'o-1', orderNumber: 'ORD-1', reason: 'x', releases: [] },
+  'inventory.insufficient': { orderId: 'o-1', orderNumber: 'ORD-1', shortfalls: [] },
+}
+
 function envelope(eventType: string, occurredAt: string, payload: unknown, id?: string) {
+  const complete =
+    payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+      ? { ...(COMPLETE[eventType] ?? {}), ...(payload as object) }
+      : payload
   return {
     eventId: id ?? `evt-${eventType}-${occurredAt}`,
     eventType,
@@ -116,7 +181,7 @@ function envelope(eventType: string, occurredAt: string, payload: unknown, id?: 
     occurredAt,
     producer: 'test',
     correlationId: 'corr-1',
-    payload,
+    payload: complete,
   } as unknown as EventEnvelope
 }
 
@@ -398,20 +463,30 @@ dbDescribe('refundedAmount is not netted against capturedAmount', () => {
     ['Infinity', Number.POSITIVE_INFINITY],
     ['a numeric string', '100'],
     ['a missing amount', undefined],
-  ])('contributes nothing for %s rather than corrupting the total', async (_label, amount) => {
+  ])('rejects the whole event for %s rather than corrupting the total', async (_label, amount) => {
     const h = harness()
+    const before = getRejectedEventCount()
     await handlePaymentCaptured(
       h.deps,
       envelope('payment.captured', '2026-09-23T04:00:00.000Z', { amount }),
       CONTEXT
     )
 
-    const outcomes = await readPaymentOutcomes(h.store)
-    // The capture COUNT still rises — the event happened. Only the money is
-    // withheld, because we do not know what it was.
-    expect(outcomes?.captured).toBe(1)
-    expect(outcomes?.capturedAmount).toBe(0)
-    expect(Number.isFinite(outcomes?.capturedAmount)).toBe(true)
+    // The payload breaks the shared schema: nothing is counted (not even the
+    // capture), the event is claimed so a redelivery is a plain duplicate, and
+    // the rejection is visible.
+    expect(await readPaymentOutcomes(h.store)).toBeNull()
+    expect(await readProgress(h.store)).toBeNull()
+    expect(getRejectedEventCount()).toBe(before + 1)
+    expect(h.logs.some((m) => m.includes('Rejected malformed payment.captured'))).toBe(true)
+
+    await handlePaymentCaptured(
+      h.deps,
+      envelope('payment.captured', '2026-09-23T04:00:00.000Z', { amount }),
+      CONTEXT
+    )
+    expect(getRejectedEventCount()).toBe(before + 1) // not re-processed
+    expect((await readProgress(h.store))?.duplicatesSkipped).toBe(1)
   })
 })
 
@@ -525,7 +600,10 @@ dbDescribe('reservationShortfallRate is denominated on reservation ATTEMPTS', ()
         envelope(
           'inventory.insufficient',
           '2026-09-23T04:00:00.000Z',
-          { orderId: `s${i}`, shortfalls: [{ productId: 'p1' }] },
+          {
+            orderId: `s${i}`,
+            shortfalls: [{ productId: 'p1', sku: 'S', requested: 2, available: 0 }],
+          },
           `ins-${i}`
         ),
         CONTEXT
@@ -683,7 +761,7 @@ dbDescribe('hours with no data are ABSENT from the revenue series', () => {
       h.deps,
       envelope('order.created', new Date().toISOString(), {
         orderId: 'o1',
-        totalAmount: 'not a number',
+        totalAmount: 0,
         currency: 'USD',
         items: [],
       }),
@@ -694,8 +772,7 @@ dbDescribe('hours with no data are ABSENT from the revenue series', () => {
     expect(view.series).toHaveLength(1)
     expect(view.series[0]?.orders).toBe(1)
     expect(view.series[0]?.revenue).toBe(0)
-    // No usable amount means no currency label either — the two move together.
-    expect(view.series[0]?.currency).toBeNull()
+    expect(view.series[0]?.currency).toBe('USD')
   })
 
   /** Buckets older than the requested window are excluded, not zeroed. */
@@ -912,7 +989,8 @@ dbDescribe('atomic counters and transactional idempotency', () => {
         orderId: 'bad',
         totalAmount: 10,
         currency: 'USD',
-        items: [{ productId: 'p9', sku: 'S', quantity: 1e12, unitPrice: 1e12 }],
+        // Valid for the schema, yet 2e9 x 1e6 overflows numeric(18,4).
+        items: [{ productId: 'p9', sku: 'S', quantity: 2_000_000_000, unitPrice: 1_000_000 }],
       },
       'bad'
     )

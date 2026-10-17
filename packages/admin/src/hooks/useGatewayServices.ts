@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { GATEWAY_URL } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 // The gateway serves GET /api/v1/services — its own server-side health
 // rollup of ms-user/ms-product/ms-order, probed by the gateway process
@@ -42,7 +43,7 @@ async function fetchGatewayServices(): Promise<GatewayServicesResponse> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    const res = await fetch(`${GATEWAY_URL}/api/v1/services`, { signal: controller.signal })
+    const res = await apiFetch(`${GATEWAY_URL}/api/v1/services`, { signal: controller.signal })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return (await res.json()) as GatewayServicesResponse
   } finally {

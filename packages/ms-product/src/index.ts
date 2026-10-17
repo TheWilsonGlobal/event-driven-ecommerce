@@ -15,6 +15,11 @@ import {
   type DocumentDatabaseAdapter,
 } from '@ecommerce/shared-database'
 import {
+  assertPolicyCoverage,
+  registerSecurity,
+  securityServerOptions,
+} from '@ecommerce/shared-security'
+import {
   registerMetrics,
   buildLoggerOptions,
   probeLokiReachable,
@@ -32,6 +37,15 @@ import {
 } from './routes'
 import { seedAndIndex } from './seed'
 import { QueueManager, registerQueueRoutes } from './queues'
+import {
+  SERVICE_CSP,
+  applySharedRoutePolicies,
+  corsOriginCheck,
+  relaxUpgradeInsecure,
+  resolveCorsOrigins,
+  searchConstraint,
+} from './security'
+import { MULTIPART_LIMITS } from './routes/uploads'
 import { registerShutdownHandlers } from './shutdown'
 
 const REPO_ROOT = path.resolve(__dirname, '../../../')
@@ -72,23 +86,51 @@ async function bootstrap() {
     process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
 
   server = fastify({
+    // Body/request limits, timeouts and trustProxy (TRUST_PROXY) come from the
+    // shared defaults; the upload routes raise their own bodyLimit explicitly.
+    ...securityServerOptions(),
+    // Lets GET /products?search= resolve to its own, stricter rate-limit tier.
+    constraints: { hasSearch: searchConstraint },
     logger: buildLoggerOptions({ service: 'ms-product', lokiReachable }),
   })
-
-  // Before every other plugin, so the onResponse hook sees all traffic.
-  registerMetrics(server, { service: 'ms-product' })
 
   // Before any route registration below — onRoute only fires for routes
   // registered after this hook is attached.
   const routeRegistry = createRouteRegistry(server)
 
-  await server.register(cors, { origin: '*' })
-  await server.register(helmet)
-  await server.register(multipart, {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10 MB max per file
-    },
+  // CORS and helmet first, so even a 401/429 rejection carries their headers.
+  await server.register(cors, {
+    origin: corsOriginCheck(resolveCorsOrigins()),
+    credentials: true,
+    exposedHeaders: [
+      'retry-after',
+      'x-ratelimit-limit',
+      'x-ratelimit-remaining',
+      'x-ratelimit-reset',
+    ],
+    maxAge: 600,
   })
+  await server.register(helmet, { contentSecurityPolicy: SERVICE_CSP })
+
+  // Policies for the routes shared-utils installs (/metrics, /api/v1/endpoints);
+  // before registerSecurity so its onRoute hook records them.
+  applySharedRoutePolicies(server)
+
+  // Error shape, strict validation, rate limit, JWT verification and the policy
+  // hook. Rate-limit counters live in Redis when the KV driver is Redis (shared
+  // across replicas); otherwise a per-process memory store.
+  const security = await registerSecurity(server, {
+    service: 'ms-product',
+    redis: dbConfig.keyValue.driver === 'redis' ? dbConfig.keyValue.redis : null,
+  })
+  server.addHook('onClose', async () => {
+    await security.close()
+  })
+
+  // After registerSecurity so the metrics hook sits behind the rate limiter's.
+  registerMetrics(server, { service: 'ms-product' })
+
+  await server.register(multipart, { limits: MULTIPART_LIMITS })
 
   await server.register(swagger, {
     openapi: {
@@ -115,6 +157,10 @@ async function bootstrap() {
   await server.register(swaggerUi, {
     routePrefix: '/api-docs',
     uiConfig: { docExpansion: 'list', deepLinking: true },
+    // The service-wide CSP loads nothing; the UI's static routes get the plugin's
+    // own policy ('self' plus hashes of its inline bits) instead.
+    staticCSP: true,
+    transformStaticCSP: relaxUpgradeInsecure,
   })
 
   // Ensure the RustFS bucket exists on startup (non-blocking)
@@ -153,6 +199,10 @@ async function bootstrap() {
   )
   registerLogRoutes(server)
   registerEndpointsRoute(server, routeRegistry, 'ms-product')
+
+  // Default deny: refuse to boot (outside production) if any route above was
+  // added without a `config.policy`.
+  if (!security.config.production) assertPolicyCoverage(server)
 
   registerShutdownHandlers({
     server,

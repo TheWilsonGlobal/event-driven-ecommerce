@@ -1,4 +1,7 @@
 import type { FastifyInstance } from 'fastify'
+import type { RoutePolicy } from '@ecommerce/shared-security'
+
+const OPS_POLICY: RoutePolicy = { permission: 'ops:read', mfa: true }
 
 // GET /api/v1/topology — the static service registry every port label in
 // this codebase should be reading from, rather than hardcoding a number.
@@ -22,6 +25,7 @@ export function registerTopologyRoute(server: FastifyInstance, services: Service
   server.get(
     '/api/v1/topology',
     {
+      config: { policy: OPS_POLICY },
       schema: {
         tags: ['services'],
         description:

@@ -15,6 +15,7 @@ export function registerHealthRoutes(
   server.get(
     '/health',
     {
+      config: { policy: { public: true } },
       schema: {
         tags: ['health'],
         description: 'Service liveness/status check, including database driver.',

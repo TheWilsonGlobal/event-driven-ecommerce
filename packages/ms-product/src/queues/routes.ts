@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { QueueManager } from './queueManager'
 import { QUEUE_DEFINITIONS, type QueueName } from './definitions'
+import { OPS_POLICY } from '../security'
 import {
   buildQueueData,
   toRedisUnavailable,
@@ -27,6 +28,7 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
   server.get(
     '/api/v1/queues',
     {
+      config: { policy: OPS_POLICY },
       schema: {
         tags: ['queues'],
         description:

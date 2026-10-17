@@ -1,56 +1,81 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+import {
+  EntityId,
+  ErrorResponse,
+  Strict,
+  Type,
+  notFound,
+  type Static,
+} from '@ecommerce/shared-security'
 import { getInventory, listInventory, listReservations, type InventoryStore } from '../db/store'
 
 export interface InventoryRouteDeps {
   store: InventoryStore
 }
 
-const inventoryRowSchema = {
-  type: 'object',
-  properties: {
-    productId: { type: 'string' },
-    sku: { type: 'string' },
-    available: { type: 'number', description: 'Units free to be reserved.' },
-    reserved: {
-      type: 'number',
-      description: 'Units held for an order that has neither shipped nor been cancelled.',
-    },
-    updatedAt: { type: 'string', format: 'date-time' },
-  },
-  required: ['productId', 'sku', 'available', 'reserved', 'updatedAt'],
-} as const
+const closed = { additionalProperties: false }
 
-const reservationSchema = {
-  type: 'object',
-  properties: {
-    orderId: { type: 'string' },
-    orderNumber: { type: 'string' },
-    eventId: {
-      type: 'string',
+// ── Requests ────────────────────────────────────────────────────────────────
+
+const ProductParams = Strict({ productId: EntityId })
+
+// Defaults to the largest page (100) rather than the shared 20: this listing
+// used to return every row, and a smaller default would silently truncate it.
+const PageQuery = {
+  limit: Type.Integer({ minimum: 1, maximum: 100, default: 100 }),
+  offset: Type.Integer({ minimum: 0, maximum: 100_000, default: 0 }),
+}
+
+const InventoryQuery = Strict({ ...PageQuery })
+const ReservationsQuery = Strict({ orderId: Type.Optional(EntityId), ...PageQuery })
+
+// ── Responses ───────────────────────────────────────────────────────────────
+
+const InventoryRowOut = Type.Object(
+  {
+    productId: Type.String(),
+    sku: Type.String(),
+    available: Type.Number({ description: 'Units free to be reserved.' }),
+    reserved: Type.Number({
+      description: 'Units held for an order that has neither shipped nor been cancelled.',
+    }),
+    updatedAt: Type.String({ format: 'date-time' }),
+  },
+  closed
+)
+
+const ReservationOut = Type.Object(
+  {
+    orderId: Type.String(),
+    orderNumber: Type.String(),
+    eventId: Type.String({
       description: 'The order.created eventId this reservation was made in response to.',
-    },
-    items: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          productId: { type: 'string' },
-          sku: { type: 'string' },
-          quantity: { type: 'number' },
-        },
-        required: ['productId', 'sku', 'quantity'],
-      },
-    },
-    status: { type: 'string', enum: ['RESERVED', 'RELEASED'] },
-    createdAt: { type: 'string', format: 'date-time' },
+    }),
+    items: Type.Array(
+      Type.Object({ productId: Type.String(), sku: Type.String(), quantity: Type.Number() }, closed)
+    ),
+    status: Type.Unsafe<'RESERVED' | 'RELEASED'>({
+      type: 'string',
+      enum: ['RESERVED', 'RELEASED'],
+    }),
+    createdAt: Type.String({ format: 'date-time' }),
     // Nullable, and it must stay ['string','null']: under a plain
     // { type: 'string' } Fastify's serializer coerces null to "", which would
     // render as a present-but-blank release timestamp on a reservation that
     // was never released.
-    releasedAt: { type: ['string', 'null'], format: 'date-time' },
+    releasedAt: Type.Unsafe<string | null>({ type: ['string', 'null'], format: 'date-time' }),
   },
-  required: ['orderId', 'orderNumber', 'eventId', 'items', 'status', 'createdAt', 'releasedAt'],
-} as const
+  closed
+)
+
+const InventoryListOut = Type.Object(
+  { count: Type.Integer(), items: Type.Array(InventoryRowOut) },
+  closed
+)
+const ReservationListOut = Type.Object(
+  { count: Type.Integer(), items: Type.Array(ReservationOut) },
+  closed
+)
 
 /**
  * Read-only views over the stock ledger.
@@ -60,6 +85,9 @@ const reservationSchema = {
  * a second, unordered path to the same state — one with none of the
  * idempotency guarantees the event path has, and one whose writes would be
  * invisible on the inventory topic.
+ *
+ * Stock levels and reservations are back-office data (VENDOR, ADMIN and the
+ * SERVICE identity hold inventory:read); a customer has no business here.
  */
 export function registerInventoryRoutes(
   server: FastifyInstance,
@@ -68,23 +96,22 @@ export function registerInventoryRoutes(
   server.get(
     '/api/v1/inventory',
     {
+      config: { policy: { permission: 'inventory:read' } },
       schema: {
         tags: ['inventory'],
-        description: 'Current stock levels for every product this service tracks.',
+        description: 'Current stock levels for the products this service tracks (paginated).',
+        querystring: InventoryQuery,
         response: {
-          200: {
-            type: 'object',
-            properties: {
-              count: { type: 'number' },
-              items: { type: 'array', items: inventoryRowSchema },
-            },
-            required: ['count', 'items'],
-          },
+          200: InventoryListOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
         },
       },
     },
-    async () => {
-      const rows = await listInventory(store)
+    async (request: FastifyRequest<{ Querystring: Static<typeof InventoryQuery> }>) => {
+      const { limit, offset } = request.query
+      const rows = await listInventory(store, { limit, offset })
       return { count: rows.length, items: rows }
     }
   )
@@ -92,32 +119,26 @@ export function registerInventoryRoutes(
   server.get(
     '/api/v1/inventory/:productId',
     {
+      config: { policy: { permission: 'inventory:read' } },
       schema: {
         tags: ['inventory'],
         description: 'Current stock level for one product.',
-        params: {
-          type: 'object',
-          properties: { productId: { type: 'string' } },
-          required: ['productId'],
-        },
+        params: ProductParams,
         response: {
-          200: inventoryRowSchema,
-          404: {
-            type: 'object',
-            properties: { error: { type: 'string' } },
-            required: ['error'],
-          },
+          200: InventoryRowOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+          404: ErrorResponse,
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { productId: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: Static<typeof ProductParams> }>) => {
       const row = await getInventory(store, request.params.productId)
-      if (!row) {
-        // 404, not a zeroed row: this service does not own the catalogue, so
-        // "no stock record" means "unknown to inventory", which is a different
-        // fact from "in stock, zero units".
-        return reply.status(404).send({ error: 'No inventory record for that product' })
-      }
+      // 404, not a zeroed row: this service does not own the catalogue, so
+      // "no stock record" means "unknown to inventory", which is a different
+      // fact from "in stock, zero units".
+      if (!row) throw notFound('No inventory record for that product')
       return row
     }
   )
@@ -125,31 +146,25 @@ export function registerInventoryRoutes(
   server.get(
     '/api/v1/reservations',
     {
+      config: { policy: { permission: 'inventory:read' } },
       schema: {
         tags: ['reservations'],
         description:
-          'Stock reservations, newest first. Optionally filtered to one order. A row ' +
-          'exists only for an order whose stock was actually reserved — an order that ' +
+          'Stock reservations, newest first (paginated). Optionally filtered to one order. A ' +
+          'row exists only for an order whose stock was actually reserved — an order that ' +
           'was short produced an inventory.insufficient event and no row.',
-        querystring: {
-          type: 'object',
-          properties: { orderId: { type: 'string' } },
-        },
+        querystring: ReservationsQuery,
         response: {
-          200: {
-            type: 'object',
-            properties: {
-              count: { type: 'number' },
-              items: { type: 'array', items: reservationSchema },
-            },
-            required: ['count', 'items'],
-          },
+          200: ReservationListOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
         },
       },
     },
-    async (request: FastifyRequest<{ Querystring: { orderId?: string } }>) => {
-      const { orderId } = request.query
-      const rows = await listReservations(store, orderId || undefined)
+    async (request: FastifyRequest<{ Querystring: Static<typeof ReservationsQuery> }>) => {
+      const { orderId, limit, offset } = request.query
+      const rows = await listReservations(store, orderId, { limit, offset })
       return { count: rows.length, items: rows }
     }
   )

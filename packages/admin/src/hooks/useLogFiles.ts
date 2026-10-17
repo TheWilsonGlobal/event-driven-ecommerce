@@ -6,6 +6,7 @@ import {
   PRODUCT_SERVICE_URL,
   ORDER_SERVICE_URL,
 } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 // Each service serves GET /api/v1/logs off the real NDJSON files its own
 // pino logger writes to <repo-root>/logs/ — the admin fetches all four
@@ -43,7 +44,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    const res = await fetch(url, { signal: controller.signal })
+    const res = await apiFetch(url, { signal: controller.signal })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return (await res.json()) as T
   } finally {

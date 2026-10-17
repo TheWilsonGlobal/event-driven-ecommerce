@@ -30,6 +30,7 @@ export function registerOutboxRoutes(server: FastifyInstance, relay: OutboxRelay
   server.get(
     '/api/v1/outbox',
     {
+      config: { policy: { permission: 'ops:read', mfa: true } },
       schema: {
         tags: ['outbox'],
         description:
@@ -79,6 +80,7 @@ export function registerOutboxRoutes(server: FastifyInstance, relay: OutboxRelay
   server.post(
     '/api/v1/outbox/requeue',
     {
+      config: { policy: { permission: 'ops:write', mfa: true, audit: true }, rateTier: 'admin' },
       schema: {
         tags: ['outbox'],
         description:

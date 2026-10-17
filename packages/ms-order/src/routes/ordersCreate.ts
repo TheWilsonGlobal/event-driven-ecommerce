@@ -1,106 +1,72 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as crypto from 'crypto'
+import { AppError } from '@ecommerce/shared-security'
 import { Prisma, PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import { paymentMethodToProvider, paymentStatusToPaymentRowStatus } from '../seedOrders'
 import { QueueManager } from '../queues'
 import { stageOrderCreated, stageOrderConfirmed } from '../events'
-import { toOrderRecord, generateUniqueOrderNumber, CreateOrderBody } from '../orderMapping'
+import { toOrderRecord, generateUniqueOrderNumber } from '../orderMapping'
+import {
+  checkOrderPrices,
+  ProductUnavailableError,
+  type PriceVerifier,
+} from '../pricing/PriceVerifier'
+import {
+  CreateOrderBodySchema,
+  CreateOrderHeaders,
+  ErrorResponse,
+  OrderOut,
+  type CreateOrderBodyT,
+} from './schemas'
 
 export interface OrdersCreateRouteDeps {
   prisma: PrismaClient
   queueManager: QueueManager
+  priceVerifier?: PriceVerifier
 }
 
 /** Registers `POST /api/v1/orders` (checkout / order creation). */
 export function registerOrderCreateRoute(
   server: FastifyInstance,
-  { prisma, queueManager }: OrdersCreateRouteDeps
+  { prisma, queueManager, priceVerifier }: OrdersCreateRouteDeps
 ): void {
   server.post(
     '/api/v1/orders',
     {
+      config: { policy: { permission: 'orders:create' }, rateTier: 'write' },
       schema: {
         tags: ['orders'],
-        description: 'Create a new order (checkout).',
-        body: {
-          type: 'object',
-          properties: {
-            userId: { type: 'string' },
-            idempotencyKey: {
-              type: 'string',
-              description:
-                'Optional dedupe key (or send the Idempotency-Key header). A repeat with the same ' +
-                'key and the same order returns the original order (200) and emits no new events; ' +
-                'the same key with a DIFFERENT order is a 409.',
-            },
-            paymentPreCaptured: {
-              type: 'boolean',
-              description:
-                'Defaults to true (existing client checkout captures payment client-side, ' +
-                'yielding a CONFIRMED order). Send false to create a PENDING order awaiting ' +
-                'payment, which enqueues a delayed expire-order job.',
-            },
-            customerName: { type: 'string' },
-            customerEmail: { type: 'string' },
-            items: { type: 'array', items: { type: 'object' } },
-            shippingAddress: { type: 'object' },
-            paymentMethod: { type: 'string' },
-            subtotal: { type: 'number' },
-            taxAmount: { type: 'number' },
-            shippingAmount: { type: 'number' },
-            discountAmount: { type: 'number' },
-            totalAmount: { type: 'number' },
-            currency: { type: 'string' },
-          },
-          required: [
-            'customerName',
-            'customerEmail',
-            'items',
-            'shippingAddress',
-            'paymentMethod',
-            'subtotal',
-            'totalAmount',
-          ],
-        },
+        description:
+          'Create a new order (checkout). Authenticated only: the owner is the token subject ' +
+          '(a body `userId` is rejected). Prices are verified against ms-product (PRICE_CHECK). ' +
+          'Idempotency: send the Idempotency-Key header (or body idempotencyKey); a repeat with ' +
+          'the same key and the same order returns the original order (200) and emits no new ' +
+          'events; the same key with a DIFFERENT order is a 409. `paymentPreCaptured` defaults ' +
+          'to true (the web checkout captures payment client-side, yielding a CONFIRMED order); ' +
+          'false creates a PENDING order awaiting payment and enqueues a delayed expire-order job.',
+        headers: CreateOrderHeaders,
+        body: CreateOrderBodySchema,
         response: {
-          200: { type: 'object', additionalProperties: true },
-          201: { type: 'object', additionalProperties: true },
-          409: { type: 'object', properties: { error: { type: 'string' } } },
-          400: {
-            type: 'object',
-            properties: { error: { type: 'string' } },
-          },
+          200: OrderOut,
+          201: OrderOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+          409: ErrorResponse,
+          422: ErrorResponse,
+          503: ErrorResponse,
         },
       },
     },
-    async (request: FastifyRequest<{ Body: CreateOrderBody }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: CreateOrderBodyT }>, reply: FastifyReply) => {
       const body = request.body
 
-      if (!body || typeof body !== 'object') {
-        return reply.status(400).send({ error: 'Request body is required' })
-      }
-      if (!Array.isArray(body.items) || body.items.length === 0) {
-        return reply.status(400).send({ error: 'items must be a non-empty array' })
-      }
-      if (!body.customerName || !body.customerEmail) {
-        return reply.status(400).send({ error: 'customerName and customerEmail are required' })
-      }
-      if (
-        !body.shippingAddress ||
-        !body.shippingAddress.addressLine1 ||
-        !body.shippingAddress.city ||
-        !body.shippingAddress.state ||
-        !body.shippingAddress.postalCode ||
-        !body.shippingAddress.country
-      ) {
-        return reply.status(400).send({ error: 'shippingAddress is missing required fields' })
-      }
-      if (!body.paymentMethod) {
-        return reply.status(400).send({ error: 'paymentMethod is required' })
-      }
-      if (typeof body.subtotal !== 'number' || typeof body.totalAmount !== 'number') {
-        return reply.status(400).send({ error: 'subtotal and totalAmount must be numbers' })
-      }
+      // The strict body schema has already bounded and typed everything above.
+      // Ownership comes ONLY from the verified token. `request.auth` is null
+      // solely in AUTH_ENFORCE=report (the policy hook would have refused it in
+      // enforce), where the pre-auth 'guest' placeholder keeps checkout working
+      // while the would-be denial is logged.
+      const userId = request.auth?.userId ?? 'guest'
 
       // Pattern 2 (idempotency): a retried checkout must converge on ONE order.
       // The Idempotency-Key header wins over the body field when both are sent.
@@ -118,41 +84,59 @@ export function registerOrderCreateRoute(
         if (!sameOrder(existing, body)) {
           // Same key, different content: ignoring it would silently drop the
           // caller's second order; honouring it would break the key's meaning.
-          return reply.status(409).send({
-            error: 'Idempotency-Key was already used for a different order',
-          })
+          throw new AppError(
+            409,
+            'IDEMPOTENCY_CONFLICT',
+            'Idempotency-Key was already used for a different order'
+          )
         }
         return reply.header('Idempotent-Replay', 'true').status(200).send(toOrderRecord(existing))
       }
       const replayed = await replay()
       if (replayed) return replayed
 
+      const taxAmount = body.taxAmount ?? 0
+      const shippingAmount = body.shippingAmount ?? 0
+      const discountAmount = body.discountAmount ?? 0
+      const currency = body.currency ?? 'USD'
+
+      // Plan 4.3: the client's prices are claims, not facts. After the replay
+      // check (an old order must stay replayable after a price change) and before
+      // any write.
+      const catalogue = priceVerifier
+        ? await verifyPrices(request, priceVerifier, {
+            items: body.items,
+            subtotal: body.subtotal,
+            taxAmount,
+            shippingAmount,
+            discountAmount,
+            totalAmount: body.totalAmount,
+            currency,
+          })
+        : null
+
       let orderNumber: string
       try {
         orderNumber = await generateUniqueOrderNumber(prisma)
       } catch (err) {
         server.log.error(err)
-        return reply.status(500).send({ error: 'Failed to generate order number' })
+        throw new AppError(500, 'ORDER_NUMBER_FAILED', 'Failed to generate order number')
       }
 
-      // No authenticated user context is wired into ms-order yet (no auth
-      // middleware on this service), so unauthenticated/guest checkouts are
-      // accepted and stored with a 'guest' placeholder userId rather than
-      // rejected outright.
-      const userId = body.userId ?? 'guest'
-
-      const itemsWithComputedTotals = body.items.map((item) => ({
-        productId: item.productId,
-        productSku: item.sku,
-        productTitle: item.title,
-        unitPrice: item.unitPrice,
-        quantity: item.quantity,
-        totalPrice: Math.round(item.unitPrice * item.quantity * 100) / 100,
-      }))
-
-      const taxAmount = body.taxAmount ?? 0
-      const shippingAmount = body.shippingAmount ?? 0
-      const discountAmount = body.discountAmount ?? 0
+      const itemsWithComputedTotals = body.items.map((item) => {
+        // Enforce mode stores the catalogue's sku/title: they travel on the
+        // order events, so a client must not be able to rename a product.
+        const authoritative =
+          priceVerifier?.mode === 'enforce' ? catalogue?.get(item.productId) : undefined
+        return {
+          productId: item.productId,
+          productSku: authoritative?.sku ?? item.sku,
+          productTitle: authoritative?.title ?? item.title,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          totalPrice: Math.round(item.unitPrice * item.quantity * 100) / 100,
+        }
+      })
 
       // Payment state at creation drives BOTH the order status and which
       // queues are triggered.
@@ -170,7 +154,6 @@ export function registerOrderCreateRoute(
       // real condition order-expiration exists to handle.
       const paymentPreCaptured = body.paymentPreCaptured !== false
       const orderStatus = paymentPreCaptured ? 'CONFIRMED' : 'PENDING'
-      const currency = body.currency ?? 'USD'
 
       // Pattern 1 (outbox): the order rows AND the events describing them commit in one
       // transaction. A crash can no longer leave an order that nobody was told about.
@@ -320,7 +303,7 @@ function sameOrder(
     totalAmount: unknown
     items: { productId: string; quantity: number }[]
   },
-  body: CreateOrderBody
+  body: CreateOrderBodyT
 ): boolean {
   if (existing.customerEmail !== body.customerEmail) return false
   if (Number(existing.totalAmount) !== body.totalAmount) return false
@@ -330,4 +313,50 @@ function sameOrder(
       .sort()
       .join('|')
   return key(existing.items) === key(body.items)
+}
+
+/**
+ * Runs the catalogue check and applies PRICE_CHECK. Returns the catalogue
+ * entries it resolved (for authoritative sku/title), or null when the check
+ * could not run in report mode.
+ */
+async function verifyPrices(
+  request: FastifyRequest,
+  verifier: PriceVerifier,
+  input: Parameters<typeof checkOrderPrices>[1]
+): Promise<Map<string, { sku: string | null; title: string | null }> | null> {
+  const enforce = verifier.mode === 'enforce'
+  try {
+    const { mismatches, products } = await checkOrderPrices(verifier.client, input)
+    if (mismatches.length === 0) return products
+    request.log.warn(
+      {
+        priceCheck: {
+          code: 'PRICE_MISMATCH',
+          enforced: enforce,
+          mismatches: mismatches.slice(0, 20),
+        },
+      },
+      'order prices differ from the catalogue'
+    )
+    if (enforce) {
+      throw new AppError(422, 'PRICE_MISMATCH', 'Order prices do not match the catalogue', {
+        mismatches: mismatches.slice(0, 20),
+      })
+    }
+    return products
+  } catch (err) {
+    if (!(err instanceof ProductUnavailableError)) throw err
+    request.log.warn({ err: err.message, enforced: enforce }, 'price verification unavailable')
+    if (enforce) {
+      throw new AppError(
+        503,
+        'PRICE_CHECK_UNAVAILABLE',
+        'Prices cannot be verified right now, please retry shortly',
+        {},
+        { 'retry-after': '5' }
+      )
+    }
+    return null
+  }
 }

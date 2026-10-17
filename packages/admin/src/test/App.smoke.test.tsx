@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../App'
+import { WithAuth } from './authFixtures'
 
 // Mount effects (service health probes) fire a rejected, mocked `fetch` on
 // render; flushing one microtask tick lets those rejections settle inside
@@ -21,14 +22,22 @@ const flush = () => act(async () => {})
 // anyway so each screen also mounts and renders without throwing).
 describe('App smoke test', () => {
   it('renders the shell without throwing', async () => {
-    render(<App />)
+    render(
+      <WithAuth>
+        <App />
+      </WithAuth>
+    )
     await flush()
     expect(screen.getByText('Admin Cockpit', { exact: false })).toBeInTheDocument()
   })
 
   it('navigates through every tab — including Infra — without throwing', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    render(
+      <WithAuth>
+        <App />
+      </WithAuth>
+    )
     await flush()
 
     const tabLabels = [

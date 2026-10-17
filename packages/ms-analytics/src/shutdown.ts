@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify'
 import { closeServicePools } from '@ecommerce/shared-database'
 import type { EventConsumer, EventProducer } from '@ecommerce/shared-messaging'
+import type { SecurityHandle } from '@ecommerce/shared-security'
 
 export interface ShutdownDeps {
   server: FastifyInstance
   consumer: EventConsumer
   producer: EventProducer
+  security: SecurityHandle
 }
 
 /**
@@ -24,7 +26,12 @@ export interface ShutdownDeps {
  * than half-applying, but closing the pool first would turn every in-flight
  * event into a needless failure.
  */
-export function registerShutdownHandlers({ server, consumer, producer }: ShutdownDeps): void {
+export function registerShutdownHandlers({
+  server,
+  consumer,
+  producer,
+  security,
+}: ShutdownDeps): void {
   let shuttingDown = false
 
   const shutdown = async (signal: string) => {
@@ -38,6 +45,13 @@ export function registerShutdownHandlers({ server, consumer, producer }: Shutdow
       await server.close()
     } catch (err) {
       console.warn(`[Analytics Service] Error closing HTTP server: ${(err as Error).message}`)
+    }
+
+    // The rate-limit Redis handle is only needed while requests are served.
+    try {
+      await security.close()
+    } catch (err) {
+      console.warn(`[Analytics Service] Error closing security handle: ${(err as Error).message}`)
     }
 
     try {

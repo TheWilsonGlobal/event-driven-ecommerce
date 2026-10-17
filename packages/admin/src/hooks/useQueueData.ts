@@ -7,6 +7,7 @@ import {
   PRODUCT_SERVICE_AUTHORITY,
   PRODUCT_SERVICE_URL,
 } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 // Live queue + KV-cache introspection, served by ms-order and ms-product
 // directly (the API gateway does not proxy these routes).
@@ -67,7 +68,7 @@ export async function fetchJson<T>(url: string): Promise<T> {
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   let res: Response
   try {
-    res = await fetch(url, { signal: controller.signal })
+    res = await apiFetch(url, { signal: controller.signal })
   } catch (err) {
     // Service down, DNS/connection refused, CORS, or our own timeout abort.
     const aborted = err instanceof DOMException && err.name === 'AbortError'

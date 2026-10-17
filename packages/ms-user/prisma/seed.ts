@@ -22,7 +22,6 @@ export async function seedUsers(): Promise<{ inserted: number; skipped: boolean 
       data: {
         id: seedUser.id,
         email: seedUser.email,
-        passwordHash: seedUser.passwordHash,
         firstName: seedUser.firstName,
         lastName: seedUser.lastName,
         role: seedUser.role,

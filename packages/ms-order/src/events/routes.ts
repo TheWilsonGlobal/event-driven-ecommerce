@@ -36,6 +36,7 @@ export function registerEventRoutes(server: FastifyInstance, options: { repoRoot
   server.get(
     '/api/v1/events',
     {
+      config: { policy: { permission: 'ops:read', mfa: true } },
       schema: {
         tags: ['events'],
         description:
@@ -125,6 +126,7 @@ export function registerEventRoutes(server: FastifyInstance, options: { repoRoot
   server.patch<{ Body: { enabled: boolean } }>(
     '/api/v1/events/config',
     {
+      config: { policy: { permission: 'ops:write', mfa: true, audit: true }, rateTier: 'admin' },
       schema: {
         tags: ['events'],
         description:

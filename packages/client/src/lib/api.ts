@@ -1,10 +1,175 @@
 // Thin API client for talking to backend microservices from the storefront.
 // All calls go through the API gateway, not a direct service port, so the
 // storefront keeps working if a service moves behind the gateway later.
+// Every call goes through apiFetch (bearer token, one 401 retry, typed errors).
 
 import type { CartItem, Category, Product } from '../app/types'
+import { ApiError, friendlyMessage, type ApiFieldError } from './apiError'
+import { emitAuthRequired } from './authEvents'
+import { getBrowserSupabase } from './supabase/browser'
 
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? 'http://localhost:5460'
+export { ApiError, friendlyMessage, fieldMessages } from './apiError'
+export type { ApiFieldError } from './apiError'
+
+function gatewayUrl(): string {
+  return process.env.NEXT_PUBLIC_GATEWAY_URL ?? 'http://localhost:5460'
+}
+
+/** Refresh a little before the access token actually expires. */
+const EXPIRY_SKEW_MS = 30_000
+
+export type AuthMode = 'none' | 'optional' | 'required'
+
+export interface ApiFetchOptions {
+  method?: string
+  body?: unknown
+  headers?: Record<string, string>
+  /**
+   * none: never attach a token (public catalog reads).
+   * optional: attach the bearer token when a session exists.
+   * required: refuse (and ask the UI to prompt for sign-in) without a session.
+   */
+  auth?: AuthMode
+  /** Used in the "could not reach ..." message. */
+  serviceName?: string
+}
+
+async function getAccessToken(forceRefresh: boolean): Promise<string | null> {
+  const supabase = getBrowserSupabase()
+  if (!supabase) return null
+  try {
+    if (forceRefresh) {
+      const { data, error } = await supabase.auth.refreshSession()
+      return error ? null : (data.session?.access_token ?? null)
+    }
+    const { data } = await supabase.auth.getSession()
+    const session = data.session
+    if (!session) return null
+    if (session.expires_at && session.expires_at * 1000 - Date.now() < EXPIRY_SKEW_MS) {
+      const refreshed = await supabase.auth.refreshSession()
+      return refreshed.error ? null : (refreshed.data.session?.access_token ?? null)
+    }
+    return session.access_token
+  } catch {
+    // Never log the error object: it could carry session material.
+    return null
+  }
+}
+
+const DEFAULT_CODES: Record<number, string> = {
+  400: 'VALIDATION_FAILED',
+  401: 'AUTHENTICATION_REQUIRED',
+  403: 'FORBIDDEN',
+  413: 'PAYLOAD_TOO_LARGE',
+  422: 'UNPROCESSABLE',
+  429: 'RATE_LIMITED',
+  503: 'SERVICE_UNAVAILABLE',
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  let body: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = await response.json()
+    if (parsed && typeof parsed === 'object') body = parsed as Record<string, unknown>
+  } catch {
+    // non-JSON body: fall back to the generic message
+  }
+  const status = response.status
+  const headerRetry = Number(response.headers.get('retry-after'))
+  const bodyRetry = typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : NaN
+  const retryAfterSeconds =
+    Number.isFinite(headerRetry) && headerRetry > 0
+      ? Math.ceil(headerRetry)
+      : Number.isFinite(bodyRetry) && bodyRetry > 0
+        ? Math.ceil(bodyRetry)
+        : undefined
+  const message =
+    typeof body.message === 'string'
+      ? body.message
+      : typeof body.error === 'string'
+        ? body.error
+        : `The server returned an error (status ${status}).`
+  const fields = Array.isArray(body.fields)
+    ? (body.fields as ApiFieldError[]).filter(
+        (f) => f && typeof f.path === 'string' && typeof f.rule === 'string'
+      )
+    : []
+  return new ApiError({
+    status,
+    code: typeof body.code === 'string' ? body.code : (DEFAULT_CODES[status] ?? 'HTTP_ERROR'),
+    message,
+    requestId: typeof body.requestId === 'string' ? body.requestId : undefined,
+    fields,
+    retryAfterSeconds,
+  })
+}
+
+/**
+ * The single entry point for every gateway call.
+ *  - attaches `Authorization: Bearer <access_token>` (refreshing an expired token first)
+ *  - retries a 401 exactly once after `refreshSession`
+ *  - maps the standard error body to a typed ApiError (429 carries the wait time)
+ * The token is only ever placed in the request header, never logged or stored by us.
+ */
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const {
+    method = 'GET',
+    body,
+    headers = {},
+    auth = 'optional',
+    serviceName = 'the server',
+  } = options
+
+  const send = async (token: string | null): Promise<Response> => {
+    const h: Record<string, string> = { ...headers }
+    if (body !== undefined) h['Content-Type'] = 'application/json'
+    if (token) h['Authorization'] = `Bearer ${token}`
+    try {
+      return await fetch(`${gatewayUrl()}${path}`, {
+        method,
+        headers: h,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      })
+    } catch {
+      throw new ApiError({
+        status: 0,
+        code: 'NETWORK_ERROR',
+        message: `Could not reach ${serviceName}. Please check your connection and try again.`,
+      })
+    }
+  }
+
+  let token: string | null = null
+  if (auth !== 'none') {
+    token = await getAccessToken(false)
+    if (!token && auth === 'required') {
+      emitAuthRequired('Sign in to continue.')
+      throw new ApiError({
+        status: 401,
+        code: 'AUTHENTICATION_REQUIRED',
+        message: 'Please sign in to continue.',
+      })
+    }
+  }
+
+  let response = await send(token)
+
+  if (response.status === 401 && auth !== 'none') {
+    // One silent refresh + retry, then give up and ask the user to sign in.
+    const fresh = await getAccessToken(true)
+    if (fresh) response = await send(fresh)
+    if (response.status === 401) {
+      emitAuthRequired('Your session has expired. Please sign in again.')
+    }
+  }
+
+  if (!response.ok) throw await toApiError(response)
+  if (response.status === 204) return undefined as T
+  return (await response.json()) as T
+}
+
+/** Money must have at most 2 decimals on the wire. */
+export const roundMoney = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100
 
 export interface ShippingInfo {
   fullName: string
@@ -59,74 +224,65 @@ export interface CreatedOrder {
   updatedAt: string
 }
 
-export class OrderApiError extends Error {
-  status: number | undefined
-
-  constructor(message: string, status?: number) {
-    super(message)
-    this.name = 'OrderApiError'
-    this.status = status
-  }
-}
-
-export async function createOrder(
+/** Build the strict POST /orders body. userId comes from the token, never the body. */
+export function buildOrderBody(
   cart: CartItem[],
   shippingInfo: ShippingInfo,
   totals: CreateOrderTotals
-): Promise<CreatedOrder> {
-  const body = {
+) {
+  return {
     customerName: shippingInfo.fullName,
     customerEmail: shippingInfo.email,
     items: cart.map((item) => ({
       productId: item.product.id,
       sku: item.product.sku,
       title: item.product.title,
-      unitPrice: item.product.price,
-      quantity: item.quantity,
+      unitPrice: roundMoney(item.product.price),
+      quantity: Math.min(1000, Math.max(1, Math.trunc(item.quantity))),
     })),
     shippingAddress: {
       addressLine1: shippingInfo.addressLine1,
       city: shippingInfo.city,
       state: shippingInfo.state,
       postalCode: shippingInfo.postalCode,
-      country: 'United States',
+      country: 'US',
     },
     paymentMethod: 'STRIPE',
-    subtotal: totals.subtotal,
-    taxAmount: totals.taxAmount,
-    shippingAmount: totals.shippingAmount,
-    discountAmount: totals.discountAmount,
-    totalAmount: totals.totalAmount,
+    subtotal: roundMoney(totals.subtotal),
+    taxAmount: roundMoney(totals.taxAmount),
+    shippingAmount: roundMoney(totals.shippingAmount),
+    discountAmount: roundMoney(totals.discountAmount),
+    totalAmount: roundMoney(totals.totalAmount),
     currency: totals.currency,
   }
+}
 
-  let response: Response
-  try {
-    response = await fetch(`${GATEWAY_URL}/api/v1/orders`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-  } catch (err) {
-    throw new OrderApiError(
-      'Could not reach Order Service. Please check your connection and try again.'
-    )
-  }
+export function createOrder(
+  cart: CartItem[],
+  shippingInfo: ShippingInfo,
+  totals: CreateOrderTotals
+): Promise<CreatedOrder> {
+  return apiFetch<CreatedOrder>('/api/v1/orders', {
+    method: 'POST',
+    body: buildOrderBody(cart, shippingInfo, totals),
+    auth: 'required',
+    serviceName: 'Order Service',
+  })
+}
 
-  if (!response.ok) {
-    let errorMessage = `Order Service returned an error (status ${response.status}).`
-    try {
-      const errorBody = await response.json()
-      if (errorBody && typeof errorBody.error === 'string') {
-        errorMessage = errorBody.error
-      }
-    } catch {
-      // response body wasn't JSON — fall back to the generic message
-    }
-    throw new OrderApiError(errorMessage, response.status)
-  }
+export interface UserProfile {
+  id: string
+  email: string
+  role: string
+  [key: string]: unknown
+}
 
-  return (await response.json()) as CreatedOrder
+/** The caller's profile (auto-provisioned by the backend on first call). */
+export function getMe(): Promise<UserProfile> {
+  return apiFetch<UserProfile>('/api/v1/users/me', {
+    auth: 'required',
+    serviceName: 'User Service',
+  })
 }
 
 export class ProductApiError extends Error {
@@ -136,31 +292,31 @@ export class ProductApiError extends Error {
   }
 }
 
-export async function getProducts(): Promise<Product[]> {
-  let response: Response
+async function publicGet<T>(path: string, service: string): Promise<T> {
   try {
-    response = await fetch(`${GATEWAY_URL}/api/v1/products?limit=100`)
-  } catch {
-    throw new ProductApiError('Could not reach Product Service. Please check your connection.')
+    return await apiFetch<T>(path, { auth: 'none', serviceName: service })
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new ProductApiError(
+        err.status === 0
+          ? `Could not reach ${service}. Please check your connection.`
+          : friendlyMessage(err)
+      )
+    }
+    throw err
   }
-  if (!response.ok) {
-    throw new ProductApiError(`Product Service returned an error (status ${response.status}).`)
-  }
-  const body = (await response.json()) as { products: Product[] }
+}
+
+export async function getProducts(): Promise<Product[]> {
+  const body = await publicGet<{ products: Product[] }>(
+    '/api/v1/products?limit=100',
+    'Product Service'
+  )
   return body.products
 }
 
 export async function getCategories(): Promise<Category[]> {
-  let response: Response
-  try {
-    response = await fetch(`${GATEWAY_URL}/api/v1/categories`)
-  } catch {
-    throw new ProductApiError('Could not reach Product Service. Please check your connection.')
-  }
-  if (!response.ok) {
-    throw new ProductApiError(`Product Service returned an error (status ${response.status}).`)
-  }
-  const body = (await response.json()) as { categories: Category[] }
+  const body = await publicGet<{ categories: Category[] }>('/api/v1/categories', 'Product Service')
   return body.categories
 }
 
@@ -187,15 +343,20 @@ export class TopologyApiError extends Error {
  * "the gateway is unreachable" should look like, not this function.
  */
 export async function getTopology(): Promise<ServiceLocation[]> {
-  let response: Response
   try {
-    response = await fetch(`${GATEWAY_URL}/api/v1/topology`)
-  } catch {
-    throw new TopologyApiError('Could not reach the API gateway. Please check your connection.')
+    const body = await apiFetch<{ services: ServiceLocation[] }>('/api/v1/topology', {
+      auth: 'none',
+      serviceName: 'the API gateway',
+    })
+    return body.services
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new TopologyApiError(
+        err.status === 0
+          ? 'Could not reach the API gateway. Please check your connection.'
+          : `API gateway returned an error (status ${err.status}).`
+      )
+    }
+    throw err
   }
-  if (!response.ok) {
-    throw new TopologyApiError(`API gateway returned an error (status ${response.status}).`)
-  }
-  const body = (await response.json()) as { services: ServiceLocation[] }
-  return body.services
 }

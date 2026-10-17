@@ -13,7 +13,12 @@ datasource db {
 model User {
   id              String         @id @default(uuid())
   email           String         @unique
-  passwordHash    String         @map("password_hash")
+  // DEPRECATED: Supabase Auth owns credentials now. Nullable and no longer
+  // written; kept (not dropped) until the cutover is verified.
+  passwordHash    String?        @map("password_hash")
+  // The Supabase auth.users id (JWT `sub`). The access-token hook looks the role
+  // up by this column, and ownership checks compare it to the caller's `sub`.
+  authUserId      String?        @unique @map("auth_user_id") @db.Uuid
   firstName       String         @map("first_name")
   lastName        String         @map("last_name")
   phoneNumber     String?        @map("phone_number")
@@ -47,6 +52,8 @@ model Address {
   @@map("addresses")
 }
 
+// DEPRECATED: Supabase Auth issues and rotates refresh tokens. Nothing reads or
+// writes this table any more; it is left in place until the cutover is verified.
 model RefreshToken {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
@@ -58,4 +65,21 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+// Append-only record of privileged changes to accounts (create, delete, role and
+// status changes). Not a relation to users on purpose: the row must outlive the
+// account it describes, e.g. a delete.
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?  @map("actor_user_id")
+  actorRole    String?  @map("actor_role")
+  action       String
+  targetUserId String?  @map("target_user_id")
+  details      Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([targetUserId])
+  @@index([createdAt])
+  @@map("audit_log")
 }

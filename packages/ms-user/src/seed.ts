@@ -1,18 +1,9 @@
 import type { FastifyInstance } from 'fastify'
-import * as bcrypt from 'bcryptjs'
 import { PrismaClient } from '../node_modules/.prisma-ms-user/client'
 import { SEED_USERS } from '@ecommerce/shared-database'
 
 import * as fs from 'fs'
 import * as path from 'path'
-
-// Placeholder dev password hash used for users created ad hoc via the admin
-// "Add User" flow, where no real credential is collected yet. Same approach
-// as the shared SEED_USERS records (bcrypt hash of "Password123!").
-export const PLACEHOLDER_PASSWORD_HASH = bcrypt.hashSync(
-  `placeholder-${Date.now()}-${Math.random()}`,
-  10
-)
 
 async function ensureTables(server: FastifyInstance, prisma: PrismaClient): Promise<void> {
   const migrationsDir = path.resolve(__dirname, '../prisma/migrations')
@@ -39,6 +30,11 @@ async function ensureTables(server: FastifyInstance, prisma: PrismaClient): Prom
  * Self-seeds the users table from the shared SEED_USERS source of truth if
  * (and only if) it is currently empty. Safe to call on every service start:
  * restarts never duplicate data since it no-ops once users exist.
+ *
+ * Profiles only: credentials live in Supabase Auth now, so no password hash is
+ * written (SEED_USERS still carries one for the other consumers of that list).
+ * The rows start with no auth_user_id; `pnpm run auth:sync` creates the matching
+ * Supabase accounts and links them.
  */
 export async function seedIfEmpty(server: FastifyInstance, prisma: PrismaClient): Promise<void> {
   try {
@@ -62,7 +58,6 @@ export async function seedIfEmpty(server: FastifyInstance, prisma: PrismaClient)
       data: {
         id: seedUser.id,
         email: seedUser.email,
-        passwordHash: seedUser.passwordHash,
         firstName: seedUser.firstName,
         lastName: seedUser.lastName,
         role: seedUser.role,

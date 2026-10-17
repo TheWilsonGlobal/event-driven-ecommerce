@@ -1,4 +1,5 @@
 import {
+  validatePayload,
   type EventEnvelope,
   type OrderCancelledPayload,
   type OrderCreatedPayload,
@@ -192,15 +193,22 @@ export async function handleOrderCreated(
       return { kind: 'duplicate' }
     }
 
+    const valid = validatePayload(envelope.eventType, payload)
     if (
+      !valid.ok ||
       !payload ||
       typeof payload.orderId !== 'string' ||
       !Array.isArray(payload.items) ||
       !hasUsableItems(payload.items)
     ) {
-      // Malformed beyond the envelope's own validation. Recorded as handled so a
-      // redelivery does not re-log it forever — retrying could never succeed.
+      // Malformed beyond the envelope's own validation (the schema from
+      // shared-messaging, plus the local line checks). Recorded as handled so a
+      // redelivery does not re-log it forever; retrying could never succeed.
       await setOutcome(tx, envelope.eventId, 'rejected:malformed-payload')
+      console.warn(
+        `${LOG_PREFIX} Rejected malformed ${envelope.eventType} ` +
+          `(eventId=${envelope.eventId}): ${valid.ok ? 'unusable line items' : valid.reason}`
+      )
       return { kind: 'rejected' }
     }
 
@@ -347,8 +355,13 @@ export async function handleOrderCancelled(
       return { kind: 'duplicate' }
     }
 
-    if (!payload || typeof payload.orderId !== 'string') {
+    const valid = validatePayload(envelope.eventType, payload)
+    if (!valid.ok || !payload || typeof payload.orderId !== 'string') {
       await setOutcome(tx, envelope.eventId, 'rejected:malformed-payload')
+      console.warn(
+        `${LOG_PREFIX} Rejected malformed ${envelope.eventType} ` +
+          `(eventId=${envelope.eventId}): ${valid.ok ? 'no orderId' : valid.reason}`
+      )
       return { kind: 'rejected' }
     }
 

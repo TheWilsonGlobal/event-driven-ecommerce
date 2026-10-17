@@ -17,16 +17,16 @@ import {
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
 import { MIGRATIONS_DIR, createAnalyticsStore } from './aggregates/store'
-import {
-  createAnalyticsConsumer,
-  eventProducer,
-  kafkaAdminClient,
-  kafkaSettings,
-  registerEventRoutes,
-} from './events'
+import { createAnalyticsConsumer, eventProducer, kafkaAdminClient, kafkaSettings } from './events'
 import { registerKafkaMetrics } from '@ecommerce/shared-messaging'
-import { registerAnalyticsRoutes, registerHealthRoutes } from './routes'
+import { registerServiceRoutes } from './routes'
 import { registerShutdownHandlers } from './shutdown'
+import {
+  assertPolicyCoverage,
+  securityServerOptions,
+  type SecurityHandle,
+} from '@ecommerce/shared-security'
+import { registerAnalyticsSecurity } from './security'
 
 /**
  * ms-analytics — the PURE CONSUMER that demonstrates fan-out.
@@ -81,6 +81,7 @@ const store = createAnalyticsStore()
 const consumer = createAnalyticsConsumer(store)
 
 let server: FastifyInstance
+let security: SecurityHandle
 
 async function bootstrap() {
   // Schema before anything that can write to it. Awaited before the server
@@ -106,7 +107,16 @@ async function bootstrap() {
     process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
 
   server = fastify({
+    ...securityServerOptions(),
     logger: buildLoggerOptions({ service: 'ms-analytics', lokiReachable }),
+  })
+
+  // FIRST, before any plugin or route: the policy hook only sees routes
+  // registered after it, and the strict validator / error handler must be in
+  // place for every route. Redis backs the rate limiter only when the KV driver
+  // is Redis; otherwise a per-process store is used (not shared across replicas).
+  security = await registerAnalyticsSecurity(server, {
+    redis: dbConfig.keyValue.driver === 'redis' ? dbConfig.keyValue.redis : null,
   })
 
   // Before every other plugin, so the onResponse hook sees all traffic.
@@ -128,7 +138,13 @@ async function bootstrap() {
   // registered after this hook is attached.
   const routeRegistry = createRouteRegistry(server)
 
-  await server.register(cors, { origin: '*' })
+  // An allow-list from CORS_ORIGINS; empty means no cross-origin access at all
+  // (never '*'). Bearer tokens travel in a header, so no credentials mode.
+  await server.register(cors, {
+    origin: security.config.corsOrigins.length > 0 ? security.config.corsOrigins : false,
+    allowedHeaders: ['Authorization', 'Content-Type'],
+    exposedHeaders: ['Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+  })
   await server.register(helmet)
 
   await server.register(swagger, {
@@ -156,12 +172,15 @@ async function bootstrap() {
     uiConfig: { docExpansion: 'list', deepLinking: true },
   })
 
-  registerHealthRoutes(server, { dbConfig, consumer })
-  registerAnalyticsRoutes(server, { store })
-  registerEventRoutes(server, consumer)
+  registerServiceRoutes(server, { dbConfig, consumer, store })
   registerEndpointsRoute(server, routeRegistry, 'ms-analytics')
 
-  registerShutdownHandlers({ server, consumer, producer: eventProducer })
+  // Default deny, checked at boot outside production: a route someone adds
+  // without a policy stops the service from starting instead of silently
+  // answering 403 (or, in report mode, 200) to everyone.
+  if (!security.config.production) assertPolicyCoverage(server)
+
+  registerShutdownHandlers({ server, consumer, producer: eventProducer, security })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

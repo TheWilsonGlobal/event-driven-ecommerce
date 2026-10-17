@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { DocumentDatabaseAdapter } from '@ecommerce/shared-database'
+import { OPS_POLICY } from '../security'
 
 const SERVICE = 'ms-product'
 
@@ -79,6 +80,7 @@ export function registerSchemaRoutes(
   server.get(
     '/api/v1/schema',
     {
+      config: { policy: OPS_POLICY },
       schema: {
         tags: ['schema'],
         description:

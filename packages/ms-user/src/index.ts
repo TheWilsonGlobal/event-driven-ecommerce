@@ -13,13 +13,17 @@ import {
   buildLoggerOptions,
   probeLokiReachable,
   createRouteRegistry,
-  registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
-import { registerSchemaRoutes, registerLogRoutes } from './diagnostics'
+import {
+  assertPolicyCoverage,
+  registerSecurity,
+  securityServerOptions,
+  type SecurityHandle,
+} from '@ecommerce/shared-security'
 import { seedIfEmpty } from './seed'
-import { registerHealthRoute } from './routes/health'
-import { registerUserRoutes } from './routes/users'
-import { registerAuthRoutes } from './routes/auth'
+import { registerRoutes } from './routes'
+import { createSupabaseAuth, loadSupabaseConfig } from './supabase'
+import { applyForeignRoutePolicies, redisForRateLimit, resolveCorsOrigins } from './security'
 
 // Package-local .env first (an optional override; dotenv never overrides
 // already-set keys), then the repo-root .env. The Prisma schema reads
@@ -37,6 +41,7 @@ const prisma = new PrismaClient()
 // constructed — an unreachable Loki then produces one quiet line here
 // instead of a stack trace per log line for the life of the process.
 let server: FastifyInstance
+let security: SecurityHandle | undefined
 
 async function bootstrap() {
   const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
@@ -44,7 +49,18 @@ async function bootstrap() {
     process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
 
   server = fastify({
+    ...securityServerOptions(),
     logger: buildLoggerOptions({ service: 'ms-user', lokiReachable }),
+  })
+
+  // API defense (change-05): strict validation, rate limits, JWT verification and
+  // the route policy hook. Must come before ANY route is registered, so the policy
+  // for /metrics and /api/v1/endpoints (registered by shared libraries) is amended
+  // first, then the security plugins attach.
+  applyForeignRoutePolicies(server)
+  security = await registerSecurity(server, {
+    service: 'ms-user',
+    redis: redisForRateLimit(dbConfig),
   })
 
   await seedIfEmpty(server, prisma)
@@ -56,7 +72,11 @@ async function bootstrap() {
   // registered after this hook is attached.
   const routeRegistry = createRouteRegistry(server)
 
-  await server.register(cors, { origin: '*' })
+  // Allow-list from CORS_ORIGINS, never '*'.
+  await server.register(cors, {
+    origin: resolveCorsOrigins(process.env.CORS_ORIGINS),
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  })
   await server.register(helmet)
 
   await server.register(swagger, {
@@ -84,13 +104,16 @@ async function bootstrap() {
     uiConfig: { docExpansion: 'list', deepLinking: true },
   })
 
-  registerHealthRoute(server, dbConfig, prisma)
-  registerUserRoutes(server, { prisma })
-  registerAuthRoutes(server, { prisma })
+  registerRoutes(server, {
+    prisma,
+    supabase: createSupabaseAuth(loadSupabaseConfig()),
+    dbConfig,
+    routeRegistry,
+  })
 
-  registerSchemaRoutes(server, prisma)
-  registerLogRoutes(server)
-  registerEndpointsRoute(server, routeRegistry, 'ms-user')
+  // Default deny made loud: a route added without a policy stops the boot in
+  // development instead of answering 403 to everyone in production.
+  if (process.env.NODE_ENV !== 'production') assertPolicyCoverage(server)
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })
@@ -103,7 +126,11 @@ async function bootstrap() {
 
 bootstrap()
 
-process.on('SIGTERM', async () => {
+async function shutdown() {
+  await security?.close()
   await prisma.$disconnect()
   process.exit(0)
-})
+}
+
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)

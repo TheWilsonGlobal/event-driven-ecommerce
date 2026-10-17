@@ -34,6 +34,7 @@
       "@ecommerce/shared-utils": ["./packages/shared/utils/src"],
       "@ecommerce/shared-database": ["./packages/shared/database/src"],
       "@ecommerce/shared-messaging": ["./packages/shared/messaging/src"],
+      "@ecommerce/shared-security": ["./packages/shared/security/src"],
       "@ecommerce/gateway": ["./packages/gateway/src"],
       "@ecommerce/ms-user": ["./packages/ms-user/src"],
       "@ecommerce/ms-product": ["./packages/ms-product/src"],

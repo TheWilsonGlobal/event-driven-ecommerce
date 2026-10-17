@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { OrderRecord } from '../../types'
 import { ORDER_SERVICE_URL } from '../../data/serviceUrls'
 import { FETCH_ALL_LIMIT, mapOrder } from './mappers'
+import { apiFetch, toApiError } from '../../data/apiFetch'
 
 export function useOrders(showToast: (msg: string) => void) {
   const [orders, setOrders] = useState<OrderRecord[]>([])
@@ -18,7 +19,9 @@ export function useOrders(showToast: (msg: string) => void) {
     setOrdersLoading(true)
     setOrdersError(null)
     try {
-      const res = await fetch(`${ORDER_SERVICE_URL}/api/v1/orders?page=1&limit=${FETCH_ALL_LIMIT}`)
+      const res = await apiFetch(
+        `${ORDER_SERVICE_URL}/api/v1/orders?page=1&limit=${FETCH_ALL_LIMIT}`
+      )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setOrders((data.orders ?? []).map(mapOrder))
@@ -37,14 +40,13 @@ export function useOrders(showToast: (msg: string) => void) {
 
   const handleUpdateOrderStatus = async (orderId: string, newStatus: OrderRecord['status']) => {
     try {
-      const res = await fetch(`${ORDER_SERVICE_URL}/api/v1/orders/${orderId}`, {
+      const res = await apiFetch(`${ORDER_SERVICE_URL}/api/v1/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error ?? `HTTP ${res.status}`)
+        throw await toApiError(res)
       }
       showToast(`Order status updated to ${newStatus}`)
       if (selectedOrder?.id === orderId) {

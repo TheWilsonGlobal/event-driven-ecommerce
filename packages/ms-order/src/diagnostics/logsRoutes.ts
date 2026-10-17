@@ -1,5 +1,7 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { listLogFiles, readLogFile } from '@ecommerce/shared-utils'
+import { AppError, notFound } from '@ecommerce/shared-security'
+import { ErrorResponse, LogFileParams } from '../routes/schemas'
 
 const SERVICE = 'ms-order'
 
@@ -27,6 +29,7 @@ export function registerLogRoutes(server: FastifyInstance): void {
   server.get(
     '/api/v1/logs',
     {
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['logs'],
         description:
@@ -53,17 +56,14 @@ export function registerLogRoutes(server: FastifyInstance): void {
   server.get(
     '/api/v1/logs/:filename',
     {
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['logs'],
         description:
           "Return one real log file's raw NDJSON content by filename. The filename is " +
           "validated against this service's real log directory listing first; path traversal " +
           '(`..`, `/`, `\\`) and any name not already on disk are rejected with 400/404.',
-        params: {
-          type: 'object',
-          properties: { filename: { type: 'string' } },
-          required: ['filename'],
-        },
+        params: LogFileParams,
         response: {
           200: {
             type: 'object',
@@ -74,20 +74,20 @@ export function registerLogRoutes(server: FastifyInstance): void {
             },
             required: ['filename', 'sizeBytes', 'content'],
           },
-          400: { type: 'object', properties: { error: { type: 'string' } } },
-          404: { type: 'object', properties: { error: { type: 'string' } } },
+          400: ErrorResponse,
+          404: ErrorResponse,
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { filename: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Params: { filename: string } }>) => {
       const { filename } = request.params
       const result = await readLogFile(SERVICE, filename)
 
       if (!result.ok) {
         if (result.reason === 'invalid_filename') {
-          return reply.status(400).send({ error: 'Invalid filename' })
+          throw new AppError(400, 'INVALID_FILENAME', 'Invalid filename')
         }
-        return reply.status(404).send({ error: `Log file ${filename} not found` })
+        throw notFound('Log file not found')
       }
 
       return result.data

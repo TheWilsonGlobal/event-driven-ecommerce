@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { ServiceItem, RustfsHealth } from '../types'
 import { SERVICE_REGISTRY } from '../data/serviceRegistry'
 import { PRODUCT_SERVICE_URL, RUSTFS_BUCKET, RUSTFS_ENDPOINT } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 export function useServiceProbes(autoPolling: boolean) {
   const [services, setServices] = useState<ServiceItem[]>(SERVICE_REGISTRY)
@@ -20,7 +21,7 @@ export function useServiceProbes(autoPolling: boolean) {
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 2000)
-      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/health`, {
+      const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/health`, {
         signal: controller.signal,
       })
       clearTimeout(timeoutId)
@@ -59,7 +60,7 @@ export function useServiceProbes(autoPolling: boolean) {
           const controller = new AbortController()
           const timeoutId = setTimeout(() => controller.abort(), 1200)
           try {
-            const res = await fetch(svc.healthUrl, { signal: controller.signal })
+            const res = await apiFetch(svc.healthUrl, { signal: controller.signal })
             clearTimeout(timeoutId)
             const latencyMs = Date.now() - startTime
             let details: Record<string, unknown> | undefined

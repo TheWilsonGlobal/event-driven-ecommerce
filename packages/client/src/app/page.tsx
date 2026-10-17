@@ -12,6 +12,7 @@ import { useCatalog } from './hooks/useCatalog'
 import { useToast } from './hooks/useToast'
 import { useCart } from './hooks/useCart'
 import { useCheckout } from './hooks/useCheckout'
+import { getProducts } from '../lib/api'
 
 export default function ClientStorefront() {
   const {
@@ -32,6 +33,7 @@ export default function ClientStorefront() {
 
   const {
     cart,
+    setCart,
     isCartOpen,
     setIsCartOpen,
     discountCode,
@@ -55,6 +57,7 @@ export default function ClientStorefront() {
     quickViewProduct,
     setQuickViewProduct,
     isCheckoutOpen,
+    beginCheckout,
     setIsCheckoutOpen,
     checkoutStep,
     setCheckoutStep,
@@ -63,7 +66,6 @@ export default function ClientStorefront() {
     handleShippingInfoChange,
     isSubmittingOrder,
     checkoutError,
-    setCheckoutError,
     handleCompleteOrder,
   } = useCheckout({
     cart,
@@ -74,6 +76,17 @@ export default function ClientStorefront() {
     finalTotal,
     clearCart,
     showToast,
+    onPriceMismatch: async () => {
+      const fresh = await getProducts()
+      setCart((prev) =>
+        prev.map((item) => ({
+          ...item,
+          product: fresh.find((x) => x.id === item.product.id) ?? item.product,
+        }))
+      )
+      setIsCheckoutOpen(false)
+      setIsCartOpen(true)
+    },
   })
 
   return (
@@ -149,9 +162,7 @@ export default function ClientStorefront() {
         onApplyPromo={applyPromoCode}
         onCheckout={() => {
           setIsCartOpen(false)
-          setIsCheckoutOpen(true)
-          setCheckoutStep('shipping')
-          setCheckoutError('')
+          beginCheckout()
         }}
       />
 

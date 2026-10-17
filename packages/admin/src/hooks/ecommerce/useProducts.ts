@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { ProductRecord } from '../../types'
 import { PRODUCT_SERVICE_URL } from '../../data/serviceUrls'
 import { FETCH_ALL_LIMIT, mapProduct } from './mappers'
+import { apiFetch, toApiError } from '../../data/apiFetch'
 
 export function useProducts(showToast: (msg: string) => void) {
   const [products, setProducts] = useState<ProductRecord[]>([])
@@ -21,7 +22,7 @@ export function useProducts(showToast: (msg: string) => void) {
     setProductsLoading(true)
     setProductsError(null)
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${PRODUCT_SERVICE_URL}/api/v1/products?page=1&limit=${FETCH_ALL_LIMIT}`
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -40,7 +41,7 @@ export function useProducts(showToast: (msg: string) => void) {
 
   const fetchObjectCount = useCallback(async () => {
     try {
-      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
+      const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setObjectCount(Array.isArray(data.objects) ? data.objects.length : 0)
@@ -80,7 +81,7 @@ export function useProducts(showToast: (msg: string) => void) {
 
     try {
       if (editingProduct) {
-        const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${editingProduct.id}`, {
+        const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${editingProduct.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -94,12 +95,11 @@ export function useProducts(showToast: (msg: string) => void) {
           }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.error ?? `HTTP ${res.status}`)
+          throw await toApiError(res)
         }
         showToast(`Product "${title}" updated!`)
       } else {
-        const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products`, {
+        const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/products`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -120,8 +120,7 @@ export function useProducts(showToast: (msg: string) => void) {
           }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.error ?? `HTTP ${res.status}`)
+          throw await toApiError(res)
         }
         showToast(`Product "${title}" added!`)
       }
@@ -134,12 +133,11 @@ export function useProducts(showToast: (msg: string) => void) {
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return
     try {
-      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${id}`, {
+      const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${id}`, {
         method: 'DELETE',
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error ?? `HTTP ${res.status}`)
+        throw await toApiError(res)
       }
       showToast('Product deleted')
       await fetchProducts()

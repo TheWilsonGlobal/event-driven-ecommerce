@@ -16,13 +16,20 @@ export type UserWithAddresses = PrismaUser & {
   }>
 }
 
-/** Maps a Prisma User (with addresses included) to the public API shape, dropping passwordHash. */
-export function toPublicUser(user: UserWithAddresses): User {
+export type PublicUser = User & { phoneNumber: string | null }
+
+/**
+ * Maps a Prisma User (with addresses included) to the public API shape. It names
+ * fields one by one, so passwordHash and authUserId can never ride along, and the
+ * closed response schema is a second wall behind it.
+ */
+export function toPublicUser(user: UserWithAddresses): PublicUser {
   return {
     id: user.id,
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    phoneNumber: user.phoneNumber,
     // user.role is an untyped Prisma String column — this mapping is the
     // trusted boundary where it's asserted into the shared UserRole contract.
     role: user.role as UserRole,

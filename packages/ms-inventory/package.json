@@ -16,6 +16,7 @@
   "dependencies": {
     "@ecommerce/shared-database": "workspace:*",
     "@ecommerce/shared-messaging": "workspace:*",
+    "@ecommerce/shared-security": "workspace:*",
     "@ecommerce/shared-types": "workspace:*",
     "@ecommerce/shared-utils": "workspace:*",
     "@fastify/cors": "^8.5.0",

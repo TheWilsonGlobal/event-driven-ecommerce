@@ -7,6 +7,13 @@ import type { Category, Product } from '@ecommerce/shared-types'
 export interface ProductDoc extends Omit<Product, 'id'> {
   id?: string
   _id?: string
+  /**
+   * The Supabase user id of the VENDOR who created the product. Absent on seeded
+   * and admin-created products, which makes them ADMIN-only to edit. Never
+   * returned by the API (the response schema omits it) and never writable from a
+   * request body.
+   */
+  vendorId?: string
 }
 
 export interface CategoryDoc extends Omit<Category, 'id'> {

@@ -27,6 +27,7 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
   server.get(
     '/api/v1/queues',
     {
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['queues'],
         description:
@@ -103,6 +104,7 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
   server.get(
     '/api/v1/cache/namespaces',
     {
+      config: { policy: { permission: 'ops:read', mfa: true } },
       schema: {
         tags: ['cache'],
         description:
@@ -176,6 +178,7 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
   server.get(
     '/api/v1/cache/keys',
     {
+      config: { policy: { permission: 'ops:read', mfa: true }, rateTier: 'expensive' },
       schema: {
         tags: ['cache'],
         description:
@@ -223,6 +226,7 @@ export function registerQueueRoutes(server: FastifyInstance, queueManager: Queue
   server.get(
     '/api/v1/cache/driver',
     {
+      config: { policy: { permission: 'ops:read', mfa: true } },
       schema: {
         tags: ['cache'],
         description:

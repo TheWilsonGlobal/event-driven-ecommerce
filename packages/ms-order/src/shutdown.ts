@@ -3,6 +3,7 @@ import { PrismaClient } from '../node_modules/.prisma-ms-order/client'
 import type { KeyValueStoreAdapter } from '@ecommerce/shared-database'
 import { QueueManager } from './queues'
 import type { EventProducer, OutboxRelay } from '@ecommerce/shared-messaging'
+import type { SecurityHandle } from '@ecommerce/shared-security'
 import { closeServicePools } from '@ecommerce/shared-database'
 
 export interface ShutdownDeps {
@@ -12,6 +13,7 @@ export interface ShutdownDeps {
   prisma: PrismaClient
   eventProducer: EventProducer
   outboxRelay: OutboxRelay
+  security: SecurityHandle
 }
 
 /**
@@ -26,6 +28,7 @@ export function registerShutdownHandlers({
   prisma,
   eventProducer,
   outboxRelay,
+  security,
 }: ShutdownDeps): void {
   let shuttingDown = false
 
@@ -42,7 +45,14 @@ export function registerShutdownHandlers({
       console.warn(`[Order Service] Error closing HTTP server: ${(err as Error).message}`)
     }
 
-    // First: stop claiming, and let an in-flight send finish so its lease is not
+    // The rate-limit Redis handle is only needed while requests are served.
+    try {
+      await security.close()
+    } catch (err) {
+      console.warn(`[Order Service] Error closing security handle: ${(err as Error).message}`)
+    }
+
+    // Next: stop claiming, and let an in-flight send finish so its lease is not
     // left dangling. Must precede closing the producer the relay publishes through.
     try {
       await outboxRelay.stop()

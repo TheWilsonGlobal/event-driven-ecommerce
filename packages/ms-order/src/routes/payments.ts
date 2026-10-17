@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
+import { AppError, notFound, requireOwnerOrAny, type Static } from '@ecommerce/shared-security'
 import { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import { QueueManager } from '../queues'
 import {
@@ -7,6 +8,16 @@ import {
   stagePaymentFailed,
   stagePaymentRefunded,
 } from '../events'
+import { requireCapability } from '../security'
+import {
+  CaptureBody,
+  CaptureOut,
+  CaptureParams,
+  ErrorResponse,
+  SagaFailureBody,
+  SagaFailureOut,
+  OrderRefParams,
+} from './schemas'
 
 export interface PaymentsRouteDeps {
   prisma: PrismaClient
@@ -56,44 +67,32 @@ export function registerPaymentRoutes(
   server.post(
     '/api/v1/payments/:orderId/capture',
     {
+      config: { policy: { permission: 'payments:capture' }, rateTier: 'write' },
       schema: {
         tags: ['payments'],
         description:
-          'Attempt to capture payment for a PENDING order. On failure, enqueues a ' +
-          'retry-capture job (payment-retry queue) which, once retries are exhausted, ' +
-          'enqueues a refund-payment compensation (saga-compensation queue). ' +
-          'The capture call itself is simulated — no payment provider is contacted.',
-        params: {
-          type: 'object',
-          properties: { orderId: { type: 'string' } },
-          required: ['orderId'],
-        },
-        body: {
-          type: 'object',
-          properties: {
-            outcome: {
-              type: 'string',
-              enum: ['succeed', 'fail'],
-              description:
-                'Forces the simulated capture result. Omit for a random outcome. ' +
-                'Operator/demo control — this repo has no payment credentials.',
-            },
-          },
-        },
+          'Attempt to capture payment for a PENDING order (the owner, or payments:capture:any). ' +
+          'On failure, enqueues a retry-capture job (payment-retry queue) which, once retries ' +
+          'are exhausted, enqueues a refund-payment compensation (saga-compensation queue). ' +
+          'The capture call itself is simulated: no payment provider is contacted. `outcome` ' +
+          'forces the simulated result and is an operator control (payments:capture:any only).',
+        params: CaptureParams,
+        body: CaptureBody,
         response: {
-          200: { type: 'object', additionalProperties: true },
-          400: { type: 'object', properties: { error: { type: 'string' } } },
-          404: { type: 'object', properties: { error: { type: 'string' } } },
-          409: { type: 'object', properties: { error: { type: 'string' } } },
+          200: CaptureOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+          404: ErrorResponse,
+          409: ErrorResponse,
         },
       },
     },
     async (
       request: FastifyRequest<{
-        Params: { orderId: string }
-        Body: { outcome?: 'succeed' | 'fail' }
-      }>,
-      reply: FastifyReply
+        Params: Static<typeof CaptureParams>
+        Body: Static<typeof CaptureBody>
+      }>
     ) => {
       const { orderId } = request.params
 
@@ -101,21 +100,27 @@ export function registerPaymentRoutes(
         where: { id: orderId },
         include: { items: true, payments: true },
       })
-      if (!order) {
-        return reply.status(404).send({ error: 'Order not found' })
-      }
+      if (!order) throw notFound()
+      requireOwnerOrAny(request, order.userId, 'payments:capture')
 
       const pendingPayment = order.payments.find((p) => p.status === 'PENDING')
       if (!pendingPayment) {
-        return reply.status(400).send({
-          error: 'Order has no PENDING payment to capture',
-        })
+        throw new AppError(400, 'NO_PENDING_PAYMENT', 'Order has no PENDING payment to capture')
       }
 
       // SIMULATED: stands in for `stripe.paymentIntents.capture(...)`. No
       // network call is made. `outcome` overrides the coin flip so the failure
       // path is reproducible.
       const requested = request.body?.outcome
+      // Forcing the outcome would let a customer mark their own payment as
+      // captured: only the operator role may steer the simulation.
+      if (requested) {
+        requireCapability(
+          request,
+          'payments:capture:any',
+          'Forcing the capture outcome is an operator control'
+        )
+      }
       const captureSucceeded = requested ? requested === 'succeed' : Math.random() < 0.5
 
       if (captureSucceeded) {
@@ -174,9 +179,11 @@ export function registerPaymentRoutes(
           { timeout: 20_000 }
         )
         if (captured === null) {
-          return reply.status(409).send({
-            error: 'Payment was already captured by a concurrent request',
-          })
+          throw new AppError(
+            409,
+            'ALREADY_CAPTURED',
+            'Payment was already captured by a concurrent request'
+          )
         }
 
         // A now-confirmed order genuinely warrants its confirmation + receipt.
@@ -256,50 +263,31 @@ export function registerPaymentRoutes(
   server.post(
     '/api/v1/orders/:id/saga-failure',
     {
+      config: { policy: { permission: 'saga:report', mfa: true, audit: true } },
       schema: {
         tags: ['orders'],
         description:
-          'Operator hook: report a failed order-saga step and enqueue the real compensating ' +
-          'action on the saga-compensation queue. ms-order has no multi-step saga ' +
-          'implementation yet, so the failure is reported rather than detected; the ' +
-          'compensation it triggers operates on real order/payment rows.',
-        params: {
-          type: 'object',
-          properties: { id: { type: 'string' } },
-          required: ['id'],
-        },
-        body: {
-          type: 'object',
-          properties: {
-            step: {
-              type: 'string',
-              description: 'Name of the saga step that failed, e.g. "reserve-inventory".',
-            },
-            compensation: {
-              type: 'string',
-              enum: ['release-inventory', 'refund-payment'],
-              description: 'Which compensating action to run.',
-            },
-            reason: { type: 'string' },
-          },
-          required: ['step', 'compensation'],
-        },
+          'Operator hook (ADMIN with a second factor, or a SERVICE token): report a failed ' +
+          'order-saga step and enqueue the real compensating action on the saga-compensation ' +
+          'queue. ms-order has no multi-step saga implementation yet, so the failure is ' +
+          'reported rather than detected; the compensation it triggers operates on real ' +
+          'order/payment rows.',
+        params: OrderRefParams,
+        body: SagaFailureBody,
         response: {
-          202: { type: 'object', additionalProperties: true },
-          400: { type: 'object', properties: { error: { type: 'string' } } },
-          404: { type: 'object', properties: { error: { type: 'string' } } },
+          202: SagaFailureOut,
+          400: ErrorResponse,
+          401: ErrorResponse,
+          403: ErrorResponse,
+          404: ErrorResponse,
           503: { type: 'object', additionalProperties: true },
         },
       },
     },
     async (
       request: FastifyRequest<{
-        Params: { id: string }
-        Body: {
-          step: string
-          compensation: 'release-inventory' | 'refund-payment'
-          reason?: string
-        }
+        Params: Static<typeof OrderRefParams>
+        Body: Static<typeof SagaFailureBody>
       }>,
       reply: FastifyReply
     ) => {
@@ -307,9 +295,7 @@ export function registerPaymentRoutes(
         where: { id: request.params.id },
         include: { items: true, payments: true },
       })
-      if (!order) {
-        return reply.status(404).send({ error: 'Order not found' })
-      }
+      if (!order) throw notFound()
 
       const { step, compensation } = request.body
       const reason = request.body.reason ?? `saga step "${step}" failed`
@@ -319,9 +305,11 @@ export function registerPaymentRoutes(
       if (compensation === 'refund-payment') {
         const capturedPayment = order.payments.find((p) => p.status === 'COMPLETED')
         if (!capturedPayment) {
-          return reply.status(400).send({
-            error: 'Order has no COMPLETED payment to refund',
-          })
+          throw new AppError(
+            400,
+            'NO_COMPLETED_PAYMENT',
+            'Order has no COMPLETED payment to refund'
+          )
         }
         // The refund is COMPENSATION WORK, so it goes on BullMQ. The fact
         // that a refund was initiated is published for analytics. Note the

@@ -6,6 +6,7 @@ import {
   RUSTFS_CONSOLE_ENDPOINT,
   RUSTFS_CONSOLE_PORT,
 } from '../data/serviceUrls'
+import { apiFetch } from '../data/apiFetch'
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 const DEFAULT_PAGE_SIZE = 25
@@ -74,7 +75,7 @@ export default function StorageTab() {
   const loadObjects = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
+      const res = await apiFetch(`${PRODUCT_SERVICE_URL}/api/v1/storage/objects`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setAllObjects(data.objects ?? [])

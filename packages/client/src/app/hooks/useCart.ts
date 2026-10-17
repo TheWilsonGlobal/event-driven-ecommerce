@@ -1,8 +1,44 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Product, CartItem } from '../types'
+
+// The cart (products, quantities only; no tokens or personal data) survives a
+// reload so an e-mail confirmation / magic-link round trip does not lose it.
+export const CART_STORAGE_KEY = 'neo-store-cart-v1'
+
+function loadStoredCart(): CartItem[] {
+  try {
+    const raw = window.localStorage.getItem(CART_STORAGE_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (i): i is CartItem =>
+        !!i && typeof i.quantity === 'number' && !!i.product && typeof i.product.id === 'string'
+    )
+  } catch {
+    return []
+  }
+}
 
 export function useCart(showToast: (msg: string) => void) {
   const [cart, setCart] = useState<CartItem[]>([])
+  const hydrated = useRef(false)
+
+  // Hydrate after mount (not in the initial state) to avoid an SSR mismatch.
+  useEffect(() => {
+    const stored = loadStoredCart()
+    if (stored.length) setCart((prev) => (prev.length ? prev : stored))
+    hydrated.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated.current) return
+    try {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart))
+    } catch {
+      // storage unavailable: the in-memory cart still works
+    }
+  }, [cart])
+
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false)
   const [discountCode, setDiscountCode] = useState<string>('')
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0)

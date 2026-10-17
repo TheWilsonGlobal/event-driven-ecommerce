@@ -2,7 +2,11 @@ import * as crypto from 'crypto'
 import * as dotenv from 'dotenv'
 import * as fs from 'fs'
 import * as path from 'path'
-import { applyServiceUrlDefaults, closeServicePools, getServicePool } from '@ecommerce/shared-database'
+import {
+  applyServiceUrlDefaults,
+  closeServicePools,
+  getServicePool,
+} from '@ecommerce/shared-database'
 import { OutboxRelay, TOPICS, type EventEnvelope } from '@ecommerce/shared-messaging'
 import {
   MIGRATIONS_DIR,
@@ -97,7 +101,18 @@ function orderCreated(eventId: string, orderId: string, items: Line[]): EventEnv
     occurredAt: '2026-09-23T04:15:00.000Z',
     producer: 'ms-order',
     correlationId: `corr-${eventId}`,
-    payload: { orderId, orderNumber: `ORD-${orderId}`, items },
+    // A complete order.created, as ms-order publishes it: the payload schema in
+    // shared-messaging is the contract, not just the fields this service reads.
+    payload: {
+      orderId,
+      orderNumber: `ORD-${orderId}`,
+      userId: 'user-1',
+      customerEmail: 'a@example.com',
+      status: 'CONFIRMED',
+      totalAmount: 10,
+      currency: 'USD',
+      items: items.map((i) => ({ unitPrice: 1, ...i })),
+    },
   } as unknown as EventEnvelope
 }
 
@@ -109,7 +124,7 @@ function orderCancelled(eventId: string, orderId: string, reason = 'user-cancell
     occurredAt: '2026-09-23T05:15:00.000Z',
     producer: 'ms-order',
     correlationId: `corr-${eventId}`,
-    payload: { orderId, orderNumber: `ORD-${orderId}`, reason },
+    payload: { orderId, orderNumber: `ORD-${orderId}`, reason, items: [] },
   } as unknown as EventEnvelope
 }
 
@@ -816,6 +831,25 @@ dbDescribe('malformed payloads', () => {
     ['a zero quantity', { orderId: 'ord-1', items: [line('prod-1', 0)] }],
     ['a negative quantity', { orderId: 'ord-1', items: [line('prod-1', -3)] }],
     ['an item without a productId', { orderId: 'ord-1', items: [{ quantity: 1 }] }],
+    // Well-formed lines, but the payload fails the shared schema (plan 4.4).
+    [
+      'a negative total',
+      { ...(orderCreated('x', 'ord-1', [line('prod-1', 1)]).payload as object), totalAmount: -1 },
+    ],
+    [
+      'a missing userId',
+      {
+        ...(orderCreated('x', 'ord-1', [line('prod-1', 1)]).payload as object),
+        userId: undefined,
+      },
+    ],
+    [
+      'an oversized orderNumber',
+      {
+        ...(orderCreated('x', 'ord-1', [line('prod-1', 1)]).payload as object),
+        orderNumber: 'x'.repeat(10_000),
+      },
+    ],
   ])('order.created with %s is recorded as handled and moves no stock', async (_label, payload) => {
     await seedStock([{ productId: 'prod-1', available: 10 }])
     const envelope = orderCreated('evt-bad', 'ord-1', [])
@@ -832,6 +866,7 @@ dbDescribe('malformed payloads', () => {
     ['a null payload', null],
     ['orderId missing', { reason: 'x' }],
     ['orderId not a string', { orderId: { nested: true } }],
+    ['items not an array', { orderId: 'ord-1', orderNumber: 'ORD-1', reason: 'x', items: 'all' }],
   ])(
     'order.cancelled with %s is recorded as handled and credits no stock',
     async (_label, payload) => {

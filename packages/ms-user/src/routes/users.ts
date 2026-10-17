@@ -1,231 +1,409 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '../../node_modules/.prisma-ms-user/client'
-import { USER_ROLES } from '@ecommerce/shared-types'
-import { PLACEHOLDER_PASSWORD_HASH } from '../seed'
+import { Prisma, type PrismaClient } from '../../node_modules/.prisma-ms-user/client'
+import {
+  AppError,
+  forbidden,
+  notFound,
+  requireOwnerOrAny,
+  unauthorized,
+  type Static,
+} from '@ecommerce/shared-security'
+import {
+  AdminCreateUserBody,
+  IdParams,
+  ListUsersQuery,
+  SuccessOut,
+  UpdateProfileBody,
+  UpdateRoleBody,
+  UpdateStatusBody,
+  UserListOut,
+  UserOut,
+} from '../schemas'
 import { toPublicUser } from '../userMapping'
+import { writeAuditLog } from '../services/auditLog'
+import { ensureProfile } from '../services/profiles'
+import { SupabaseAuthError, type SupabaseAuth } from '../supabase'
 
-export function registerUserRoutes(server: FastifyInstance, { prisma }: { prisma: PrismaClient }) {
-  server.get(
+export interface UserRouteDeps {
+  prisma: PrismaClient
+  supabase: SupabaseAuth
+}
+
+const include = { addresses: true } as const
+
+/**
+ * An Admin API failure the caller can do nothing about. It is a 503 with a fixed
+ * body: the upstream reason stays in the server log, not in the response.
+ */
+function providerUnavailable(
+  request: { log: { warn: (o: object, m: string) => void } },
+  err: unknown
+) {
+  request.log.warn(
+    { providerError: err instanceof SupabaseAuthError ? err.kind : 'unknown' },
+    'supabase admin call failed'
+  )
+  return new AppError(503, 'AUTH_PROVIDER_UNAVAILABLE', 'The identity provider is unavailable')
+}
+
+export function registerUserRoutes(server: FastifyInstance, { prisma, supabase }: UserRouteDeps) {
+  // ── admin: list ───────────────────────────────────────────────────────────
+  server.get<{ Querystring: Static<typeof ListUsersQuery> }>(
     '/api/v1/users',
     {
+      config: { policy: { permission: 'users:read:any' } },
       schema: {
         tags: ['users'],
-        description: 'List users (paginated).',
-        querystring: {
-          type: 'object',
-          properties: {
-            page: { type: 'number' },
-            limit: { type: 'number' },
-          },
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              users: {
-                type: 'array',
-                items: { type: 'object', additionalProperties: true },
-              },
-              total: { type: 'number' },
-              page: { type: 'number' },
-              limit: { type: 'number' },
-            },
-          },
-        },
+        description: 'List users (paginated). Admin only.',
+        querystring: ListUsersQuery,
+        response: { 200: UserListOut },
       },
     },
     async (request) => {
-      const query = (request.query as Record<string, any>) || {}
-      const page = Math.max(1, parseInt(query.page, 10) || 1)
-      const limit = Math.max(1, parseInt(query.limit, 10) || 10)
-
+      const { page, limit } = request.query
       const [users, total] = await Promise.all([
         prisma.user.findMany({
-          include: { addresses: true },
+          include,
           orderBy: { createdAt: 'asc' },
           skip: (page - 1) * limit,
           take: limit,
         }),
         prisma.user.count(),
       ])
-
-      return {
-        users: users.map(toPublicUser),
-        total,
-        page,
-        limit,
-      }
+      return { users: users.map(toPublicUser), total, page, limit }
     }
   )
 
-  server.post(
+  // ── admin: create ─────────────────────────────────────────────────────────
+  server.post<{ Body: Static<typeof AdminCreateUserBody> }>(
     '/api/v1/users',
     {
+      config: {
+        policy: { permission: 'users:create', mfa: true, audit: true },
+        rateTier: 'admin',
+      },
       schema: {
         tags: ['users'],
-        description: 'Create a new user (admin "Add User" flow).',
-        body: {
-          type: 'object',
-          required: ['email', 'firstName', 'lastName'],
-          properties: {
-            email: { type: 'string' },
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-            role: { type: 'string', enum: [...USER_ROLES] },
-            isActive: { type: 'boolean' },
-            addressLine1: { type: 'string' },
-            city: { type: 'string' },
-            state: { type: 'string' },
-            postalCode: { type: 'string' },
-          },
-        },
-        response: {
-          201: { type: 'object', additionalProperties: true },
-          409: {
-            type: 'object',
-            properties: { success: { type: 'boolean' }, message: { type: 'string' } },
-          },
-        },
+        description:
+          'Create a user (admin "Add User" flow). Creates the Supabase Auth account through ' +
+          'the Admin API (no password: the person sets one with a password reset) and the ' +
+          'profile row. Admin + MFA.',
+        body: AdminCreateUserBody,
+        response: { 201: UserOut },
       },
     },
     async (request, reply) => {
-      const body = (request.body as Record<string, any>) || {}
+      const body = request.body
+      const email = body.email.trim().toLowerCase()
+      const role = body.role ?? 'CUSTOMER'
+      const emailConfirm = body.emailConfirm ?? true
 
-      if (!body.email || !body.firstName || !body.lastName) {
-        return reply.status(400).send({
-          success: false,
-          message: 'email, firstName and lastName are required',
-        })
+      if (await prisma.user.findUnique({ where: { email } })) {
+        throw new AppError(409, 'EMAIL_IN_USE', 'A user with this email already exists')
       }
 
-      const existing = await prisma.user.findUnique({ where: { email: body.email } })
-      if (existing) {
-        return reply.status(409).send({
-          success: false,
-          message: `User with email ${body.email} already exists`,
-        })
+      let authUserId: string
+      try {
+        ;({ id: authUserId } = await supabase.admin.createUser({
+          email,
+          emailConfirm,
+          appRole: role,
+          firstName: body.firstName,
+          lastName: body.lastName,
+        }))
+      } catch (err) {
+        if (err instanceof SupabaseAuthError && err.kind === 'conflict') {
+          throw new AppError(409, 'EMAIL_IN_USE', 'A user with this email already exists')
+        }
+        throw providerUnavailable(request, err)
       }
 
       const hasAddress = body.addressLine1 && body.city && body.state && body.postalCode
-
-      const user = await prisma.user.create({
-        data: {
-          email: body.email,
-          passwordHash: PLACEHOLDER_PASSWORD_HASH,
-          firstName: body.firstName,
-          lastName: body.lastName,
-          role: body.role || 'CUSTOMER',
-          isActive: body.isActive ?? true,
-          isEmailVerified: false,
-          ...(hasAddress
-            ? {
-                addresses: {
-                  create: [
-                    {
-                      addressLine1: body.addressLine1,
-                      city: body.city,
-                      state: body.state,
-                      postalCode: body.postalCode,
-                      country: body.country || 'United States',
-                      isDefaultShipping: true,
+      try {
+        const user = await prisma.$transaction(async (tx) => {
+          const created = await tx.user.create({
+            data: {
+              authUserId,
+              email,
+              firstName: body.firstName,
+              lastName: body.lastName,
+              role,
+              isActive: body.isActive ?? true,
+              isEmailVerified: emailConfirm,
+              ...(hasAddress
+                ? {
+                    addresses: {
+                      create: [
+                        {
+                          addressLine1: body.addressLine1 as string,
+                          city: body.city as string,
+                          state: body.state as string,
+                          postalCode: body.postalCode as string,
+                          country: body.country ?? 'United States',
+                          isDefaultShipping: true,
+                        },
+                      ],
                     },
-                  ],
-                },
-              }
-            : {}),
-        },
-        include: { addresses: true },
-      })
-
-      return reply.status(201).send(toPublicUser(user))
+                  }
+                : {}),
+            },
+            include,
+          })
+          await writeAuditLog(tx, request, {
+            action: 'user.create',
+            targetUserId: created.id,
+            details: { email, role },
+          })
+          return created
+        })
+        return reply.status(201).send(toPublicUser(user))
+      } catch (err) {
+        // Do not leave a Supabase account with no profile behind.
+        await supabase.admin.deleteUser(authUserId).catch(() => undefined)
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          throw new AppError(409, 'EMAIL_IN_USE', 'A user with this email already exists')
+        }
+        throw err
+      }
     }
   )
 
-  server.patch(
-    '/api/v1/users/:id',
+  // ── self: my profile (declared before /:id; find-my-way prefers the static route) ──
+  server.get(
+    '/api/v1/users/me',
     {
+      config: { policy: { permission: 'users:read' } },
       schema: {
         tags: ['users'],
-        description: 'Update a user (isActive, role, firstName, lastName).',
-        params: {
-          type: 'object',
-          properties: { id: { type: 'string' } },
-          required: ['id'],
-        },
-        body: {
-          type: 'object',
-          properties: {
-            isActive: { type: 'boolean' },
-            role: { type: 'string', enum: [...USER_ROLES] },
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-          },
-        },
-        response: {
-          200: { type: 'object', additionalProperties: true },
-          404: {
-            type: 'object',
-            properties: { success: { type: 'boolean' }, message: { type: 'string' } },
-          },
-        },
+        description:
+          "The caller's own profile, created as CUSTOMER on first call for an identity that " +
+          'signed up directly with Supabase.',
+        response: { 200: UserOut },
       },
     },
-    async (request, reply) => {
-      const { id } = request.params as { id: string }
-      const body = (request.body as Record<string, any>) || {}
-
-      const existing = await prisma.user.findUnique({ where: { id } })
-      if (!existing) {
-        return reply.status(404).send({ success: false, message: `User ${id} not found` })
+    async (request) => {
+      const auth = request.auth
+      if (!auth) throw unauthorized() // only reachable in AUTH_ENFORCE=report
+      if (!auth.email) {
+        throw new AppError(400, 'PROFILE_UNAVAILABLE', 'The token carries no e-mail address')
       }
-
-      const user = await prisma.user.update({
-        where: { id },
-        data: {
-          ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
-          ...(body.role !== undefined ? { role: body.role } : {}),
-          ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
-          ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
-        },
-        include: { addresses: true },
+      const profile = await ensureProfile(prisma, {
+        authUserId: auth.userId,
+        email: auth.email.trim().toLowerCase(),
       })
+      if (!profile) {
+        throw new AppError(
+          409,
+          'PROFILE_CONFLICT',
+          'Your account could not be linked to a profile. Contact an administrator.'
+        )
+      }
+      return toPublicUser(profile)
+    }
+  )
 
+  // ── self or admin: one profile ────────────────────────────────────────────
+  server.get<{ Params: Static<typeof IdParams> }>(
+    '/api/v1/users/:id',
+    {
+      config: { policy: { permission: 'users:read' } },
+      schema: {
+        tags: ['users'],
+        description: 'One profile. Callers see only their own; admins see any.',
+        params: IdParams,
+        response: { 200: UserOut },
+      },
+    },
+    async (request) => {
+      const user = await prisma.user.findUnique({ where: { id: request.params.id }, include })
+      if (!user) throw notFound()
+      // 404, not 403, for somebody else's profile: ids cannot be probed.
+      requireOwnerOrAny(request, user.authUserId, 'users:read')
       return toPublicUser(user)
     }
   )
 
-  server.delete(
+  server.patch<{ Params: Static<typeof IdParams>; Body: Static<typeof UpdateProfileBody> }>(
     '/api/v1/users/:id',
     {
+      config: { policy: { permission: 'users:update' } },
       schema: {
         tags: ['users'],
-        description: 'Delete a user (cascades to addresses and refresh tokens).',
-        params: {
-          type: 'object',
-          properties: { id: { type: 'string' } },
-          required: ['id'],
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: { success: { type: 'boolean' } },
-          },
-          404: {
-            type: 'object',
-            properties: { success: { type: 'boolean' }, message: { type: 'string' } },
-          },
-        },
+        description:
+          'Update a profile (firstName, lastName, phoneNumber). Callers update only their own; ' +
+          'admins any. Role and status have their own admin routes and are rejected here.',
+        params: IdParams,
+        body: UpdateProfileBody,
+        response: { 200: UserOut },
       },
     },
-    async (request, reply) => {
-      const { id } = request.params as { id: string }
-
+    async (request) => {
+      const { id } = request.params
+      const body = request.body
       const existing = await prisma.user.findUnique({ where: { id } })
-      if (!existing) {
-        return reply.status(404).send({ success: false, message: `User ${id} not found` })
+      if (!existing) throw notFound()
+      requireOwnerOrAny(request, existing.authUserId, 'users:update')
+
+      const user = await prisma.user.update({
+        where: { id },
+        data: {
+          ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
+          ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
+          ...(body.phoneNumber !== undefined ? { phoneNumber: body.phoneNumber } : {}),
+        },
+        include,
+      })
+      return toPublicUser(user)
+    }
+  )
+
+  // ── admin: role ───────────────────────────────────────────────────────────
+  server.patch<{ Params: Static<typeof IdParams>; Body: Static<typeof UpdateRoleBody> }>(
+    '/api/v1/users/:id/role',
+    {
+      config: {
+        policy: { permission: 'users:update:role', mfa: true, audit: true },
+        rateTier: 'admin',
+      },
+      schema: {
+        tags: ['users'],
+        description:
+          'Change a role. Admin + MFA, audited, and also written to Supabase app_metadata so ' +
+          'the next token carries it. Nobody can change their own role.',
+        params: IdParams,
+        body: UpdateRoleBody,
+        response: { 200: UserOut },
+      },
+    },
+    async (request) => {
+      const { id } = request.params
+      const { role } = request.body
+      const existing = await prisma.user.findUnique({ where: { id }, include })
+      if (!existing) throw notFound()
+
+      if (request.auth && existing.authUserId === request.auth.userId) {
+        throw forbidden('SELF_ROLE_CHANGE', 'You cannot change your own role')
+      }
+      if (existing.role === role) return toPublicUser(existing)
+
+      // Provider first: if it is down nothing has changed anywhere. The access
+      // token hook reads ms_user.users.role, so the DB write below is the source
+      // of truth either way.
+      if (existing.authUserId) {
+        try {
+          await supabase.admin.updateUser(existing.authUserId, { appRole: role })
+        } catch (err) {
+          if (!(err instanceof SupabaseAuthError && err.kind === 'not_found')) {
+            throw providerUnavailable(request, err)
+          }
+        }
       }
 
-      await prisma.user.delete({ where: { id } })
+      const user = await prisma.$transaction(async (tx) => {
+        const updated = await tx.user.update({ where: { id }, data: { role }, include })
+        await writeAuditLog(tx, request, {
+          action: 'user.role_change',
+          targetUserId: id,
+          details: { from: existing.role, to: role },
+        })
+        return updated
+      })
+      return toPublicUser(user)
+    }
+  )
+
+  // ── admin: status ─────────────────────────────────────────────────────────
+  server.patch<{ Params: Static<typeof IdParams>; Body: Static<typeof UpdateStatusBody> }>(
+    '/api/v1/users/:id/status',
+    {
+      config: { policy: { permission: 'users:update:status', audit: true }, rateTier: 'admin' },
+      schema: {
+        tags: ['users'],
+        description:
+          'Activate or deactivate an account. Deactivating also bans the Supabase user so no ' +
+          'new session can be issued. Admin only, audited.',
+        params: IdParams,
+        body: UpdateStatusBody,
+        response: { 200: UserOut },
+      },
+    },
+    async (request) => {
+      const { id } = request.params
+      const { isActive } = request.body
+      const existing = await prisma.user.findUnique({ where: { id }, include })
+      if (!existing) throw notFound()
+
+      if (request.auth && existing.authUserId === request.auth.userId && !isActive) {
+        throw forbidden('SELF_DEACTIVATION', 'You cannot deactivate your own account')
+      }
+      if (existing.isActive === isActive) return toPublicUser(existing)
+
+      if (existing.authUserId) {
+        try {
+          await supabase.admin.updateUser(existing.authUserId, { banned: !isActive })
+        } catch (err) {
+          if (!(err instanceof SupabaseAuthError && err.kind === 'not_found')) {
+            throw providerUnavailable(request, err)
+          }
+        }
+      }
+
+      const user = await prisma.$transaction(async (tx) => {
+        const updated = await tx.user.update({ where: { id }, data: { isActive }, include })
+        await writeAuditLog(tx, request, {
+          action: 'user.status_change',
+          targetUserId: id,
+          details: { from: existing.isActive, to: isActive },
+        })
+        return updated
+      })
+      return toPublicUser(user)
+    }
+  )
+
+  // ── admin: delete ─────────────────────────────────────────────────────────
+  server.delete<{ Params: Static<typeof IdParams> }>(
+    '/api/v1/users/:id',
+    {
+      config: {
+        policy: { permission: 'users:delete', mfa: true, audit: true },
+        rateTier: 'admin',
+      },
+      schema: {
+        tags: ['users'],
+        description:
+          'Delete a user: the Supabase account, the profile and its addresses. Admin + MFA, audited.',
+        params: IdParams,
+        response: { 200: SuccessOut },
+      },
+    },
+    async (request) => {
+      const { id } = request.params
+      const existing = await prisma.user.findUnique({ where: { id } })
+      if (!existing) throw notFound()
+
+      if (request.auth && existing.authUserId === request.auth.userId) {
+        throw forbidden('SELF_DELETE', 'You cannot delete your own account')
+      }
+
+      if (existing.authUserId) {
+        try {
+          await supabase.admin.deleteUser(existing.authUserId)
+        } catch (err) {
+          if (!(err instanceof SupabaseAuthError && err.kind === 'not_found')) {
+            throw providerUnavailable(request, err)
+          }
+        }
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.user.delete({ where: { id } })
+        await writeAuditLog(tx, request, {
+          action: 'user.delete',
+          targetUserId: id,
+          details: { email: existing.email, role: existing.role },
+        })
+      })
       return { success: true }
     }
   )
