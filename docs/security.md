@@ -37,3 +37,16 @@ See `.env.example` for the full list (`SUPABASE_*`, `CORS_ORIGINS`, `TRUST_PROXY
 pnpm --filter @ecommerce/ms-user run auth:sync             # dry run: lists seeded profiles without a Supabase account
 pnpm --filter @ecommerce/ms-user run auth:sync -- --apply  # create the accounts (writes to the live project)
 ```
+
+### Developing without a real authenticator
+
+- **Mock the admin TOTP screen.** Put `VITE_MOCK_MFA=true` in the root `.env` and restart the admin dev server. An ADMIN
+  at `aal1` then sees a "DEV MOCK: two-factor" screen (any 6-digit code, or "Skip (mock)") and a permanent
+  "MFA MOCKED (dev)" badge. It is honoured only under the Vite dev server (`import.meta.env.DEV`); production builds
+  ignore the flag and do not contain the mock. It changes in-memory UI state only: no token is altered and no
+  Supabase MFA endpoint is called.
+- **Generate a real code from the enrolment secret.** The real screen shows a "Dev tip" in dev. Run
+  `node packages/admin/scripts/totp-dev.mjs <BASE32_SECRET>` to print the current code (RFC 6238, SHA-1, 30 s, 6 digits)
+  and the seconds it remains valid.
+- **Limitation.** The mock does not change what the API sees. With `AUTH_ENFORCE=enforce`, operator routes still answer
+  `MFA_REQUIRED` until a real `aal2` session exists; use the script above (or keep `AUTH_ENFORCE=report`) for that.

@@ -11,7 +11,7 @@ import path from 'path'
 // re-expose just the handful the admin needs as VITE_-prefixed entries.
 const ROOT_ENV_DIR = path.resolve(__dirname, '../..')
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   // '' = load every var regardless of prefix, not just VITE_.
   const env = loadEnv(mode, ROOT_ENV_DIR, '')
 
@@ -69,6 +69,9 @@ export default defineConfig(({ mode }) => {
     // the same root .env but is deliberately never read in this file.
     VITE_SUPABASE_URL: env.SUPABASE_URL || '',
     VITE_SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY || '',
+    // Dev-only TOTP mock switch. Forwarded only for `vite` (serve), never for a build, and
+    // the app additionally requires import.meta.env.DEV === true.
+    VITE_MOCK_MFA: command === 'serve' && env.VITE_MOCK_MFA === 'true' ? 'true' : '',
   })
 
   return {

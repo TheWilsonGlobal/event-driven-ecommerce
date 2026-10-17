@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useAuth, type TotpEnrollment } from './AuthContext'
+import { DevTotpTip } from './DevTotpTip'
 
 /** Centered card used by every pre-app screen. */
 export function AuthShell({
@@ -32,7 +33,7 @@ export function AuthShell({
 }
 
 /** Error text announced to screen readers; always mounted so changes are read. */
-function ErrorLine({ message }: { message: string | null }) {
+export function ErrorLine({ message }: { message: string | null }) {
   return (
     <p className="auth-error" role="alert" aria-live="assertive">
       {message}
@@ -284,6 +285,7 @@ export function MfaScreen({ overlay = false }: { overlay?: boolean }) {
           </button>
         </form>
       )}
+      {import.meta.env.DEV === true && ready && <DevTotpTip />}
       <div className="auth-actions">
         {overlay ? (
           <button className="btn btn-ghost" onClick={mfa.cancel}>
