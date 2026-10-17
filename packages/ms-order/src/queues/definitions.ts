@@ -82,8 +82,12 @@ export function getQueueDefinition(name: QueueName): QueueDefinition {
  * (optional env override, default ORDER_EXPIRATION_MINUTES_DEFAULT = 15 minutes).
  */
 export function orderExpirationDelayMs(): number {
-  const minutes = parseInt(process.env.BULLMQ_ORDER_EXPIRATION_MINUTES ?? String(ORDER_EXPIRATION_MINUTES_DEFAULT), 10)
-  const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : ORDER_EXPIRATION_MINUTES_DEFAULT
+  const minutes = parseInt(
+    process.env.BULLMQ_ORDER_EXPIRATION_MINUTES ?? String(ORDER_EXPIRATION_MINUTES_DEFAULT),
+    10
+  )
+  const safeMinutes =
+    Number.isFinite(minutes) && minutes > 0 ? minutes : ORDER_EXPIRATION_MINUTES_DEFAULT
   return safeMinutes * 60 * 1000
 }
 

@@ -21,7 +21,7 @@ describe('outbox relay defaults', () => {
         OUTBOX_MAX_ATTEMPTS: '3',
         OUTBOX_LEASE_MS: '9000',
         OUTBOX_SEND_TIMEOUT_MS: '2000',
-      }),
+      })
     ).toEqual({ pollMs: 100, batch: 7, maxAttempts: 3, leaseMs: 9000, sendTimeoutMs: 2000 })
   })
 })

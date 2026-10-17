@@ -49,7 +49,9 @@ const ONLY = onlyArg ? onlyArg.slice(7).split(',') : ['user', 'order', 'product'
 const DATA = path.join(ROOT, 'data/db')
 
 function connect(service) {
-  const raw = process.env[`${service.toUpperCase()}_DIRECT_URL`] || process.env[`${service.toUpperCase()}_DATABASE_URL`]
+  const raw =
+    process.env[`${service.toUpperCase()}_DIRECT_URL`] ||
+    process.env[`${service.toUpperCase()}_DATABASE_URL`]
   if (!raw) throw new Error(`${service.toUpperCase()}_DATABASE_URL is not set`)
   const u = new URL(raw)
   u.search = ''
@@ -105,13 +107,21 @@ async function copySqlite(db, client, schema, table, report) {
     }
   }
   const target = (await client.query(`SELECT count(*)::int n FROM ${schema}."${table}"`)).rows[0].n
-  report.push({ table: `${schema}.${table}`, source: rows.length, inserted: APPLY ? inserted : '(dry)', skipped: APPLY ? rows.length - inserted : '(dry)', target })
+  report.push({
+    table: `${schema}.${table}`,
+    source: rows.length,
+    inserted: APPLY ? inserted : '(dry)',
+    skipped: APPLY ? rows.length - inserted : '(dry)',
+    target,
+  })
 }
 
 async function copyDocs(client, schema, table, docs, report) {
   let inserted = 0
   if (APPLY) {
-    await client.query(`CREATE TABLE IF NOT EXISTS ${schema}."${table}" (id text PRIMARY KEY, doc jsonb NOT NULL)`)
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS ${schema}."${table}" (id text PRIMARY KEY, doc jsonb NOT NULL)`
+    )
     for (const d of docs) {
       const id = String(d.id ?? d._id)
       const r = await client.query(
@@ -127,7 +137,13 @@ async function copyDocs(client, schema, table, docs, report) {
   } catch {
     /* table not created yet in a dry run */
   }
-  report.push({ table: `${schema}.${table}`, source: docs.length, inserted: APPLY ? inserted : '(dry)', skipped: APPLY ? docs.length - inserted : '(dry)', target })
+  report.push({
+    table: `${schema}.${table}`,
+    source: docs.length,
+    inserted: APPLY ? inserted : '(dry)',
+    skipped: APPLY ? docs.length - inserted : '(dry)',
+    target,
+  })
 }
 
 async function main() {
@@ -137,14 +153,16 @@ async function main() {
   if (ONLY.includes('user')) {
     const client = await connect('user')
     const db = new DatabaseSync(path.join(DATA, 'ms-user.db'), { readOnly: true })
-    for (const t of ['users', 'addresses', 'refresh_tokens']) await copySqlite(db, client, 'ms_user', t, report)
+    for (const t of ['users', 'addresses', 'refresh_tokens'])
+      await copySqlite(db, client, 'ms_user', t, report)
     db.close()
     await client.end()
   }
   if (ONLY.includes('order')) {
     const client = await connect('order')
     const db = new DatabaseSync(path.join(DATA, 'ms-order.db'), { readOnly: true })
-    for (const t of ['orders', 'order_items', 'payments']) await copySqlite(db, client, 'ms_order', t, report)
+    for (const t of ['orders', 'order_items', 'payments'])
+      await copySqlite(db, client, 'ms_order', t, report)
     db.close()
     await client.end()
   }
@@ -173,15 +191,36 @@ async function main() {
         const r = await client.query(
           `INSERT INTO ms_inventory.reservations(order_id, order_number, event_id, items, status, created_at, released_at)
            VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7) ON CONFLICT DO NOTHING`,
-          [d.orderId, d.orderNumber, d.eventId, JSON.stringify(d.items ?? []), d.status, d.createdAt, d.releasedAt ?? null]
+          [
+            d.orderId,
+            d.orderNumber,
+            d.eventId,
+            JSON.stringify(d.items ?? []),
+            d.status,
+            d.createdAt,
+            d.releasedAt ?? null,
+          ]
         )
         insR += r.rowCount ?? 0
       }
     }
     const t1 = (await client.query('SELECT count(*)::int n FROM ms_inventory.inventory')).rows[0].n
-    const t2 = (await client.query('SELECT count(*)::int n FROM ms_inventory.reservations')).rows[0].n
-    report.push({ table: 'ms_inventory.inventory', source: inv.length, inserted: APPLY ? ins : '(dry)', skipped: APPLY ? inv.length - ins : '(dry)', target: t1 })
-    report.push({ table: 'ms_inventory.reservations', source: res.length, inserted: APPLY ? insR : '(dry)', skipped: APPLY ? res.length - insR : '(dry)', target: t2 })
+    const t2 = (await client.query('SELECT count(*)::int n FROM ms_inventory.reservations')).rows[0]
+      .n
+    report.push({
+      table: 'ms_inventory.inventory',
+      source: inv.length,
+      inserted: APPLY ? ins : '(dry)',
+      skipped: APPLY ? inv.length - ins : '(dry)',
+      target: t1,
+    })
+    report.push({
+      table: 'ms_inventory.reservations',
+      source: res.length,
+      inserted: APPLY ? insR : '(dry)',
+      skipped: APPLY ? res.length - insR : '(dry)',
+      target: t2,
+    })
     await client.end()
   }
 

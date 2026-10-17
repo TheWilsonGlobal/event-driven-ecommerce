@@ -69,9 +69,10 @@ export default defineConfig(({ mode, command }) => {
     // the same root .env but is deliberately never read in this file.
     VITE_SUPABASE_URL: env.SUPABASE_URL || '',
     VITE_SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY || '',
-    // Dev-only TOTP mock switch. Forwarded only for `vite` (serve), never for a build, and
+    // Dev-only TOTP mock switch. Forwarded only for `vite` (serve), never for a build or a vitest run (tests stub the flag themselves), and
     // the app additionally requires import.meta.env.DEV === true.
-    VITE_MOCK_MFA: command === 'serve' && env.VITE_MOCK_MFA === 'true' ? 'true' : '',
+    VITE_MOCK_MFA:
+      command === 'serve' && !process.env.VITEST && env.VITE_MOCK_MFA === 'true' ? 'true' : '',
   })
 
   return {

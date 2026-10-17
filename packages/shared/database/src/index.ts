@@ -1,5 +1,10 @@
 export * from './config'
-export { DB_POOL_MAX_DEFAULT, REDIS_DB_DEFAULT, STORAGE_DEFAULTS, ELASTICSEARCH_INDEX_DEFAULT } from '@ecommerce/shared-constants'
+export {
+  DB_POOL_MAX_DEFAULT,
+  REDIS_DB_DEFAULT,
+  STORAGE_DEFAULTS,
+  ELASTICSEARCH_INDEX_DEFAULT,
+} from '@ecommerce/shared-constants'
 export * from './relational'
 export * from './document'
 export * from './postgres'

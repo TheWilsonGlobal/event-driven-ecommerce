@@ -6,5 +6,10 @@
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"],
-  "references": [{ "path": "../shared/constants" }, { "path": "../shared/types" }, { "path": "../shared/utils" }, { "path": "../shared/security" }]
+  "references": [
+    { "path": "../shared/constants" },
+    { "path": "../shared/types" },
+    { "path": "../shared/utils" },
+    { "path": "../shared/security" }
+  ]
 }
