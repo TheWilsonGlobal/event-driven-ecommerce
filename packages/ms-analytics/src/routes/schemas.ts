@@ -30,7 +30,7 @@ const progressProperties = {
     type: 'number',
     description:
       'Events APPLIED to the aggregates, duplicates excluded. Durable (stored in ' +
-      'NeDB), unlike the consumer counters on GET /api/v1/events which reset on ' +
+      'Postgres), unlike the consumer counters on GET /api/v1/events which reset on ' +
       'restart. 0 together with a null lastEventAt means nothing has been processed.',
   },
   duplicatesSkipped: {

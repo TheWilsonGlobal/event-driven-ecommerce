@@ -12,10 +12,10 @@
     "test:watch": "jest --watch",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "prisma:generate": "prisma generate",
-    "migrate": "prisma migrate deploy",
-    "migrate:dev": "prisma migrate dev",
-    "db:seed": "prisma db seed"
+    "prisma:generate": "node ../scripts/prisma-env.js generate",
+    "migrate": "node ../scripts/prisma-env.js migrate deploy",
+    "migrate:dev": "node ../scripts/prisma-env.js migrate dev",
+    "db:seed": "node ../scripts/prisma-env.js db seed"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

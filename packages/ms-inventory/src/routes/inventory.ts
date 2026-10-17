@@ -1,10 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import type { DocumentDatabaseAdapter } from '@ecommerce/shared-database'
-import type { InventoryDoc, ReservationDoc } from '../types'
+import { getInventory, listInventory, listReservations, type InventoryStore } from '../db/store'
 
 export interface InventoryRouteDeps {
-  inventoryStore: DocumentDatabaseAdapter<InventoryDoc>
-  reservationsStore: DocumentDatabaseAdapter<ReservationDoc>
+  store: InventoryStore
 }
 
 const inventoryRowSchema = {
@@ -65,7 +63,7 @@ const reservationSchema = {
  */
 export function registerInventoryRoutes(
   server: FastifyInstance,
-  { inventoryStore, reservationsStore }: InventoryRouteDeps
+  { store }: InventoryRouteDeps
 ): void {
   server.get(
     '/api/v1/inventory',
@@ -86,8 +84,7 @@ export function registerInventoryRoutes(
       },
     },
     async () => {
-      const rows = await inventoryStore.find({})
-      rows.sort((a, b) => a.productId.localeCompare(b.productId))
+      const rows = await listInventory(store)
       return { count: rows.length, items: rows }
     }
   )
@@ -114,7 +111,7 @@ export function registerInventoryRoutes(
       },
     },
     async (request: FastifyRequest<{ Params: { productId: string } }>, reply: FastifyReply) => {
-      const row = await inventoryStore.findOne({ productId: request.params.productId })
+      const row = await getInventory(store, request.params.productId)
       if (!row) {
         // 404, not a zeroed row: this service does not own the catalogue, so
         // "no stock record" means "unknown to inventory", which is a different
@@ -152,8 +149,7 @@ export function registerInventoryRoutes(
     },
     async (request: FastifyRequest<{ Querystring: { orderId?: string } }>) => {
       const { orderId } = request.query
-      const rows = await reservationsStore.find(orderId ? { orderId } : {})
-      rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      const rows = await listReservations(store, orderId || undefined)
       return { count: rows.length, items: rows }
     }
   )

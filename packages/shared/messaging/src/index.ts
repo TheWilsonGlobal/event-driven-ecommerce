@@ -137,3 +137,26 @@ export {
   KafkaEnvWriteError,
   type KafkaEnvToggleResult,
 } from './kafka/envToggle'
+
+// ── Transactional outbox ─────────────────────────────────────────────────────
+// Write side (same transaction as the state change) and the SKIP LOCKED + lease
+// relay that drains it to Kafka. Replaces publish-after-commit for facts that
+// must not be lost. See outbox/outbox.ts and outbox/relay.ts.
+export {
+  buildOutboxEvent,
+  insertOutboxEvent,
+  enqueueOutboxEvent,
+  DEFAULT_MAX_ATTEMPTS,
+  type SqlClient,
+  type OutboxEventInput,
+  type OutboxEventRow,
+} from './outbox/outbox'
+export {
+  OutboxRelay,
+  loadOutboxEnv,
+  validateRelayConfig,
+  type OutboxRelayConfig,
+  type OutboxEnvConfig,
+  type OutboxStats,
+  type ClaimedOutboxRow,
+} from './outbox/relay'

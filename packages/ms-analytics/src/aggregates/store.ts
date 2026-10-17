@@ -1,5 +1,5 @@
-import type { DocumentDatabaseAdapter, DatabaseConfiguration } from '@ecommerce/shared-database'
-import { createDocumentStore } from '@ecommerce/shared-database'
+import * as path from 'path'
+import { getServicePool, withTransaction, type ServicePool } from '@ecommerce/shared-database'
 import type {
   FunnelDoc,
   HourBucketDoc,
@@ -10,56 +10,80 @@ import type {
 } from '../types'
 
 /**
- * The analytics write model: six NeDB collections this service owns outright.
+ * The analytics write model: six Postgres tables in schema ms_analytics, created
+ * by migrations/001_init.sql.
  *
- * ── Why upsert-by-natural-key, and why it is not a race ─────────────────────
- * Every mutation here is read-modify-write, which is not atomic. That is safe
- * only because ONE consumer loop applies events sequentially — kafkajs'
- * `eachMessage` awaits each handler before pulling the next message. There is
- * exactly one writer in this process, and no other service writes these files.
- * If a second writer ever appeared (a second replica of ms-analytics sharing a
- * data path) these increments would start losing updates; the fix then is
- * nedb's $inc, not a lock. Stated here because the safety is structural rather
- * than obvious from any single function below.
+ * ── Why counters are atomic now ─────────────────────────────────────────────
+ * Every bump is one `INSERT ... ON CONFLICT (key) DO UPDATE SET n = t.n +
+ * EXCLUDED.n`, evaluated by the database. The NeDB version read a document,
+ * added in JS and wrote it back, which was safe only while exactly ONE consumer
+ * loop in ONE process wrote the files. Two replicas (or a replica plus a replay)
+ * now serialise on the row lock instead of silently losing updates.
  *
- * ── Singletons are real documents, not implicit zeroes ──────────────────────
- * The funnel, payment-outcome and progress documents are created lazily on
- * first write. A missing document therefore means "nothing has ever been
- * applied", which the read layer renders distinctly from "all counters are
- * genuinely zero". Seeding them with zeroes at boot would throw that
- * distinction away before the first request ever arrived.
+ * ── Writes take a transaction, reads take the store ─────────────────────────
+ * Every `bump*`, `claimEvent` and `record*` function takes a `Tx` and must be
+ * called from inside `store.transaction(...)`: the ledger insert and all the
+ * counter bumps for one event commit together or not at all (see handlers.ts).
+ * Reads (`read*`) take the store and run as plain autocommit queries.
+ *
+ * ── Every table reference is schema-qualified ───────────────────────────────
+ * The transaction pooler does not preserve `search_path`, so SQL here always
+ * says `${schema}.table`. `schema` is a service constant or a test-controlled
+ * name checked against a strict identifier pattern, never request input.
+ *
+ * ── Singletons are real rows, not implicit zeroes ───────────────────────────
+ * The funnel, payment_outcomes and progress rows are created lazily by the
+ * first upsert. A missing row therefore means "nothing has ever been applied",
+ * which the read layer renders distinctly from "all counters are genuinely
+ * zero". Seeding them with zeroes at boot would throw that distinction away
+ * before the first request ever arrived. The readers below return null for it.
  */
 
-export const COLLECTIONS = {
-  processedEvents: 'analytics_processed_events',
-  hourBuckets: 'analytics_hour_buckets',
-  productCounters: 'analytics_product_counters',
-  paymentOutcomes: 'analytics_payment_outcomes',
-  funnel: 'analytics_funnel',
-  progress: 'analytics_progress',
-} as const
+/**
+ * Directory holding the SQL migrations. Resolved from this file so it is the
+ * same package-root folder whether we run from src (ts-node) or dist (tsc
+ * output): both sit exactly two levels below the package root.
+ */
+export const MIGRATIONS_DIR = path.resolve(__dirname, '../../migrations')
 
-/** Fixed id for the three singleton documents. */
-const SINGLETON_ID = 'singleton'
-
-export interface AnalyticsStore {
-  processedEvents: DocumentDatabaseAdapter<ProcessedEventDoc>
-  hourBuckets: DocumentDatabaseAdapter<HourBucketDoc>
-  productCounters: DocumentDatabaseAdapter<ProductCounterDoc>
-  paymentOutcomes: DocumentDatabaseAdapter<PaymentOutcomeDoc>
-  funnel: DocumentDatabaseAdapter<FunnelDoc>
-  progress: DocumentDatabaseAdapter<ProgressDoc>
+/** The slice of a pg client/pool this module needs (and a fake can implement). */
+export interface Queryable {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query(text: string, params?: unknown[]): Promise<{ rows: any[]; rowCount: number | null }>
 }
 
-export function createAnalyticsStore(config: DatabaseConfiguration): AnalyticsStore {
+/** A Queryable bound to one schema. Inside `transaction` it is ONE connection. */
+export interface Tx extends Queryable {
+  readonly schema: string
+}
+
+export interface AnalyticsStore {
+  readonly schema: string
+  /** Autocommit queries, for the read views. */
+  readonly db: Tx
+  /** Runs `fn` in one BEGIN/COMMIT; any throw rolls the whole thing back. */
+  transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>
+}
+
+const IDENTIFIER = /^[a-z_][a-z0-9_]*$/
+
+/** Store over an explicit pool and schema. Tests pass a throwaway schema here. */
+export function createAnalyticsStoreOn(pool: ServicePool['pool'], schema: string): AnalyticsStore {
+  if (!IDENTIFIER.test(schema)) throw new Error(`bad schema name: ${schema}`)
   return {
-    processedEvents: createDocumentStore<ProcessedEventDoc>(COLLECTIONS.processedEvents, config),
-    hourBuckets: createDocumentStore<HourBucketDoc>(COLLECTIONS.hourBuckets, config),
-    productCounters: createDocumentStore<ProductCounterDoc>(COLLECTIONS.productCounters, config),
-    paymentOutcomes: createDocumentStore<PaymentOutcomeDoc>(COLLECTIONS.paymentOutcomes, config),
-    funnel: createDocumentStore<FunnelDoc>(COLLECTIONS.funnel, config),
-    progress: createDocumentStore<ProgressDoc>(COLLECTIONS.progress, config),
+    schema,
+    db: { schema, query: (text, params) => pool.query(text, params) },
+    transaction: (fn) =>
+      withTransaction(pool, (client) =>
+        fn({ schema, query: (text, params) => client.query(text, params) })
+      ),
   }
+}
+
+/** The production store: the analytics pool, schema ms_analytics. */
+export function createAnalyticsStore(): AnalyticsStore {
+  const sp = getServicePool('analytics')
+  return createAnalyticsStoreOn(sp.pool, sp.schema)
 }
 
 /**
@@ -83,49 +107,121 @@ export function hourKeyOf(isoTimestamp: string): string | null {
 }
 
 /**
- * Records that `eventId` has been applied.
+ * Records that `doc.id` (the eventId) has been applied.
  *
  * Returns false when it was ALREADY applied, and the caller must then make no
  * contribution whatsoever. This is the load-bearing half of the idempotency
  * contract; see handlers.ts for why an aggregate needs it more than a state
  * machine does.
  *
- * Check-then-insert rather than insert-then-catch, because the adapter's
- * `insert` surfaces a duplicate-key failure as a generic Error we cannot
- * reliably distinguish from a disk failure. The window that would make
- * check-then-insert wrong requires two concurrent writers, which the
- * single-consumer-loop property above rules out.
+ * It must be the FIRST statement of the event's transaction. The primary key
+ * makes the check-and-claim a single atomic statement, so two concurrent
+ * deliveries of one event cannot both win: the loser blocks on the winner's
+ * uncommitted row, then sees the conflict once it commits (rowCount 0).
  */
-export async function claimEvent(
-  store: AnalyticsStore,
-  doc: ProcessedEventDoc & { id: string }
-): Promise<boolean> {
-  const existing = await store.processedEvents.findOne({ id: doc.id })
-  if (existing) {
-    return false
-  }
-  await store.processedEvents.insert(doc)
-  return true
+export async function claimEvent(tx: Tx, doc: ProcessedEventDoc): Promise<boolean> {
+  const result = await tx.query(
+    `INSERT INTO ${tx.schema}.processed_events
+       (event_id, event_type, occurred_at, topic, partition, kafka_offset)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (event_id) DO NOTHING`,
+    [doc.id, doc.eventType, doc.occurredAt, doc.topic, doc.partition, doc.offset]
+  )
+  return result.rowCount === 1
 }
 
-/** Reads a singleton, or null when it has never been written. */
-async function readSingleton<T>(adapter: DocumentDatabaseAdapter<T>): Promise<T | null> {
-  return adapter.findOne({ id: SINGLETON_ID })
+// ─── Reads ─────────────────────────────────────────────────────────────────
+
+/** numeric and bigint arrive as strings from pg; the API contract is number. */
+function num(value: unknown): number {
+  return Number(value)
 }
 
+/** Reads a singleton, or null when its row has never been written. */
 export async function readFunnel(store: AnalyticsStore): Promise<FunnelDoc | null> {
-  return readSingleton(store.funnel)
+  const { rows } = await store.db.query(
+    `SELECT created, confirmed, cancelled, reserved, insufficient
+       FROM ${store.schema}.funnel`
+  )
+  const r = rows[0]
+  return r
+    ? {
+        created: num(r.created),
+        confirmed: num(r.confirmed),
+        cancelled: num(r.cancelled),
+        reserved: num(r.reserved),
+        insufficient: num(r.insufficient),
+      }
+    : null
 }
 
 export async function readPaymentOutcomes(
   store: AnalyticsStore
 ): Promise<PaymentOutcomeDoc | null> {
-  return readSingleton(store.paymentOutcomes)
+  const { rows } = await store.db.query(
+    `SELECT captured, failed, refunded, captured_amount, refunded_amount
+       FROM ${store.schema}.payment_outcomes`
+  )
+  const r = rows[0]
+  return r
+    ? {
+        captured: num(r.captured),
+        failed: num(r.failed),
+        refunded: num(r.refunded),
+        capturedAmount: num(r.captured_amount),
+        refundedAmount: num(r.refunded_amount),
+      }
+    : null
 }
 
 export async function readProgress(store: AnalyticsStore): Promise<ProgressDoc | null> {
-  return readSingleton(store.progress)
+  const { rows } = await store.db.query(
+    `SELECT events_processed, duplicates_skipped, last_event_at, last_processed_at
+       FROM ${store.schema}.progress`
+  )
+  const r = rows[0]
+  return r
+    ? {
+        eventsProcessed: num(r.events_processed),
+        duplicatesSkipped: num(r.duplicates_skipped),
+        lastEventAt: r.last_event_at ? new Date(r.last_event_at).toISOString() : null,
+        lastProcessedAt: r.last_processed_at ? new Date(r.last_processed_at).toISOString() : null,
+      }
+    : null
 }
+
+/** Every hour bucket, ascending by hour_key (ISO-prefixed, so text order is chronological). */
+export async function readHourBuckets(store: AnalyticsStore): Promise<HourBucketDoc[]> {
+  const { rows } = await store.db.query(
+    `SELECT hour_key, orders, confirmed, cancelled, revenue, currency
+       FROM ${store.schema}.hour_buckets
+      ORDER BY hour_key`
+  )
+  return rows.map((r) => ({
+    hourKey: r.hour_key as string,
+    orders: num(r.orders),
+    confirmed: num(r.confirmed),
+    cancelled: num(r.cancelled),
+    revenue: num(r.revenue),
+    currency: (r.currency as string | null) ?? null,
+  }))
+}
+
+export async function readProductCounters(store: AnalyticsStore): Promise<ProductCounterDoc[]> {
+  const { rows } = await store.db.query(
+    `SELECT product_id, sku, units_ordered, times_ordered, revenue
+       FROM ${store.schema}.product_counters`
+  )
+  return rows.map((r) => ({
+    productId: r.product_id as string,
+    sku: r.sku as string,
+    unitsOrdered: num(r.units_ordered),
+    timesOrdered: num(r.times_ordered),
+    revenue: num(r.revenue),
+  }))
+}
+
+// ─── Writes (call inside store.transaction) ────────────────────────────────
 
 /**
  * Increments named counters on the funnel singleton, creating it on first use.
@@ -136,49 +232,50 @@ export async function readProgress(store: AnalyticsStore): Promise<ProgressDoc |
  * event did not carry one" and must never become a 0 contribution.
  */
 export async function bumpFunnel(
-  store: AnalyticsStore,
-  deltas: Partial<Record<keyof Omit<FunnelDoc, 'id' | '_id'>, number>>
+  tx: Tx,
+  deltas: Partial<Record<keyof FunnelDoc, number>>
 ): Promise<void> {
-  const current: FunnelDoc = (await readFunnel(store)) ?? {
-    id: SINGLETON_ID,
-    created: 0,
-    confirmed: 0,
-    cancelled: 0,
-    reserved: 0,
-    insufficient: 0,
-  }
-
-  await upsertSingleton(store.funnel, {
-    ...current,
-    created: current.created + (deltas.created ?? 0),
-    confirmed: current.confirmed + (deltas.confirmed ?? 0),
-    cancelled: current.cancelled + (deltas.cancelled ?? 0),
-    reserved: current.reserved + (deltas.reserved ?? 0),
-    insufficient: current.insufficient + (deltas.insufficient ?? 0),
-  })
+  await tx.query(
+    `INSERT INTO ${tx.schema}.funnel AS t (id, created, confirmed, cancelled, reserved, insufficient)
+     VALUES (true, $1, $2, $3, $4, $5)
+     ON CONFLICT (id) DO UPDATE SET
+       created      = t.created      + EXCLUDED.created,
+       confirmed    = t.confirmed    + EXCLUDED.confirmed,
+       cancelled    = t.cancelled    + EXCLUDED.cancelled,
+       reserved     = t.reserved     + EXCLUDED.reserved,
+       insufficient = t.insufficient + EXCLUDED.insufficient`,
+    [
+      deltas.created ?? 0,
+      deltas.confirmed ?? 0,
+      deltas.cancelled ?? 0,
+      deltas.reserved ?? 0,
+      deltas.insufficient ?? 0,
+    ]
+  )
 }
 
 export async function bumpPaymentOutcomes(
-  store: AnalyticsStore,
-  deltas: Partial<Record<keyof Omit<PaymentOutcomeDoc, 'id' | '_id'>, number>>
+  tx: Tx,
+  deltas: Partial<Record<keyof PaymentOutcomeDoc, number>>
 ): Promise<void> {
-  const current: PaymentOutcomeDoc = (await readPaymentOutcomes(store)) ?? {
-    id: SINGLETON_ID,
-    captured: 0,
-    failed: 0,
-    refunded: 0,
-    capturedAmount: 0,
-    refundedAmount: 0,
-  }
-
-  await upsertSingleton(store.paymentOutcomes, {
-    ...current,
-    captured: current.captured + (deltas.captured ?? 0),
-    failed: current.failed + (deltas.failed ?? 0),
-    refunded: current.refunded + (deltas.refunded ?? 0),
-    capturedAmount: current.capturedAmount + (deltas.capturedAmount ?? 0),
-    refundedAmount: current.refundedAmount + (deltas.refundedAmount ?? 0),
-  })
+  await tx.query(
+    `INSERT INTO ${tx.schema}.payment_outcomes AS t
+       (id, captured, failed, refunded, captured_amount, refunded_amount)
+     VALUES (true, $1, $2, $3, $4, $5)
+     ON CONFLICT (id) DO UPDATE SET
+       captured        = t.captured        + EXCLUDED.captured,
+       failed          = t.failed          + EXCLUDED.failed,
+       refunded        = t.refunded        + EXCLUDED.refunded,
+       captured_amount = t.captured_amount + EXCLUDED.captured_amount,
+       refunded_amount = t.refunded_amount + EXCLUDED.refunded_amount`,
+    [
+      deltas.captured ?? 0,
+      deltas.failed ?? 0,
+      deltas.refunded ?? 0,
+      deltas.capturedAmount ?? 0,
+      deltas.refundedAmount ?? 0,
+    ]
+  )
 }
 
 export interface HourDeltas {
@@ -190,33 +287,30 @@ export interface HourDeltas {
   currency?: string | undefined
 }
 
-export async function bumpHourBucket(
-  store: AnalyticsStore,
-  hourKey: string,
-  deltas: HourDeltas
-): Promise<void> {
-  const current: HourBucketDoc = (await store.hourBuckets.findOne({ id: hourKey })) ?? {
-    id: hourKey,
-    hourKey,
-    orders: 0,
-    confirmed: 0,
-    cancelled: 0,
-    revenue: 0,
-    currency: null,
-  }
-
-  await upsert(store.hourBuckets, hourKey, {
-    ...current,
-    orders: current.orders + (deltas.orders ?? 0),
-    confirmed: current.confirmed + (deltas.confirmed ?? 0),
-    cancelled: current.cancelled + (deltas.cancelled ?? 0),
-    revenue: current.revenue + (deltas.revenue ?? 0),
-    // First observed currency wins and is never overwritten. A second currency
-    // arriving in the same hour is a real modelling limit of a single float
-    // `revenue`; it is left visible (the label stays the first one observed)
-    // rather than papered over with an exchange rate this service cannot know.
-    currency: current.currency ?? deltas.currency ?? null,
-  })
+export async function bumpHourBucket(tx: Tx, hourKey: string, deltas: HourDeltas): Promise<void> {
+  await tx.query(
+    `INSERT INTO ${tx.schema}.hour_buckets AS t (hour_key, orders, confirmed, cancelled, revenue, currency)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (hour_key) DO UPDATE SET
+       orders    = t.orders    + EXCLUDED.orders,
+       confirmed = t.confirmed + EXCLUDED.confirmed,
+       cancelled = t.cancelled + EXCLUDED.cancelled,
+       revenue   = t.revenue   + EXCLUDED.revenue,
+       -- First observed currency wins and is never overwritten. A second
+       -- currency arriving in the same hour is a real modelling limit of a
+       -- single revenue column; it is left visible (the label stays the first
+       -- one observed) rather than papered over with an exchange rate this
+       -- service cannot know.
+       currency  = COALESCE(t.currency, EXCLUDED.currency)`,
+    [
+      hourKey,
+      deltas.orders ?? 0,
+      deltas.confirmed ?? 0,
+      deltas.cancelled ?? 0,
+      deltas.revenue ?? 0,
+      deltas.currency ?? null,
+    ]
+  )
 }
 
 export interface ProductDeltas {
@@ -227,50 +321,46 @@ export interface ProductDeltas {
 }
 
 export async function bumpProductCounter(
-  store: AnalyticsStore,
+  tx: Tx,
   productId: string,
   deltas: ProductDeltas
 ): Promise<void> {
-  const current: ProductCounterDoc = (await store.productCounters.findOne({ id: productId })) ?? {
-    id: productId,
-    productId,
-    sku: deltas.sku,
-    unitsOrdered: 0,
-    timesOrdered: 0,
-    revenue: 0,
-  }
-
-  await upsert(store.productCounters, productId, {
-    ...current,
-    // A later event carrying a real sku replaces a placeholder empty one; a
-    // later EMPTY sku never erases a value we already learned.
-    sku: deltas.sku || current.sku,
-    unitsOrdered: current.unitsOrdered + (deltas.unitsOrdered ?? 0),
-    timesOrdered: current.timesOrdered + (deltas.timesOrdered ?? 0),
-    revenue: current.revenue + (deltas.revenue ?? 0),
-  })
+  await tx.query(
+    `INSERT INTO ${tx.schema}.product_counters AS t
+       (product_id, sku, units_ordered, times_ordered, revenue)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (product_id) DO UPDATE SET
+       -- A later event carrying a real sku replaces a placeholder empty one; a
+       -- later EMPTY sku never erases a value we already learned.
+       sku           = COALESCE(NULLIF(EXCLUDED.sku, ''), t.sku),
+       units_ordered = t.units_ordered + EXCLUDED.units_ordered,
+       times_ordered = t.times_ordered + EXCLUDED.times_ordered,
+       revenue       = t.revenue       + EXCLUDED.revenue`,
+    [productId, deltas.sku, deltas.unitsOrdered ?? 0, deltas.timesOrdered ?? 0, deltas.revenue ?? 0]
+  )
 }
 
 /**
  * Records progress after an event was APPLIED.
  *
- * `occurredAt` only ever moves lastEventAt FORWARD. Kafka guarantees ordering
- * within a partition, not across them, so an event consumed later can legally
- * carry an earlier timestamp; letting it win would make lastEventAt jump
- * backwards and read as though the service had regressed.
+ * `occurredAt` only ever moves lastEventAt FORWARD (GREATEST ignores NULLs).
+ * Kafka guarantees ordering within a partition, not across them, so an event
+ * consumed later can legally carry an earlier timestamp; letting it win would
+ * make lastEventAt jump backwards and read as though the service had regressed.
+ * An unparseable occurredAt is passed as NULL and so never moves it at all.
  */
-export async function recordProgress(
-  store: AnalyticsStore,
-  occurredAt: string | null
-): Promise<void> {
-  const current = await readOrInitProgress(store)
-
-  await upsertSingleton(store.progress, {
-    ...current,
-    eventsProcessed: current.eventsProcessed + 1,
-    lastEventAt: pickLatest(current.lastEventAt, occurredAt),
-    lastProcessedAt: new Date().toISOString(),
-  })
+export async function recordProgress(tx: Tx, occurredAt: string | null): Promise<void> {
+  const parsed = occurredAt !== null ? Date.parse(occurredAt) : Number.NaN
+  await tx.query(
+    `INSERT INTO ${tx.schema}.progress AS t
+       (id, events_processed, duplicates_skipped, last_event_at, last_processed_at)
+     VALUES (true, 1, 0, $1::timestamptz, now())
+     ON CONFLICT (id) DO UPDATE SET
+       events_processed  = t.events_processed + 1,
+       last_event_at     = GREATEST(t.last_event_at, EXCLUDED.last_event_at),
+       last_processed_at = now()`,
+    [Number.isFinite(parsed) ? new Date(parsed).toISOString() : null]
+  )
 }
 
 /**
@@ -278,56 +368,14 @@ export async function recordProgress(
  *
  * Surfaced on every response rather than merely logged: a non-zero value is
  * the only positive evidence that deduplication is actually firing, as opposed
- * to being present but never exercised.
+ * to being present but never exercised. It is an atomic increment on the
+ * progress row, not an aggregate contribution, so it does not violate "a
+ * duplicate touches no counters".
  */
-export async function recordDuplicate(store: AnalyticsStore): Promise<void> {
-  const current = await readOrInitProgress(store)
-
-  await upsertSingleton(store.progress, {
-    ...current,
-    duplicatesSkipped: current.duplicatesSkipped + 1,
-  })
-}
-
-async function readOrInitProgress(store: AnalyticsStore): Promise<ProgressDoc> {
-  return (
-    (await readProgress(store)) ?? {
-      id: SINGLETON_ID,
-      eventsProcessed: 0,
-      duplicatesSkipped: 0,
-      lastEventAt: null,
-      lastProcessedAt: null,
-    }
+export async function recordDuplicate(tx: Tx): Promise<void> {
+  await tx.query(
+    `INSERT INTO ${tx.schema}.progress AS t (id, events_processed, duplicates_skipped)
+     VALUES (true, 0, 1)
+     ON CONFLICT (id) DO UPDATE SET duplicates_skipped = t.duplicates_skipped + 1`
   )
-}
-
-function pickLatest(a: string | null, b: string | null): string | null {
-  if (!b) return a
-  if (!a) return b
-  return Date.parse(b) > Date.parse(a) ? b : a
-}
-
-async function upsertSingleton<T extends { id?: string | undefined }>(
-  adapter: DocumentDatabaseAdapter<T>,
-  doc: T
-): Promise<void> {
-  await upsert(adapter, SINGLETON_ID, { ...doc, id: SINGLETON_ID })
-}
-
-/**
- * update-then-insert-if-it-did-not-exist.
- *
- * The adapter's `update` is a `$set` with no upsert option, so it returns 0
- * when the document is absent. That return value is the only signal available,
- * and handling it here keeps every caller above free of a create/update branch.
- */
-async function upsert<T extends { id?: string | undefined }>(
-  adapter: DocumentDatabaseAdapter<T>,
-  id: string,
-  doc: T
-): Promise<void> {
-  const affected = await adapter.update({ id }, doc)
-  if (affected === 0) {
-    await adapter.insert({ ...doc, id })
-  }
 }

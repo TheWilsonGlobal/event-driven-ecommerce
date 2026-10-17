@@ -2,10 +2,10 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import { QueueManager } from '../queues'
 import {
-  publishOrderConfirmed,
-  publishPaymentCaptured,
-  publishPaymentFailed,
-  publishPaymentRefunded,
+  stageOrderConfirmed,
+  stagePaymentCaptured,
+  stagePaymentFailed,
+  stagePaymentRefunded,
 } from '../events'
 
 export interface PaymentsRouteDeps {
@@ -84,6 +84,7 @@ export function registerPaymentRoutes(
           200: { type: 'object', additionalProperties: true },
           400: { type: 'object', properties: { error: { type: 'string' } } },
           404: { type: 'object', properties: { error: { type: 'string' } } },
+          409: { type: 'object', properties: { error: { type: 'string' } } },
         },
       },
     },
@@ -118,42 +119,65 @@ export function registerPaymentRoutes(
       const captureSucceeded = requested ? requested === 'succeed' : Math.random() < 0.5
 
       if (captureSucceeded) {
-        await prisma.payment.update({
-          where: { id: pendingPayment.id },
-          data: {
-            status: 'COMPLETED',
-            rawResponse: JSON.stringify({ simulated: true, capturedAt: new Date().toISOString() }),
-          },
-        })
-        await prisma.order.update({ where: { id: orderId }, data: { status: 'CONFIRMED' } })
+        // Pattern 1 + 2: payment, order status and BOTH events commit together,
+        // under a row lock on the order. Two concurrent captures serialise on
+        // the lock; the loser re-reads, finds no PENDING payment and gets a 409
+        // instead of a second payment.captured.
+        //
+        // payment.captured is the money event; order.confirmed is the lifecycle
+        // event. Separate topics, different audiences: analytics wants both,
+        // inventory only cares about the order reaching a terminal paid state.
+        const captured = await prisma.$transaction(
+          async (tx) => {
+            await tx.$queryRaw`SELECT id FROM "orders" WHERE id = ${orderId} FOR UPDATE`
+            const payment = await tx.payment.findUnique({ where: { id: pendingPayment.id } })
+            if (!payment || payment.status !== 'PENDING') return null
 
-        // Two facts, both now true and both committed. payment.captured is the
-        // money event; order.confirmed is the lifecycle event. They are
-        // separate topics because they have different audiences — analytics
-        // wants both, inventory only cares about the order reaching a terminal
-        // paid state.
-        await publishPaymentCaptured(
-          {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            paymentId: pendingPayment.id,
-            provider: pendingPayment.provider,
-            amount: Number(pendingPayment.amount),
-            currency: pendingPayment.currency,
+            await tx.payment.update({
+              where: { id: payment.id },
+              data: {
+                status: 'COMPLETED',
+                rawResponse: JSON.stringify({
+                  simulated: true,
+                  capturedAt: new Date().toISOString(),
+                }),
+              },
+            })
+            await tx.order.update({ where: { id: orderId }, data: { status: 'CONFIRMED' } })
+
+            await stagePaymentCaptured(
+              tx,
+              {
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                paymentId: payment.id,
+                provider: payment.provider,
+                amount: Number(payment.amount),
+                currency: payment.currency,
+              },
+              request.id
+            )
+            await stageOrderConfirmed(
+              tx,
+              {
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                customerEmail: order.customerEmail,
+                customerName: order.customerName,
+                totalAmount: Number(order.totalAmount),
+                currency: order.currency,
+              },
+              request.id
+            )
+            return payment.id
           },
-          request.id
+          { timeout: 20_000 }
         )
-        await publishOrderConfirmed(
-          {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            customerEmail: order.customerEmail,
-            customerName: order.customerName,
-            totalAmount: Number(order.totalAmount),
-            currency: order.currency,
-          },
-          request.id
-        )
+        if (captured === null) {
+          return reply.status(409).send({
+            error: 'Payment was already captured by a concurrent request',
+          })
+        }
 
         // A now-confirmed order genuinely warrants its confirmation + receipt.
         await queueManager.tryEnqueue('send-confirmation', () =>
@@ -185,11 +209,12 @@ export function registerPaymentRoutes(
 
       // Capture failed: this is the genuine trigger for payment-retry.
       //
-      // payment.failed is published as a FACT for analytics. The retry itself
+      // payment.failed is staged in the outbox as a FACT for analytics. The retry itself
       // stays on BullMQ and is NOT moved behind Kafka: a retry is work with one
       // owner, an attempt counter and a terminal failure state, none of which
       // Kafka provides. This is the split the whole design rests on.
-      await publishPaymentFailed(
+      await stagePaymentFailed(
+        prisma,
         {
           orderId: order.id,
           orderNumber: order.orderNumber,
@@ -198,7 +223,7 @@ export function registerPaymentRoutes(
           amount: Number(pendingPayment.amount),
           currency: pendingPayment.currency,
           reason: 'simulated-capture-declined',
-          // First attempt — the BullMQ retries that follow are counted by the
+          // First attempt: the BullMQ retries that follow are counted by the
           // job's own attemptsMade, not here.
           attempt: 1,
         },
@@ -303,7 +328,8 @@ export function registerPaymentRoutes(
         // ordering: publish describes an intent that the queue then carries
         // out, so a consumer must treat this as "refund started", not
         // "refund settled".
-        await publishPaymentRefunded(
+        await stagePaymentRefunded(
+          prisma,
           {
             orderId: order.id,
             orderNumber: order.orderNumber,

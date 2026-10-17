@@ -7,6 +7,7 @@ import { createRedisConnection } from './redisConnection'
 import { describeError } from './describeError'
 import {
   makeExpireOrderProcessor,
+  type ExpireOrderDeps,
   makeRetryCaptureProcessor,
   makeNotificationProcessor,
   makeSagaCompensationProcessor,
@@ -21,13 +22,8 @@ import {
  * saga-compensation queue.
  */
 export interface StartWorkersDeps {
-  /** Publishes order.cancelled when an expiry actually cancels an order. */
-  onOrderCancelled: (data: {
-    orderId: string
-    orderNumber: string
-    reason: string
-    items: { productId: string; sku: string; quantity: number; unitPrice: number }[]
-  }) => Promise<void>
+  /** Stages order.cancelled (in the cancelling transaction) when an expiry cancels an order. */
+  onOrderCancelled: ExpireOrderDeps['onOrderCancelled']
 }
 
 export function startWorkers(

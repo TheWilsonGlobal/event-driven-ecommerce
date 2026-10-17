@@ -1,17 +1,17 @@
 /**
- * NeDB document shapes for ms-inventory.
+ * Row shapes for ms-inventory's Postgres tables (schema ms_inventory, created by
+ * migrations/001_init.sql).
  *
- * `id`/`_id` are optional on every doc because EmbeddedDocumentStore generates
- * them on insert and mirrors one into the other (see document.ts) — the same
- * reason ms-product's ProductDoc carries both.
+ * These are the API/domain shapes, camelCase with ISO-8601 strings for
+ * timestamps; src/db/store.ts maps them to and from the snake_case columns.
+ * The `*Doc` names are kept from the NeDB era so handlers, routes and the
+ * published response schemas did not have to change.
  */
 
 export interface InventoryDoc {
-  id?: string
-  _id?: string
   productId: string
   sku: string
-  /** Free to be reserved. Never negative — the reserve path is all-or-nothing. */
+  /** Free to be reserved. Never negative — a CHECK constraint enforces it. */
   available: number
   /** Held for an order that has not shipped or been cancelled yet. */
   reserved: number
@@ -27,8 +27,6 @@ export interface ReservationItem {
 export type ReservationStatus = 'RESERVED' | 'RELEASED'
 
 export interface ReservationDoc {
-  id?: string
-  _id?: string
   orderId: string
   orderNumber: string
   /**
@@ -49,8 +47,6 @@ export interface ReservationDoc {
  * handling — see handlers.ts for why a second, state-based guard exists too.
  */
 export interface ProcessedEventDoc {
-  id?: string
-  _id?: string
   eventId: string
   eventType: string
   processedAt: string

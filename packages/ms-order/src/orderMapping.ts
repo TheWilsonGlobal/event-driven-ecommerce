@@ -72,7 +72,14 @@ export function toOrderRecord(order: OrderWithRelations): Order {
   }
 }
 
-export type { CreateOrderBody } from '@ecommerce/shared-types'
+import type { CreateOrderBody as SharedCreateOrderBody } from '@ecommerce/shared-types'
+
+/**
+ * The shared checkout body plus ms-order's own idempotency key (also accepted
+ * as the Idempotency-Key header). Kept local rather than added to
+ * shared-types: the browser client does not send it today.
+ */
+export type CreateOrderBody = SharedCreateOrderBody & { idempotencyKey?: string }
 
 export async function generateUniqueOrderNumber(prisma: PrismaClient): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {

@@ -10,11 +10,11 @@ The monorepo contains the following services:
 
 ### Backend Services (Fastify 4)
 - **API Gateway** (`packages/gateway` · Port 5460) - Reverse proxy, JWT verification, rate limiting
-- **User Service** (`packages/ms-user` · Port 5463) - Authentication, authorization, and user management (Prisma / SQLite / Postgres)
-- **Product Service** (`packages/ms-product` · Port 5464) - Product catalog, Elasticsearch search, and inventory (NeDB / MongoDB)
-- **Order Service** (`packages/ms-order` · Port 5465) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal (Prisma / SQLite / Postgres)
-- **Inventory Service** (`packages/ms-inventory` · Port 5466) - Stock reservation, inventory tracking, and Kafka consumer
-- **Analytics Service** (`packages/ms-analytics` · Port 5467) - Sales & event metric aggregation, and Kafka consumer
+- **User Service** (`packages/ms-user` · Port 5463) - Authentication, authorization, and user management (Prisma / Postgres schema `ms_user`)
+- **Product Service** (`packages/ms-product` · Port 5464) - Product catalog, Elasticsearch search, and catalogue storage (Postgres schema `ms_product`; NeDB is only the legacy driver)
+- **Order Service** (`packages/ms-order` · Port 5465) - Order checkout saga, BullMQ delayed queues, and Stripe/PayPal (Prisma / Postgres schema `ms_order`, transactional outbox)
+- **Inventory Service** (`packages/ms-inventory` · Port 5466) - Stock reservation, inventory tracking, and Kafka consumer (Postgres schema `ms_inventory`, transactional outbox)
+- **Analytics Service** (`packages/ms-analytics` · Port 5467) - Sales & event metric aggregation, and Kafka consumer (Postgres schema `ms_analytics`)
 
 ### Testing & Verification
 - **Load & Stress Testing** (`packages/tests`) - Live HTTP & queue/event load test harness for BullMQ and Kafka
@@ -22,7 +22,7 @@ The monorepo contains the following services:
 ### Shared Libraries
 - **Types** (`packages/shared/types`) - Common TypeScript type definitions & DTOs
 - **Utils** (`packages/shared/utils`) - Shared utility functions, logger (Pino + Loki), metrics (Prometheus) & response wrappers
-- **Database** (`packages/shared/database`) - Prisma ORM, Mongoose & Redis clients
+- **Database** (`packages/shared/database`) - Postgres pools/transactions/migrations for the single Supabase database, Redis clients (legacy NeDB/SQLite adapters kept until sign-off)
 - **Messaging** (`packages/shared/messaging`) - BullMQ queues, workers & Kafka event clients
 
 ### Frontend & Control Plane
@@ -115,7 +115,7 @@ make docker-down-services
 - `pnpm run build` - Build all workspace packages
 - `pnpm run build:shared` - Build all shared packages
 - `pnpm run db:generate` - Generate Prisma clients across microservices
-- `pnpm run db:migrate` - Deploy database migrations across PostgreSQL/SQLite services
+- `pnpm run db:migrate` - Deploy Prisma migrations (ms-user, ms-order). ms-product/inventory/analytics apply their own SQL migrations at boot
 - `pnpm run test` - Run all tests across workspace
 - `pnpm run test:watch` - Run tests in interactive watch mode
 - `pnpm run lint` - Lint all packages
@@ -146,6 +146,49 @@ make docker-down-services
 3. Verify matching glob in `pnpm-workspace.yaml`
 4. Add to `tsconfig.json` references and paths
 5. Update Docker Compose configuration
+
+## Database: one Supabase Postgres, one schema per service
+
+All application data lives in a single Supabase Postgres database. Each service owns
+one schema and never reads another's; cross-service data travels as Kafka events.
+
+| Service | Schema | Access |
+|---|---|---|
+| ms-user | `ms_user` | Prisma |
+| ms-order | `ms_order` | Prisma (+ `outbox_events`, drained with raw SQL) |
+| ms-product | `ms_product` | `pg`, jsonb documents |
+| ms-inventory | `ms_inventory` | `pg`, typed tables, SQL migrations at boot |
+| ms-analytics | `ms_analytics` | `pg`, typed tables, SQL migrations at boot |
+
+Configure it in the repo-root `.env` (see `.env.example`, "Supabase" section):
+`DB_MODE=supabase`, `<SERVICE>_DATABASE_URL` (runtime) and `<SERVICE>_DIRECT_URL` (migrations).
+A password containing `@ # % ^ $` must be percent-encoded inside those URLs. The Supabase
+secret key is server-only and never belongs in the `client` or `admin` env.
+Every table has row level security enabled with no policies.
+
+```bash
+pnpm --filter @ecommerce/ms-user run migrate     # Prisma, reads the repo-root .env
+pnpm --filter @ecommerce/ms-order run migrate
+```
+
+### Reliability patterns
+
+1. **Transactional outbox.** ms-order and ms-inventory write each Kafka event as a row in
+   `outbox_events` in the *same transaction* as the state change. An `OutboxRelay` drains the
+   table to Kafka, so a crash between commit and publish can no longer lose an event.
+   `GET /api/v1/outbox` shows rows by status; `POST /api/v1/outbox/requeue` revives dead rows.
+   With Kafka disabled, events wait in the table instead of being dropped.
+2. **Idempotency.** The `eventId` is minted once, at insert, and is identical on every retry.
+   Consumers claim it in a `processed_events` table *inside the same transaction* as their
+   effect. `POST /api/v1/orders` accepts an `Idempotency-Key` header: a repeat returns the
+   original order (200), the same key with a different order is a 409.
+3. **`FOR UPDATE SKIP LOCKED` + lease.** Relays claim rows with a database-clock lease, so
+   several relays never collide, a dead worker's rows are reclaimed, and a stale worker cannot
+   overwrite the new owner. A row is only claimable when no earlier row for the same order is
+   still in flight, which keeps per-order event ordering.
+
+Delivery into Kafka is **at-least-once**; consumers dedupe on `eventId`.
+
 
 ### Database Migrations (Prisma)
 ```bash

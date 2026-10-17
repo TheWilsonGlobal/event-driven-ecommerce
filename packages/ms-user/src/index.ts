@@ -21,10 +21,10 @@ import { registerHealthRoute } from './routes/health'
 import { registerUserRoutes } from './routes/users'
 import { registerAuthRoutes } from './routes/auth'
 
-// Load ms-user's own .env first (takes precedence: dotenv does not
-// override already-set keys). It supplies the SQLite DATABASE_URL used by
-// this service's Prisma schema, which must win over the root .env's
-// Postgres DATABASE_URL below (used by other, non-Prisma consumers).
+// Package-local .env first (an optional override; dotenv never overrides
+// already-set keys), then the repo-root .env. The Prisma schema reads
+// USER_DATABASE_URL, which lives in the root .env — there is no longer a
+// package-local SQLite DATABASE_URL.
 dotenv.config({ path: path.resolve(__dirname, '../.env') })
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 
@@ -84,7 +84,7 @@ async function bootstrap() {
     uiConfig: { docExpansion: 'list', deepLinking: true },
   })
 
-  registerHealthRoute(server, dbConfig)
+  registerHealthRoute(server, dbConfig, prisma)
   registerUserRoutes(server, { prisma })
   registerAuthRoutes(server, { prisma })
 

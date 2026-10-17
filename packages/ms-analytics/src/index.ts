@@ -1,15 +1,14 @@
 // MUST be first: loads .env before any module below reads process.env.
 // See loadEnv.ts — import hoisting means no statement in this file's body
 // can run before these imports, so the dotenv calls have to live in one.
-import { REPO_ROOT } from './loadEnv'
+import './loadEnv'
 import type { FastifyInstance } from 'fastify'
 import fastify from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
-import * as path from 'path'
-import { loadDatabaseConfig } from '@ecommerce/shared-database'
+import { loadDatabaseConfig, runMigrations } from '@ecommerce/shared-database'
 import {
   registerMetrics,
   buildLoggerOptions,
@@ -17,7 +16,7 @@ import {
   createRouteRegistry,
   registerEndpointsRoute,
 } from '@ecommerce/shared-utils'
-import { createAnalyticsStore } from './aggregates/store'
+import { MIGRATIONS_DIR, createAnalyticsStore } from './aggregates/store'
 import {
   createAnalyticsConsumer,
   eventProducer,
@@ -33,7 +32,7 @@ import { registerShutdownHandlers } from './shutdown'
  * ms-analytics — the PURE CONSUMER that demonstrates fan-out.
  *
  * ── What makes this service the proof ───────────────────────────────────────
- * It consumes all three topics, writes only to its own NeDB collections, and
+ * It consumes all three topics, writes only to its own Postgres schema (ms_analytics), and
  * publishes NOTHING. No other service reads what it writes; no other service
  * knows it exists. It has no BullMQ queue, because it does no deferred work —
  * an aggregate update is cheap, synchronous and idempotent, so there is
@@ -55,7 +54,7 @@ import { registerShutdownHandlers } from './shutdown'
  * ── Boots with Kafka down ───────────────────────────────────────────────────
  * KAFKA_ENABLED defaults to false. In that state no Kafka client is
  * constructed at all, the consumer never starts, and every analytics route
- * still answers from NeDB — reporting empty aggregates with
+ * still answers from Postgres — reporting empty aggregates with
  * `eventsProcessed: 0` and `lastEventAt: null`, which says "nothing processed"
  * rather than "all values are zero". Nothing here throws at construction.
  */
@@ -63,18 +62,18 @@ import { registerShutdownHandlers } from './shutdown'
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.ANALYTICS_SERVICE_PORT || '5467', 10)
 
-// NEDB_DATA_PATH (e.g. "./data/db") is relative-by-convention to the repo
-// root — same as how the .env file itself is located above — not to whatever
-// directory the process happens to be launched from. Without this, pnpm/nodemon
-// running with cwd = packages/ms-analytics would silently nest the real data
-// files under packages/ms-analytics/data/db. Same fix ms-product applies.
-if (!path.isAbsolute(dbConfig.document.nedb.dataPath)) {
-  dbConfig.document.nedb.dataPath = path.resolve(REPO_ROOT, dbConfig.document.nedb.dataPath)
+// Postgres is the only supported store: the transactional idempotency design
+// (one transaction per event) has no NeDB equivalent. Refuse to boot on a
+// contradictory driver instead of quietly constructing a pool that cannot exist.
+if (dbConfig.document.driver !== 'postgres') {
+  throw new Error(
+    `ms-analytics requires DOCUMENT_DB_DRIVER=postgres (got ${dbConfig.document.driver}).`
+  )
 }
 
-// The six aggregate collections. File-backed, loaded lazily on first access,
-// and owned exclusively by this service — nothing else reads or writes them.
-const store = createAnalyticsStore(dbConfig)
+// The six aggregate tables in schema ms_analytics, owned exclusively by this
+// service. Creating the store opens no connection; the pool connects lazily.
+const store = createAnalyticsStore()
 
 // Consumer construction opens nothing and never throws; with KAFKA_ENABLED
 // unset it does not even build a Kafka client. start() is called at the end of
@@ -84,6 +83,21 @@ const consumer = createAnalyticsConsumer(store)
 let server: FastifyInstance
 
 async function bootstrap() {
+  // Schema before anything that can write to it. Awaited before the server
+  // listens and, above all, before consumer.start() below: the first consumed
+  // event must find its tables. A failure is fatal — a consumer that cannot
+  // persist would otherwise ack events it drops.
+  try {
+    const migrated = await runMigrations('analytics', MIGRATIONS_DIR)
+    console.log(
+      `[Analytics Service] Migrations: applied [${migrated.applied.join(', ')}], ` +
+        `already applied [${migrated.skipped.join(', ')}]`
+    )
+  } catch (err) {
+    console.error(`[Analytics Service] Migration failed: ${(err as Error).message}`)
+    process.exit(1)
+  }
+
   const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
   // Checked once at boot, before the logger (and its Loki transport) is even
   // constructed — an unreachable Loki then produces one quiet line here

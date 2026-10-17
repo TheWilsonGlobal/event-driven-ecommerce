@@ -92,7 +92,7 @@ function mapModelToTable(model: Prisma.DMMF.Model, rowCount: number): TableView 
   return {
     name: model.dbName ?? model.name,
     service: SERVICE,
-    driver: 'SQLite (Prisma ORM)',
+    driver: 'PostgreSQL (Prisma ORM)',
     rowCount,
     columns,
     indexes,
@@ -106,7 +106,7 @@ export function registerSchemaRoutes(server: FastifyInstance, prisma: PrismaClie
       schema: {
         tags: ['schema'],
         description:
-          "Real database structure for this service's SQLite database, introspected from " +
+          "Real database structure for this service's PostgreSQL schema (ms_user), introspected from " +
           "Prisma's DMMF (generated from schema.prisma) so it can never drift from the real " +
           'schema file. rowCount is a live count() per table, run at request time.',
         response: {

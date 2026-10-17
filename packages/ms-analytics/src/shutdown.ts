@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { closeServicePools } from '@ecommerce/shared-database'
 import type { EventConsumer, EventProducer } from '@ecommerce/shared-messaging'
 
 export interface ShutdownDeps {
@@ -17,9 +18,11 @@ export interface ShutdownDeps {
  * ms-order's blocking BullMQ reads produce.
  *
  * Order is deliberate: the HTTP server first (stop accepting requests), then
- * the consumer (let the in-flight handler finish its NeDB writes — an
- * interrupted read-modify-write is how an aggregate ends up with a half-applied
- * event that the idempotency ledger will never let it retry).
+ * the consumer (let the in-flight handler finish and COMMIT its
+ * transaction), then the Postgres pool last, so that handler still has a
+ * connection to commit on. An interrupted transaction rolls back cleanly rather
+ * than half-applying, but closing the pool first would turn every in-flight
+ * event into a needless failure.
  */
 export function registerShutdownHandlers({ server, consumer, producer }: ShutdownDeps): void {
   let shuttingDown = false
@@ -50,6 +53,12 @@ export function registerShutdownHandlers({ server, consumer, producer }: Shutdow
       await producer.close()
     } catch (err) {
       console.warn(`[Analytics Service] Error closing event producer: ${(err as Error).message}`)
+    }
+
+    try {
+      await closeServicePools()
+    } catch (err) {
+      console.warn(`[Analytics Service] Error closing database pool: ${(err as Error).message}`)
     }
 
     console.log('[Analytics Service] Shutdown complete')

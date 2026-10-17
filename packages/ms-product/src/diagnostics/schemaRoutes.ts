@@ -24,13 +24,14 @@ interface CollectionSpec {
 }
 
 /**
- * NeDB has no fixed schema to introspect (no migrations, no DDL) — instead,
- * one real document is sampled from the collection and its top-level keys are
- * reported with a JS `typeof` per key. This can only ever describe the shape
- * of the sampled document, not a schema contract every document is guaranteed
- * to match; that is the real, honest limitation of an embedded document store.
+ * A document collection has no fixed column set to introspect (the Postgres
+ * table is just `id text, doc jsonb`) — instead, one real document is sampled
+ * from the collection and its top-level keys are reported with a JS `typeof`
+ * per key. This can only ever describe the shape of the sampled document, not
+ * a schema contract every document is guaranteed to match; that is the real,
+ * honest limitation of a schemaless document store, jsonb included.
  */
-async function describeCollection(spec: CollectionSpec): Promise<TableView> {
+async function describeCollection(spec: CollectionSpec, driver: string): Promise<TableView> {
   const all = await spec.store.find({})
   const rowCount = all.length
 
@@ -38,7 +39,7 @@ async function describeCollection(spec: CollectionSpec): Promise<TableView> {
     return {
       name: spec.name,
       service: SERVICE,
-      driver: 'Embedded NeDB',
+      driver,
       rowCount: 0,
       columns: [],
       indexes: [],
@@ -62,22 +63,27 @@ async function describeCollection(spec: CollectionSpec): Promise<TableView> {
   return {
     name: spec.name,
     service: SERVICE,
-    driver: 'Embedded NeDB',
+    driver,
     rowCount,
     columns,
     indexes: [],
   }
 }
 
-export function registerSchemaRoutes(server: FastifyInstance, collections: CollectionSpec[]): void {
+/** `driver` is the label reported per table, e.g. "PostgreSQL (jsonb)". */
+export function registerSchemaRoutes(
+  server: FastifyInstance,
+  collections: CollectionSpec[],
+  driver: string
+): void {
   server.get(
     '/api/v1/schema',
     {
       schema: {
         tags: ['schema'],
         description:
-          "Real document shape for this service's NeDB collections. NeDB has no fixed " +
-          'schema/migrations, so each collection is described by sampling one real document ' +
+          "Real document shape for this service's collections. Document stores have no fixed " +
+          'column set, so each collection is described by sampling one real document ' +
           '(findOne) and reporting its top-level keys with a JS typeof per key, plus a live ' +
           'rowCount (count of all documents). An empty collection is reported with zero ' +
           'columns and a note rather than fabricated fields.',
@@ -128,7 +134,7 @@ export function registerSchemaRoutes(server: FastifyInstance, collections: Colle
       },
     },
     async () => {
-      const tables = await Promise.all(collections.map(describeCollection))
+      const tables = await Promise.all(collections.map((c) => describeCollection(c, driver)))
 
       const summary = {
         tableCount: tables.length,

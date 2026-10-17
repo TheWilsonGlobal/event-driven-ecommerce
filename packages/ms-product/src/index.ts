@@ -10,7 +10,7 @@ import * as path from 'path'
 import {
   loadDatabaseConfig,
   createRustFSClient,
-  createDocumentStore,
+  createServiceDocumentStore,
   createSearchClient,
   type DocumentDatabaseAdapter,
 } from '@ecommerce/shared-database'
@@ -40,29 +40,21 @@ dotenv.config({ path: path.join(REPO_ROOT, '.env') })
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.PRODUCT_SERVICE_PORT || '5464', 10)
 
-// NEDB_DATA_PATH (e.g. "./data/db") is relative-by-convention to the repo
-// root — same as how the .env file itself is located above — not to
-// whatever directory the process happens to be launched from (pnpm/nodemon
-// run this with cwd = packages/ms-product, which would otherwise silently
-// nest the real data files under packages/ms-product/data/db instead of the
-// intended top-level data/db/).
-if (!path.isAbsolute(dbConfig.document.nedb.dataPath)) {
-  dbConfig.document.nedb.dataPath = path.resolve(REPO_ROOT, dbConfig.document.nedb.dataPath)
-}
-
 // Initialise the RustFS client (singleton per process)
 const rustfs = createRustFSClient(process.env)
 
-// Elasticsearch search index. NeDB below stays the source of truth — this only
-// answers ?search=. It fails soft when the cluster is down (it sits behind a
-// compose profile in infra-hub), so search degrades to a substring scan rather
-// than erroring.
+// Elasticsearch search index. Postgres below stays the source of truth — this
+// only answers ?search=. It fails soft when the cluster is down (it sits behind
+// a compose profile in infra-hub), so search degrades to a substring scan
+// rather than erroring.
 const search = createSearchClient(process.env)
 
-// Real NeDB-backed document stores — one physical file per collection under
-// the configured data path (e.g. data/db/products.db, data/db/categories.db).
-const productsStore = createDocumentStore<ProductDoc>('products', dbConfig)
-const categoriesStore = createDocumentStore<CategoryDoc>('categories', dbConfig)
+// Postgres-backed document stores in schema ms_product (tables "products" and
+// "categories", created on first use by the shared jsonb shim). The factory
+// falls back to the embedded NeDB store only while DOCUMENT_DB_DRIVER=nedb,
+// which the plan removes at cutover.
+const productsStore = createServiceDocumentStore<ProductDoc>('product', 'products', dbConfig)
+const categoriesStore = createServiceDocumentStore<CategoryDoc>('product', 'categories', dbConfig)
 
 // BullMQ reindex-search queue. Constructs no Redis connection at all when
 // KV_CACHE_DRIVER selects the embedded store (this repo's default,
@@ -145,20 +137,28 @@ async function bootstrap() {
   // worker begins pulling jobs only once the service is otherwise ready.
   queueManager.startWorker(productsStore, search)
 
-  registerSchemaRoutes(server, [
-    {
-      name: 'products',
-      store: productsStore as unknown as DocumentDatabaseAdapter<Record<string, unknown>>,
-    },
-    {
-      name: 'categories',
-      store: categoriesStore as unknown as DocumentDatabaseAdapter<Record<string, unknown>>,
-    },
-  ])
+  registerSchemaRoutes(
+    server,
+    [
+      {
+        name: 'products',
+        store: productsStore as unknown as DocumentDatabaseAdapter<Record<string, unknown>>,
+      },
+      {
+        name: 'categories',
+        store: categoriesStore as unknown as DocumentDatabaseAdapter<Record<string, unknown>>,
+      },
+    ],
+    dbConfig.document.driver === 'postgres' ? 'PostgreSQL (jsonb)' : 'Embedded NeDB'
+  )
   registerLogRoutes(server)
   registerEndpointsRoute(server, routeRegistry, 'ms-product')
 
-  registerShutdownHandlers({ server, queueManager })
+  registerShutdownHandlers({
+    server,
+    queueManager,
+    closeDatabase: dbConfig.document.driver === 'postgres',
+  })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })

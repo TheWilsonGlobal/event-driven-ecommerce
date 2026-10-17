@@ -1,6 +1,5 @@
 import type { Job } from 'bullmq'
-import type { DocumentDatabaseAdapter } from '@ecommerce/shared-database'
-import type { InventoryDoc, ReservationDoc } from '../types'
+import type { InventoryStore } from '../db/store'
 import { releaseReservation } from '../events/handlers'
 import { JOB_NAMES, type ReleaseExpiredReservationJob } from './jobTypes'
 
@@ -18,12 +17,18 @@ import { JOB_NAMES, type ReleaseExpiredReservationJob } from './jobTypes'
  * order first, and that cancellation releases the stock through the normal
  * path. This queue is the backstop for when it does not: ms-order's Redis was
  * down when the order was created, its expiry job failed all its attempts, or
- * the order.cancelled publish was lost (at-most-once, no outbox).
+ * the order.cancelled event never reached us.
+ *
+ * ── Check and release are one atomic statement ──────────────────────────────
+ * A full TTL has passed, so the usual outcome is that order.cancelled already
+ * released this. The state is therefore never trusted from enqueue time, and it
+ * is not read-then-acted-on either: `releaseReservation` flips RESERVED ->
+ * RELEASED with a status predicate inside one transaction, so a cancellation
+ * landing at the same instant as this timer cannot make both credit the stock.
+ * There is no ledger row here -- a BullMQ job is not a Kafka event -- the
+ * reservation's own state is the idempotency key.
  */
-export function makeReconciliationProcessor(
-  inventoryStore: DocumentDatabaseAdapter<InventoryDoc>,
-  reservationsStore: DocumentDatabaseAdapter<ReservationDoc>
-) {
+export function makeReconciliationProcessor(store: InventoryStore) {
   return async function processReconciliation(job: Job<ReleaseExpiredReservationJob>) {
     if (job.name !== JOB_NAMES.releaseExpired) {
       throw new Error(`Unknown inventory-reconciliation job name: ${job.name}`)
@@ -31,30 +36,23 @@ export function makeReconciliationProcessor(
 
     const { orderId, orderNumber } = job.data
 
-    // Re-read rather than trust the enqueue-time view — see jobTypes.ts. A
-    // full TTL has passed, and the usual outcome is that order.cancelled
-    // already released this.
-    const reservation = await reservationsStore.findOne({ orderId })
-    if (!reservation) {
-      return { outcome: 'skipped', reason: 'reservation-not-found', orderId }
-    }
-
-    if (reservation.status !== 'RESERVED') {
-      // The expected happy path: something released it within the TTL.
-      return { outcome: 'skipped', reason: 'already-released', orderId, orderNumber }
-    }
-
-    await releaseReservation(
-      { inventoryStore, reservationsStore },
-      reservation,
-      'reservation-expired'
+    const result = await store.transaction((tx) =>
+      releaseReservation(tx, orderId, 'reservation-expired')
     )
+
+    if (!result.released) {
+      // already-released is the expected happy path: something released it
+      // within the TTL.
+      return result.reason === 'no-reservation'
+        ? { outcome: 'skipped', reason: 'reservation-not-found', orderId }
+        : { outcome: 'skipped', reason: 'already-released', orderId, orderNumber }
+    }
 
     return {
       outcome: 'released',
       orderId,
       orderNumber,
-      items: reservation.items.length,
+      items: result.items.length,
     }
   }
 }

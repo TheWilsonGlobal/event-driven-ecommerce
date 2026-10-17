@@ -18,6 +18,7 @@ import {
   recordDuplicate,
   recordProgress,
   type AnalyticsStore,
+  type Tx,
 } from '../aggregates/store'
 
 /**
@@ -35,7 +36,7 @@ import {
  * silent, permanent, and grows with every rebalance.
  *
  * So EVERY handler below routes through `applyOnce`, which claims the
- * envelope's eventId in the processed_events collection first and makes no
+ * envelope's eventId in the processed_events table first and makes no
  * contribution at all when the claim fails. Kafka redelivers on rebalance, on
  * restart, and whenever an offset was not committed; this service treats that
  * as normal, not exceptional.
@@ -61,46 +62,58 @@ export interface HandlerDeps {
 /**
  * The idempotency gate every handler runs behind.
  *
- * Claims the eventId, runs `apply` only on a successful claim, then records
- * progress. A rejected claim is counted (duplicatesSkipped) rather than
- * silently dropped, so redelivery is observable in the API instead of only
- * inferable from its absence.
+ * Runs the whole event in ONE transaction. Its first statement claims the
+ * eventId (INSERT ... ON CONFLICT DO NOTHING); `apply` runs only on a
+ * successful claim, then progress is recorded. A rejected claim is counted
+ * (duplicatesSkipped) rather than silently dropped, so redelivery is observable
+ * in the API instead of only inferable from its absence, and then the
+ * transaction commits having touched no aggregate.
  *
- * Note the ordering: the claim is written BEFORE `apply` runs. If `apply`
- * then throws, the event is marked processed but was only partially applied.
- * That is the deliberate trade — the alternative (claim after apply) makes a
- * crash between the two re-apply the whole contribution, which is exactly the
- * double-count this gate exists to prevent. A partial application is a bounded
- * error in one aggregate; a double count is an unbounded one that compounds.
- * The throw is visible as a real `failed` count on GET /api/v1/events.
+ * ── The claim is atomic with the effect ─────────────────────────────────────
+ * The NeDB version had to write the claim BEFORE `apply` (no cross-collection
+ * transaction), which meant a crash or throw in `apply` left the event marked
+ * processed but only partially applied. That trade-off is retired: the ledger
+ * row and every counter bump commit together, so if `apply` throws the whole
+ * transaction rolls back — claim included — and the event is neither counted
+ * nor marked seen. A redelivery then applies it exactly once; a double count is
+ * impossible because the claim row and the counters are one commit. The throw
+ * is still visible as a real `failed` count on GET /api/v1/events.
+ *
+ * Concurrent deliveries of one eventId serialise on the primary-key row: the
+ * second blocks until the first commits, then sees the conflict and skips.
  */
 async function applyOnce(
   { store, log }: HandlerDeps,
   envelope: EventEnvelope,
   context: EventContext,
-  apply: () => Promise<void>
+  apply: (tx: Tx) => Promise<void>
 ): Promise<void> {
-  const claimed = await claimEvent(store, {
-    id: envelope.eventId,
-    eventType: envelope.eventType,
-    occurredAt: envelope.occurredAt,
-    processedAt: new Date().toISOString(),
-    topic: context.topic,
-    partition: context.partition,
-    offset: context.offset,
+  const duplicate = await store.transaction(async (tx) => {
+    const claimed = await claimEvent(tx, {
+      id: envelope.eventId,
+      eventType: envelope.eventType,
+      occurredAt: envelope.occurredAt,
+      topic: context.topic,
+      partition: context.partition,
+      offset: context.offset,
+    })
+
+    if (!claimed) {
+      await recordDuplicate(tx)
+      return true
+    }
+
+    await apply(tx)
+    await recordProgress(tx, envelope.occurredAt)
+    return false
   })
 
-  if (!claimed) {
-    await recordDuplicate(store)
+  if (duplicate) {
     log(
       `Skipped duplicate ${envelope.eventType} (eventId=${envelope.eventId}) ` +
         `redelivered at ${context.topic}[${context.partition}]@${context.offset}`
     )
-    return
   }
-
-  await apply()
-  await recordProgress(store, envelope.occurredAt)
 }
 
 /**
@@ -130,16 +143,16 @@ export async function handleOrderCreated(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
+  await applyOnce(deps, envelope, context, async (tx) => {
     const payload = envelope.payload as Partial<OrderCreatedPayload>
     const amount = usableAmount(payload.totalAmount)
     const currency = usableString(payload.currency)
     const hourKey = hourKeyOf(envelope.occurredAt)
 
-    await bumpFunnel(deps.store, { created: 1 })
+    await bumpFunnel(tx, { created: 1 })
 
     if (hourKey) {
-      await bumpHourBucket(deps.store, hourKey, {
+      await bumpHourBucket(tx, hourKey, {
         orders: 1,
         // Revenue and its currency move together. An order whose totalAmount
         // we cannot use contributes to the ORDER COUNT (we know it happened)
@@ -155,7 +168,12 @@ export async function handleOrderCreated(
       )
     }
 
-    const items = Array.isArray(payload.items) ? payload.items : []
+    // Sorted by productId so two concurrent transactions always lock the
+    // product_counters rows in the same order; interleaved orders would
+    // otherwise be able to deadlock each other.
+    const items = (Array.isArray(payload.items) ? [...payload.items] : []).sort((a, b) =>
+      String(a?.productId ?? '').localeCompare(String(b?.productId ?? ''))
+    )
     for (const item of items) {
       const productId = usableString(item?.productId)
       if (!productId) {
@@ -166,7 +184,7 @@ export async function handleOrderCreated(
       const quantity = usableAmount(item?.quantity)
       const unitPrice = usableAmount(item?.unitPrice)
 
-      await bumpProductCounter(deps.store, productId, {
+      await bumpProductCounter(tx, productId, {
         sku: usableString(item?.sku) ?? '',
         // timesOrdered counts APPEARANCES in distinct orders, which is what
         // this line is — one product on one order. It is incremented even when
@@ -188,16 +206,16 @@ export async function handleOrderConfirmed(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
+  await applyOnce(deps, envelope, context, async (tx) => {
     const hourKey = hourKeyOf(envelope.occurredAt)
-    await bumpFunnel(deps.store, { confirmed: 1 })
+    await bumpFunnel(tx, { confirmed: 1 })
     if (hourKey) {
       // Confirmation adds no revenue: order.created already banked this
       // order's totalAmount. Counting it again here would double every
       // confirmed order's contribution — the single easiest way to inflate a
       // revenue figure, since the confirmation legitimately carries a
       // totalAmount field that looks perfectly usable.
-      await bumpHourBucket(deps.store, hourKey, { confirmed: 1 })
+      await bumpHourBucket(tx, hourKey, { confirmed: 1 })
     }
   })
 }
@@ -207,15 +225,15 @@ export async function handleOrderCancelled(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
+  await applyOnce(deps, envelope, context, async (tx) => {
     const hourKey = hourKeyOf(envelope.occurredAt)
-    await bumpFunnel(deps.store, { cancelled: 1 })
+    await bumpFunnel(tx, { cancelled: 1 })
     if (hourKey) {
       // Revenue is NOT decremented. The hour in which an order was created
       // genuinely saw that order created; a cancellation an hour later is a
       // separate fact belonging to a later bucket. Subtracting here would
       // silently rewrite history, and would let a bucket go negative.
-      await bumpHourBucket(deps.store, hourKey, { cancelled: 1 })
+      await bumpHourBucket(tx, hourKey, { cancelled: 1 })
     }
   })
 }
@@ -227,11 +245,11 @@ export async function handlePaymentCaptured(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
+  await applyOnce(deps, envelope, context, async (tx) => {
     const payload = envelope.payload as Partial<PaymentCapturedPayload>
     const amount = usableAmount(payload.amount)
 
-    await bumpPaymentOutcomes(deps.store, {
+    await bumpPaymentOutcomes(tx, {
       captured: 1,
       ...(amount !== undefined ? { capturedAmount: amount } : {}),
     })
@@ -243,13 +261,13 @@ export async function handlePaymentFailed(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
+  await applyOnce(deps, envelope, context, async (tx) => {
     const payload = envelope.payload as Partial<PaymentFailedPayload>
     // A failure carries the amount that was ATTEMPTED, not one that moved. It
     // is deliberately not accumulated anywhere: summing attempted money into a
     // money field would put value in a total that no one was ever charged.
     void payload
-    await bumpPaymentOutcomes(deps.store, { failed: 1 })
+    await bumpPaymentOutcomes(tx, { failed: 1 })
   })
 }
 
@@ -258,11 +276,11 @@ export async function handlePaymentRefunded(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
+  await applyOnce(deps, envelope, context, async (tx) => {
     const payload = envelope.payload as Partial<PaymentRefundedPayload>
     const amount = usableAmount(payload.amount)
 
-    await bumpPaymentOutcomes(deps.store, {
+    await bumpPaymentOutcomes(tx, {
       refunded: 1,
       ...(amount !== undefined ? { refundedAmount: amount } : {}),
     })
@@ -276,8 +294,8 @@ export async function handleInventoryReserved(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
-    await bumpFunnel(deps.store, { reserved: 1 })
+  await applyOnce(deps, envelope, context, async (tx) => {
+    await bumpFunnel(tx, { reserved: 1 })
   })
 }
 
@@ -306,10 +324,10 @@ export async function handleInventoryInsufficient(
   envelope: EventEnvelope,
   context: EventContext
 ): Promise<void> {
-  await applyOnce(deps, envelope, context, async () => {
+  await applyOnce(deps, envelope, context, async (tx) => {
     const payload = envelope.payload as Partial<InventoryInsufficientPayload>
     const shortfalls = Array.isArray(payload.shortfalls) ? payload.shortfalls.length : 0
-    await bumpFunnel(deps.store, { insufficient: 1 })
+    await bumpFunnel(tx, { insufficient: 1 })
     deps.log(
       `inventory.insufficient for order ${payload.orderId ?? 'unknown'} ` +
         `(${shortfalls} short line(s))`

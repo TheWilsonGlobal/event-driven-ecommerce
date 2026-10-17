@@ -18,7 +18,7 @@ import {
  * would otherwise be indistinguishable — the same defect the queue and event
  * endpoints were built to avoid.
  *
- * Nothing here touches Kafka. These routes read NeDB and answer even when the
+ * Nothing here touches Kafka. These routes read Postgres and answer even when the
  * broker has never been reachable; the view is then simply empty and says so.
  */
 

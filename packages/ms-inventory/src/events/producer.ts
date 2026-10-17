@@ -12,7 +12,9 @@ import type { Kafka } from 'kafkajs'
  *
  * Same construction contract as ms-order's producer: never throws, opens
  * nothing when disabled, and a broker outage can never fail work that is
- * already committed to NeDB. KAFKA_ENABLED defaults to false, so a developer
+ * already committed to Postgres: inventory.* events are written to the
+ * transactional outbox and sent by the OutboxRelay through `publishEnvelope`,
+ * not published inline. KAFKA_ENABLED defaults to false, so a developer
  * who has not started Redpanda gets a service that boots and serves the
  * inventory API with the event endpoint honestly reporting `enabled: false`.
  *

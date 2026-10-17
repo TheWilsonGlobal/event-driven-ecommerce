@@ -1,6 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import type IORedis from 'ioredis'
-import { loadDatabaseConfig, type DocumentDatabaseAdapter } from '@ecommerce/shared-database'
+import { loadDatabaseConfig } from '@ecommerce/shared-database'
 import {
   createRedisConnectionRegistry,
   describeError,
@@ -12,7 +12,7 @@ import {
 import { QUEUE_DEFINITIONS, type QueueName } from './definitions'
 import { JOB_NAMES, type ReleaseExpiredReservationJob } from './jobTypes'
 import { makeReconciliationProcessor } from './workers'
-import type { InventoryDoc, ReservationDoc } from '../types'
+import type { InventoryStore } from '../db/store'
 
 /**
  * How long a reservation may sit RESERVED before the reconciliation worker
@@ -34,7 +34,7 @@ const RESERVATION_TTL_MS = 10 * 60 * 1000
  *
  * Nothing in here throws when Redis is unreachable. Construction is
  * synchronous; enqueue failures are caught and logged by `tryEnqueue`, so a
- * down Redis can never fail a stock movement that NeDB already committed. The
+ * down Redis can never fail a stock movement Postgres already committed. The
  * consequence is stated plainly rather than hidden: with Redis down, a
  * reservation gets no expiry timer and will only be released by an explicit
  * order.cancelled.
@@ -132,10 +132,7 @@ export class QueueManager {
   }
 
   /** Starts the reconciliation worker on its own dedicated connection. */
-  startWorker(
-    inventoryStore: DocumentDatabaseAdapter<InventoryDoc>,
-    reservationsStore: DocumentDatabaseAdapter<ReservationDoc>
-  ): void {
+  startWorker(store: InventoryStore): void {
     if (!this.redisEnabled) {
       return
     }
@@ -147,7 +144,7 @@ export class QueueManager {
       `bullmq-worker-${def.name}`
     )
 
-    const processor = makeReconciliationProcessor(inventoryStore, reservationsStore)
+    const processor = makeReconciliationProcessor(store)
     this.worker = new Worker(def.name, processor, {
       connection,
       concurrency: def.concurrency,
@@ -205,7 +202,8 @@ export class QueueManager {
    * Fire-and-forget enqueue used by the event handlers.
    *
    * A Redis outage (or the embedded KV driver being active) must not fail a
-   * reservation that was already committed to NeDB. The enqueue failure is
+   * reservation that was already committed to Postgres (handlers call this only
+   * AFTER the transaction commits). The enqueue failure is
    * logged and swallowed; the reservation stands, without an expiry timer.
    */
   async tryEnqueue<T>(

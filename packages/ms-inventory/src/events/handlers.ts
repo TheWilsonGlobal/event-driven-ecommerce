@@ -1,20 +1,52 @@
-import type { DocumentDatabaseAdapter } from '@ecommerce/shared-database'
 import {
   type EventEnvelope,
   type OrderCancelledPayload,
   type OrderCreatedPayload,
 } from '@ecommerce/shared-messaging'
-import type { InventoryDoc, ProcessedEventDoc, ReservationDoc, ReservationItem } from '../types'
+import {
+  claimEvent,
+  creditStock,
+  deleteReservation,
+  getReservationState,
+  insertReservation,
+  lockStock,
+  markReleased,
+  reserveStock,
+  setOutcome,
+  type InventoryStore,
+  type Tx,
+} from '../db/store'
+import type { ReservationItem } from '../types'
 import type { QueueManager } from '../queues'
 import {
-  publishInventoryInsufficient,
-  publishInventoryReleased,
-  publishInventoryReserved,
+  enqueueInventoryInsufficient,
+  enqueueInventoryReleased,
+  enqueueInventoryReserved,
 } from './publishers'
 import { LOG_PREFIX } from './producer'
 
 /**
  * The stock-movement handlers behind ms-inventory's Kafka consumer.
+ *
+ * ── One transaction per event ───────────────────────────────────────────────
+ * Each handler runs in a SINGLE Postgres transaction that contains, together:
+ *
+ *   - the processed_events ledger row,
+ *   - the stock movement (inventory rows),
+ *   - the reservation row,
+ *   - the inventory.* outbox rows describing what happened.
+ *
+ * They commit or roll back as one. There is no longer an ordering to get right
+ * and no window in which a crash leaves the ledger and the stock disagreeing:
+ * if anything throws, the whole event never happened, Kafka redelivers it, and
+ * the retry starts from a clean slate. (The NeDB version had to write the
+ * ledger LAST because it had no cross-collection transaction, and relied on
+ * guard 2 to make the resulting redelivery safe. That workaround is retired.)
+ *
+ * The inventory.reserved / .insufficient / .released facts are outbox rows in
+ * the same transaction, NOT publishes after commit. The OutboxRelay delivers
+ * them to Kafka later, at-least-once, with the eventId minted at insert time.
+ * See events/publishers.ts.
  *
  * ── TWO idempotency guards, and why one is not enough ───────────────────────
  * Kafka redelivers: on rebalance, on restart, and any time an offset was not
@@ -23,66 +55,61 @@ import { LOG_PREFIX } from './producer'
  *
  *   1. THE EVENT LEDGER (`processed_events`, keyed on envelope.eventId).
  *      Catches the literal redelivery: the same published message arriving
- *      twice. This is the common case and the cheapest to check, so it runs
- *      first, before anything is read or written.
+ *      twice. It is the transaction's FIRST statement,
+ *      `INSERT ... ON CONFLICT (event_id) DO NOTHING`; rowCount 0 means a
+ *      duplicate, so the transaction commits having done nothing else. Two
+ *      concurrent deliveries of one eventId serialise on the primary-key row:
+ *      the second blocks until the first commits, then sees the conflict.
  *
- *   2. THE RESERVATION'S OWN STATE (keyed on orderId).
+ *   2. THE RESERVATION'S OWN STATE (`reservations.order_id` PRIMARY KEY).
  *      Catches what the ledger cannot: two DIFFERENT eventIds describing the
- *      same order. That happens whenever ms-order publishes order.created more
- *      than once for one order — a retried checkout, a replay tool, an
- *      operator re-emitting a lost event. Each publish mints a fresh eventId
- *      (makeEnvelope calls randomUUID), so guard 1 sees them as unrelated and
- *      would happily reserve the same order's stock twice. Guard 2 is what
- *      makes "reserve for order X" converge on ONE reservation regardless of
- *      how many events describe it.
+ *      same order, e.g. an operator re-emitting a lost order.created or a
+ *      replay tool. Those carry fresh eventIds, so guard 1 sees them as
+ *      unrelated and would happily reserve the same order's stock twice. Guard
+ *      2 makes "reserve for order X" converge on ONE reservation regardless of
+ *      how many events describe it, and it is a constraint rather than a
+ *      read-then-check, so two concurrent events for one order cannot both
+ *      pass it: the reserve path is `INSERT ... ON CONFLICT DO NOTHING` and a
+ *      rowCount of 0 means someone else already owns the order.
  *
- *      The mirror image holds for release: a second order.cancelled must find
- *      the reservation already RELEASED and do nothing, or the stock would be
- *      credited back twice and inventory would inflate out of thin air.
+ *      The mirror image holds for release: `UPDATE ... WHERE status =
+ *      'RESERVED'` is the guard, so a second order.cancelled matches nothing
+ *      and credits nothing. Crediting twice would invent units that never
+ *      existed -- the most damaging failure mode this service has.
  *
- * ── Why the ledger is written LAST ──────────────────────────────────────────
- * NeDB gives no cross-collection transaction, so the ledger write and the
- * stock write cannot be atomic. Writing the ledger last means a crash between
- * them leaves the event unrecorded and it gets redelivered — at which point
- * guard 2 sees the reservation already exists and no double-reserve occurs.
- * Writing it first would risk the opposite: an event marked handled whose
- * stock movement never happened, which nothing would ever retry.
+ * ── Race-safe stock movement ────────────────────────────────────────────────
+ * The order's product rows are read in ONE batched query,
+ * `WHERE product_id = ANY($1) ORDER BY product_id FOR UPDATE`, inside the
+ * transaction. FOR UPDATE means no other order can change those rows between
+ * the availability check and the decrement; ORDER BY product_id means every
+ * transaction locks overlapping rows in the same order, so two orders cannot
+ * deadlock each other. The CHECK (available >= 0) constraints are the backstop
+ * should a bug ever skip the check: the transaction fails and rolls back whole.
+ *
+ * ── What stays outside the transaction ──────────────────────────────────────
+ * The BullMQ expiry job is enqueued AFTER commit and stays best-effort, as
+ * before: Redis is not part of the Postgres transaction and must not be able to
+ * fail (or hold open) a stock movement. If the process dies between COMMIT and
+ * the enqueue, or Redis is down, the reservation simply has no expiry timer
+ * and is released by an explicit order.cancelled. A redelivery cannot repair
+ * that -- it is a duplicate by then -- which is the documented cost of keeping
+ * Redis out of the transaction.
  *
  * ── Why these handlers do the work inline rather than enqueueing it ─────────
  * The consumer's docblock notes that work which must not be dropped should
  * enqueue a BullMQ job as its first action. A stock reservation is a small,
- * local, idempotent NeDB write with no external dependency — there is nothing
- * a retry could fix that a redelivery would not. The queue here is used for
- * the thing that genuinely needs a timer instead: expiring a stale hold.
+ * local, transactional write with no external dependency — there is nothing a
+ * retry could fix that a redelivery would not. The queue here is used for the
+ * thing that genuinely needs a timer instead: expiring a stale hold.
  */
 
 export interface HandlerDeps {
-  inventoryStore: DocumentDatabaseAdapter<InventoryDoc>
-  reservationsStore: DocumentDatabaseAdapter<ReservationDoc>
-  processedEventsStore: DocumentDatabaseAdapter<ProcessedEventDoc>
+  store: InventoryStore
   queueManager: QueueManager
 }
 
-/** Guard 1. True when this exact eventId has already been handled to completion. */
-async function alreadyProcessed(
-  store: DocumentDatabaseAdapter<ProcessedEventDoc>,
-  eventId: string
-): Promise<boolean> {
-  return (await store.findOne({ eventId })) !== null
-}
-
-async function recordProcessed(
-  store: DocumentDatabaseAdapter<ProcessedEventDoc>,
-  envelope: EventEnvelope,
-  outcome: string
-): Promise<void> {
-  await store.insert({
-    eventId: envelope.eventId,
-    eventType: envelope.eventType,
-    processedAt: new Date().toISOString(),
-    outcome,
-  })
-}
+/** Largest value the `int` columns hold; one line above it is short by definition. */
+const INT_MAX = 2_147_483_647
 
 /**
  * Normalises the line items an order event carries.
@@ -113,6 +140,37 @@ function collapseItems(
 }
 
 /**
+ * True when every line can be stored and applied.
+ *
+ * A line that is not a positive whole number of units, or has no productId,
+ * could never succeed -- the quantity column is an int, and a negative one would
+ * credit stock through the reserve path -- and a poison message that throws is
+ * redelivered forever. It is therefore classified as malformed and recorded,
+ * exactly like a payload with no orderId.
+ */
+function hasUsableItems(items: unknown[]): boolean {
+  return items.every((raw) => {
+    const item = raw as Partial<ReservationItem> | null
+    return (
+      item !== null &&
+      typeof item === 'object' &&
+      typeof item.productId === 'string' &&
+      item.productId.length > 0 &&
+      Number.isInteger(item.quantity) &&
+      (item.quantity as number) > 0 &&
+      (item.quantity as number) <= INT_MAX
+    )
+  })
+}
+
+type CreatedResult =
+  | { kind: 'duplicate' }
+  | { kind: 'rejected' }
+  | { kind: 'skipped'; status: string; eventId: string }
+  | { kind: 'insufficient'; detail: string }
+  | { kind: 'reserved'; items: ReservationItem[]; enqueued: number }
+
+/**
  * order.created → reserve stock, all-or-nothing.
  *
  * The all-or-nothing rule is a domain decision, not a technical one: a
@@ -125,143 +183,149 @@ export async function handleOrderCreated(
   envelope: EventEnvelope,
   deps: HandlerDeps
 ): Promise<void> {
-  const { inventoryStore, reservationsStore, processedEventsStore, queueManager } = deps
-
-  if (await alreadyProcessed(processedEventsStore, envelope.eventId)) {
-    // eslint-disable-next-line no-console
-    console.log(`${LOG_PREFIX} Skipping duplicate delivery of eventId=${envelope.eventId}`)
-    return
-  }
-
+  const { store, queueManager } = deps
   const payload = envelope.payload as OrderCreatedPayload
-  if (!payload || typeof payload.orderId !== 'string' || !Array.isArray(payload.items)) {
-    // Malformed beyond the envelope's own validation. Recorded as handled so a
-    // redelivery does not re-log it forever — retrying could never succeed.
-    await recordProcessed(processedEventsStore, envelope, 'rejected:malformed-payload')
-    return
-  }
 
-  // Guard 2: a reservation for this ORDER already exists, under some other
-  // eventId. Converge rather than reserve again.
-  const existing = await reservationsStore.findOne({ orderId: payload.orderId })
-  if (existing) {
-    await recordProcessed(
-      processedEventsStore,
-      envelope,
-      `skipped:order-already-${existing.status.toLowerCase()}`
-    )
-    // eslint-disable-next-line no-console
-    console.log(
-      `${LOG_PREFIX} order.created for ${payload.orderNumber} ignored: reservation already ` +
-        `${existing.status} (eventId=${existing.eventId})`
-    )
-    return
-  }
-
-  const items = collapseItems(payload.items)
-
-  // Read every row first, then decide. Nothing is written until the whole
-  // order is known to be satisfiable.
-  const rows = new Map<string, InventoryDoc>()
-  const shortfalls: { productId: string; sku: string; requested: number; available: number }[] = []
-
-  for (const item of items) {
-    const row = await inventoryStore.findOne({ productId: item.productId })
-    if (!row) {
-      // An unknown product is a shortfall of the whole quantity, not an error.
-      // ms-inventory does not own the catalogue and must not assume its own
-      // seed covers every product ms-order can sell.
-      shortfalls.push({
-        productId: item.productId,
-        sku: item.sku,
-        requested: item.quantity,
-        available: 0,
-      })
-      continue
+  const result = await store.transaction(async (tx): Promise<CreatedResult> => {
+    // Guard 1 -- first statement, see the docblock above.
+    if (!(await claimEvent(tx, envelope.eventId, envelope.eventType))) {
+      return { kind: 'duplicate' }
     }
-    rows.set(item.productId, row)
-    if (row.available < item.quantity) {
-      shortfalls.push({
-        productId: item.productId,
-        sku: row.sku,
-        requested: item.quantity,
-        available: row.available,
-      })
+
+    if (
+      !payload ||
+      typeof payload.orderId !== 'string' ||
+      !Array.isArray(payload.items) ||
+      !hasUsableItems(payload.items)
+    ) {
+      // Malformed beyond the envelope's own validation. Recorded as handled so a
+      // redelivery does not re-log it forever — retrying could never succeed.
+      await setOutcome(tx, envelope.eventId, 'rejected:malformed-payload')
+      return { kind: 'rejected' }
     }
-  }
 
-  if (shortfalls.length > 0) {
-    await recordProcessed(processedEventsStore, envelope, 'insufficient')
-    await publishInventoryInsufficient(
-      {
-        orderId: payload.orderId,
-        orderNumber: payload.orderNumber,
-        shortfalls,
-      },
-      envelope.correlationId
-    )
-    const detail = shortfalls
-      .map((s) => `${s.productId} wanted ${s.requested}, had ${s.available}`)
-      .join('; ')
-    // eslint-disable-next-line no-console
-    console.warn(`${LOG_PREFIX} Insufficient stock for ${payload.orderNumber}: ${detail}`)
-    return
-  }
+    const items = collapseItems(payload.items)
 
-  const now = new Date().toISOString()
-  for (const item of items) {
-    const row = rows.get(item.productId)
-    if (!row) {
-      continue
-    }
-    await inventoryStore.update(
-      { productId: item.productId },
-      {
-        available: row.available - item.quantity,
-        reserved: row.reserved + item.quantity,
-        updatedAt: now,
-      }
-    )
-  }
-
-  await reservationsStore.insert({
-    orderId: payload.orderId,
-    orderNumber: payload.orderNumber,
-    eventId: envelope.eventId,
-    items,
-    status: 'RESERVED',
-    createdAt: now,
-    releasedAt: null,
-  })
-
-  // Schedule the stale-hold sweep. The jobId is derived from the eventId, so a
-  // redelivery that somehow got past both guards still cannot stack a second
-  // timer — BullMQ ignores an add() whose jobId is already present.
-  await queueManager.tryEnqueue('release-expired-reservation', () =>
-    queueManager.enqueueReleaseExpired({
+    // Guard 2: claim the ORDER. rowCount 0 means a reservation for it exists,
+    // under some other eventId (or a concurrent transaction owns it) --
+    // converge rather than reserve again. Claimed BEFORE the stock is looked at
+    // so a re-emitted order.created for an order that is already reserved can
+    // never be misreported as insufficient just because its own hold has since
+    // drained the shelf.
+    const claimed = await insertReservation(tx, {
       orderId: payload.orderId,
       orderNumber: payload.orderNumber,
       eventId: envelope.eventId,
+      items,
     })
-  )
+    if (!claimed) {
+      const existing = await getReservationState(tx, payload.orderId)
+      const status = existing?.status ?? 'RESERVED'
+      await setOutcome(tx, envelope.eventId, `skipped:order-already-${status.toLowerCase()}`)
+      return { kind: 'skipped', status, eventId: existing?.eventId ?? '' }
+    }
 
-  await recordProcessed(processedEventsStore, envelope, 'reserved')
+    // Read every row first (and lock it), then decide. Nothing is decremented
+    // until the whole order is known to be satisfiable.
+    const stock = await lockStock(
+      tx,
+      items.map((i) => i.productId)
+    )
+    const shortfalls: { productId: string; sku: string; requested: number; available: number }[] =
+      []
+    for (const item of items) {
+      const row = stock.get(item.productId)
+      if (!row) {
+        // An unknown product is a shortfall of the whole quantity, not an error.
+        // ms-inventory does not own the catalogue and must not assume its own
+        // seed covers every product ms-order can sell.
+        shortfalls.push({
+          productId: item.productId,
+          sku: item.sku,
+          requested: item.quantity,
+          available: 0,
+        })
+      } else if (row.available < item.quantity) {
+        shortfalls.push({
+          productId: item.productId,
+          sku: row.sku || item.sku,
+          requested: item.quantity,
+          available: row.available,
+        })
+      }
+    }
 
-  const fanOut = await publishInventoryReserved(
-    {
-      orderId: payload.orderId,
-      orderNumber: payload.orderNumber,
-      reservations: items,
-    },
-    envelope.correlationId
-  )
+    if (shortfalls.length > 0) {
+      // Withdraw the hold claimed above: an order that was short has NO
+      // reservation row (GET /api/v1/reservations documents exactly that).
+      await deleteReservation(tx, payload.orderId)
+      await enqueueInventoryInsufficient(
+        tx,
+        { orderId: payload.orderId, orderNumber: payload.orderNumber, shortfalls },
+        envelope.correlationId
+      )
+      await setOutcome(tx, envelope.eventId, 'insufficient')
+      return {
+        kind: 'insufficient',
+        detail: shortfalls
+          .map((s) => `${s.productId} wanted ${s.requested}, had ${s.available}`)
+          .join('; '),
+      }
+    }
 
-  // eslint-disable-next-line no-console
-  console.log(
-    `${LOG_PREFIX} Reserved stock for ${payload.orderNumber} (${items.length} product(s)); ` +
-      `published ${fanOut.published}/${fanOut.attempted} inventory.reserved message(s)`
-  )
+    await reserveStock(tx, items)
+    const { enqueued } = await enqueueInventoryReserved(
+      tx,
+      { orderId: payload.orderId, orderNumber: payload.orderNumber, reservations: items },
+      envelope.correlationId
+    )
+    await setOutcome(tx, envelope.eventId, 'reserved')
+    return { kind: 'reserved', items, enqueued }
+  })
+
+  // ── Committed. Only logging and the best-effort timer happen below. ───────
+  switch (result.kind) {
+    case 'duplicate':
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Skipping duplicate delivery of eventId=${envelope.eventId}`)
+      return
+    case 'rejected':
+      return
+    case 'skipped':
+      // eslint-disable-next-line no-console
+      console.log(
+        `${LOG_PREFIX} order.created for ${payload.orderNumber} ignored: reservation already ` +
+          `${result.status} (eventId=${result.eventId})`
+      )
+      return
+    case 'insufficient':
+      // eslint-disable-next-line no-console
+      console.warn(`${LOG_PREFIX} Insufficient stock for ${payload.orderNumber}: ${result.detail}`)
+      return
+    case 'reserved':
+      // Schedule the stale-hold sweep. The jobId is derived from the eventId, so
+      // a redelivery that somehow got past both guards still cannot stack a
+      // second timer — BullMQ ignores an add() whose jobId is already present.
+      await queueManager.tryEnqueue('release-expired-reservation', () =>
+        queueManager.enqueueReleaseExpired({
+          orderId: payload.orderId,
+          orderNumber: payload.orderNumber,
+          eventId: envelope.eventId,
+        })
+      )
+      // eslint-disable-next-line no-console
+      console.log(
+        `${LOG_PREFIX} Reserved stock for ${payload.orderNumber} (${result.items.length} ` +
+          `product(s)); queued ${result.enqueued} inventory.reserved outbox row(s)`
+      )
+  }
 }
+
+type CancelledResult =
+  | { kind: 'duplicate' }
+  | { kind: 'rejected' }
+  | { kind: 'noop' }
+  | { kind: 'released'; orderNumber: string }
 
 /**
  * order.cancelled → release whatever this order holds.
@@ -275,100 +339,89 @@ export async function handleOrderCancelled(
   envelope: EventEnvelope,
   deps: HandlerDeps
 ): Promise<void> {
-  const { inventoryStore, reservationsStore, processedEventsStore } = deps
+  const { store } = deps
+  const payload = envelope.payload as OrderCancelledPayload
 
-  if (await alreadyProcessed(processedEventsStore, envelope.eventId)) {
+  const result = await store.transaction(async (tx): Promise<CancelledResult> => {
+    if (!(await claimEvent(tx, envelope.eventId, envelope.eventType))) {
+      return { kind: 'duplicate' }
+    }
+
+    if (!payload || typeof payload.orderId !== 'string') {
+      await setOutcome(tx, envelope.eventId, 'rejected:malformed-payload')
+      return { kind: 'rejected' }
+    }
+
+    const released = await releaseReservation(
+      tx,
+      payload.orderId,
+      payload.reason || 'order-cancelled',
+      envelope.correlationId
+    )
+
+    if (!released.released) {
+      await setOutcome(
+        tx,
+        envelope.eventId,
+        released.reason === 'no-reservation' ? 'skipped:no-reservation' : 'skipped:already-released'
+      )
+      return { kind: 'noop' }
+    }
+
+    await setOutcome(tx, envelope.eventId, 'released')
+    return { kind: 'released', orderNumber: released.orderNumber }
+  })
+
+  if (result.kind === 'duplicate') {
     // eslint-disable-next-line no-console
     console.log(`${LOG_PREFIX} Skipping duplicate delivery of eventId=${envelope.eventId}`)
-    return
+  } else if (result.kind === 'released') {
+    // eslint-disable-next-line no-console
+    console.log(`${LOG_PREFIX} Released reservation for ${result.orderNumber} (${payload.reason})`)
   }
-
-  const payload = envelope.payload as OrderCancelledPayload
-  if (!payload || typeof payload.orderId !== 'string') {
-    await recordProcessed(processedEventsStore, envelope, 'rejected:malformed-payload')
-    return
-  }
-
-  const reservation = await reservationsStore.findOne({ orderId: payload.orderId })
-
-  if (!reservation) {
-    await recordProcessed(processedEventsStore, envelope, 'skipped:no-reservation')
-    return
-  }
-
-  // Guard 2 on the release side. Crediting stock back twice would invent units
-  // that never existed — the most damaging failure mode this service has.
-  if (reservation.status === 'RELEASED') {
-    await recordProcessed(processedEventsStore, envelope, 'skipped:already-released')
-    return
-  }
-
-  await releaseReservation(
-    { inventoryStore, reservationsStore },
-    reservation,
-    payload.reason || 'order-cancelled',
-    envelope.correlationId
-  )
-
-  await recordProcessed(processedEventsStore, envelope, 'released')
-
-  // eslint-disable-next-line no-console
-  console.log(
-    `${LOG_PREFIX} Released reservation for ${reservation.orderNumber} (${payload.reason})`
-  )
 }
 
+export type ReleaseResult =
+  | { released: true; orderNumber: string; items: ReservationItem[] }
+  | { released: false; reason: 'no-reservation' | 'already-released' }
+
 /**
- * Restores stock and flips the reservation to RELEASED.
+ * Restores stock, flips the reservation to RELEASED and queues
+ * inventory.released -- all on the caller's transaction.
  *
  * Shared by the cancellation handler and the reconciliation worker so the two
- * paths cannot drift. Both callers are responsible for checking the RESERVED
- * state first — this function assumes it, and would double-credit if called on
- * an already-released row.
+ * paths cannot drift. Unlike the NeDB version it does NOT assume the caller
+ * checked the state first: the `status = 'RESERVED'` predicate on the flip is
+ * the check, atomically, so calling it on an already-released order is a safe
+ * no-op rather than a double credit. That matters because the worker (timer)
+ * and a cancellation can race.
+ *
+ * Lock order is reservation row, then product rows sorted by id -- the same as
+ * the reserve path, so the two cannot deadlock each other.
  */
 export async function releaseReservation(
-  stores: {
-    inventoryStore: DocumentDatabaseAdapter<InventoryDoc>
-    reservationsStore: DocumentDatabaseAdapter<ReservationDoc>
-  },
-  reservation: ReservationDoc,
+  tx: Tx,
+  orderId: string,
   reason: string,
   correlationId?: string
-): Promise<void> {
-  const now = new Date().toISOString()
-
-  for (const item of reservation.items) {
-    const row = await stores.inventoryStore.findOne({ productId: item.productId })
-    if (!row) {
-      // The product row vanished between reserving and releasing. Nothing to
-      // credit back; recreating it here would invent a stock level.
-      continue
-    }
-    await stores.inventoryStore.update(
-      { productId: item.productId },
-      {
-        available: row.available + item.quantity,
-        // Clamped: `reserved` can only have been driven below the held
-        // quantity by an external edit, and a negative reserved count would be
-        // a fabricated number.
-        reserved: Math.max(0, row.reserved - item.quantity),
-        updatedAt: now,
-      }
-    )
+): Promise<ReleaseResult> {
+  const held = await markReleased(tx, orderId)
+  if (!held) {
+    const state = await getReservationState(tx, orderId)
+    return { released: false, reason: state ? 'already-released' : 'no-reservation' }
   }
 
-  await stores.reservationsStore.update(
-    { orderId: reservation.orderId },
-    { status: 'RELEASED', releasedAt: now }
+  await lockStock(
+    tx,
+    held.items.map((i) => i.productId)
   )
+  await creditStock(tx, held.items)
 
-  await publishInventoryReleased(
-    {
-      orderId: reservation.orderId,
-      orderNumber: reservation.orderNumber,
-      reason,
-      releases: reservation.items,
-    },
+  await enqueueInventoryReleased(
+    tx,
+    { orderId, orderNumber: held.orderNumber, reason, releases: held.items },
     correlationId
   )
+
+  return { released: true, orderNumber: held.orderNumber, items: held.items }
 }

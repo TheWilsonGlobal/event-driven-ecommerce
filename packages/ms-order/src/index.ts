@@ -24,13 +24,14 @@ import { registerOrderRoutes } from './routes/orders'
 import { registerPaymentRoutes } from './routes/payments'
 import { registerCartRoutes } from './routes/cart'
 import { registerShutdownHandlers } from './shutdown'
+import { createOrderRelay, registerOutboxRoutes } from './outbox'
 import { checkKafkaHealth, registerKafkaMetrics } from '@ecommerce/shared-messaging'
 import {
   eventProducer,
   kafkaAdminClient,
   kafkaSettings,
   registerEventRoutes,
-  publishOrderCancelled,
+  stageOrderCancelled,
 } from './events'
 
 const dbConfig = loadDatabaseConfig(process.env)
@@ -44,6 +45,10 @@ if (!path.isAbsolute(dbConfig.keyValue.embedded.dataPath)) {
 }
 
 const prisma = new PrismaClient()
+
+// Drains outbox_events to Kafka (pattern 1) with SKIP LOCKED + a lease (pattern 3).
+// Constructed here so a bad OUTBOX_* config fails the boot, started after listen.
+const outboxRelay = createOrderRelay(eventProducer)
 
 // The embedded store is only constructed when it is the active driver, so the
 // Redis path does not create a file it never reads.
@@ -116,6 +121,9 @@ async function bootstrap() {
                   mode: { type: 'string' },
                   driver: { type: 'string' },
                   queue: { type: 'string' },
+                  reachable: { type: 'boolean' },
+                  latencyMs: { type: ['number', 'null'] },
+                  error: { type: 'string' },
                 },
               },
               // Read from a ~10s cache so a liveness probe never blocks on an
@@ -138,15 +146,29 @@ async function bootstrap() {
         },
       },
     },
-    async () => {
+    async (_request, reply) => {
+      // A real round trip: reachability is never inferred from configuration.
+      const dbStarted = Date.now()
+      let dbReachable = true
+      let dbError: string | undefined
+      try {
+        await prisma.$queryRaw`SELECT 1`
+      } catch (err) {
+        dbReachable = false
+        dbError = err instanceof Error ? err.message.trim().split('\n').pop() : String(err)
+      }
+      if (!dbReachable) reply.status(503)
       return {
-        status: 'ok',
+        status: dbReachable ? 'ok' : 'unhealthy',
         service: 'ms-order',
         timestamp: new Date().toISOString(),
         database: {
           mode: dbConfig.mode,
           driver: dbConfig.relational.driver,
           queue: dbConfig.keyValue.driver,
+          reachable: dbReachable,
+          latencyMs: dbReachable ? Date.now() - dbStarted : null,
+          ...(dbError ? { error: dbError } : {}),
         },
         events: await checkKafkaHealth(
           kafkaAdminClient,
@@ -162,6 +184,7 @@ async function bootstrap() {
 
   registerQueueRoutes(server, queueManager)
   registerEventRoutes(server, { repoRoot: REPO_ROOT })
+  registerOutboxRoutes(server, outboxRelay)
   registerSchemaRoutes(server, prisma)
   registerLogRoutes(server)
 
@@ -180,10 +203,10 @@ async function bootstrap() {
   // (with an 'error' handler attached) and the service still serves HTTP.
   if (redisEnabled) {
     queueManager.startWorkers({
-      // An expiry that actually cancels an order publishes the fact, so
-      // ms-inventory can release what it reserved. Swallows its own failures.
-      onOrderCancelled: async (data) => {
-        await publishOrderCancelled(data)
+      // An expiry that actually cancels an order stages the fact in the same
+      // transaction, so ms-inventory can release what it reserved.
+      onOrderCancelled: async (tx, data) => {
+        await stageOrderCancelled(tx, data)
       },
     })
     console.log(
@@ -214,11 +237,12 @@ async function bootstrap() {
 
   registerEndpointsRoute(server, routeRegistry, 'ms-order')
 
-  registerShutdownHandlers({ server, queueManager, kvStore, prisma, eventProducer })
+  registerShutdownHandlers({ server, queueManager, kvStore, prisma, eventProducer, outboxRelay })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })
     console.log(`[Order Service] Listening on http://localhost:${PORT}`)
+    outboxRelay.start()
   } catch (err) {
     server.log.error(err)
     process.exit(1)

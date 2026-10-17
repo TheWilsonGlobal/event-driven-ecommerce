@@ -1,6 +1,6 @@
-export type DatabaseMode = 'server' | 'embedded'
+export type DatabaseMode = 'server' | 'embedded' | 'supabase'
 export type RelationalDriver = 'postgres' | 'sqlite'
-export type DocumentDriver = 'mongodb' | 'nedb'
+export type DocumentDriver = 'mongodb' | 'nedb' | 'postgres'
 export type KeyValueDriver = 'redis' | 'rocksdb' | 'embedded'
 
 export interface DatabaseConfiguration {
@@ -68,7 +68,9 @@ function parseKeyValueDriver(raw: string | undefined, fallback: KeyValueDriver):
 }
 
 export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): DatabaseConfiguration {
-  const mode: DatabaseMode = env.DB_MODE?.toLowerCase() === 'embedded' ? 'embedded' : 'server'
+  const rawMode = env.DB_MODE?.toLowerCase()
+  const mode: DatabaseMode =
+    rawMode === 'embedded' ? 'embedded' : rawMode === 'supabase' ? 'supabase' : 'server'
 
   const relationalDriver: RelationalDriver =
     (env.RELATIONAL_DB_DRIVER?.toLowerCase() as RelationalDriver) ??
@@ -76,7 +78,16 @@ export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): Databa
 
   const docDriver: DocumentDriver =
     (env.DOCUMENT_DB_DRIVER?.toLowerCase() as DocumentDriver) ??
-    (mode === 'embedded' ? 'nedb' : 'mongodb')
+    (mode === 'embedded' ? 'nedb' : mode === 'supabase' ? 'postgres' : 'mongodb')
+
+  // DB_MODE=supabase with a non-postgres driver is a contradiction, not a
+  // preference. Refuse to boot rather than quietly writing to a local file.
+  if (mode === 'supabase' && (relationalDriver !== 'postgres' || docDriver !== 'postgres')) {
+    throw new Error(
+      `DB_MODE=supabase requires RELATIONAL_DB_DRIVER=postgres and DOCUMENT_DB_DRIVER=postgres ` +
+        `(got ${relationalDriver} / ${docDriver}).`
+    )
+  }
 
   const kvDriver: KeyValueDriver = parseKeyValueDriver(
     env.KV_CACHE_DRIVER,

@@ -2,7 +2,9 @@ import type { HourBucketDoc, ProductCounterDoc } from '../types'
 import {
   hourKeyOf,
   readFunnel,
+  readHourBuckets,
   readPaymentOutcomes,
+  readProductCounters,
   readProgress,
   type AnalyticsStore,
 } from './store'
@@ -96,7 +98,7 @@ export interface SummaryView extends ProgressView {
 
 export async function summaryView(store: AnalyticsStore): Promise<SummaryView> {
   const [buckets, outcomes, progress] = await Promise.all([
-    store.hourBuckets.find({}),
+    readHourBuckets(store),
     readPaymentOutcomes(store),
     progressView(store),
   ])
@@ -176,7 +178,7 @@ export interface RevenueView extends ProgressView {
 }
 
 export async function revenueView(store: AnalyticsStore, hours: number): Promise<RevenueView> {
-  const [buckets, progress] = await Promise.all([store.hourBuckets.find({}), progressView(store)])
+  const [buckets, progress] = await Promise.all([readHourBuckets(store), progressView(store)])
 
   // The window is anchored to NOW, so an idle service's window slides forward
   // and eventually contains nothing. That is correct: "no revenue in the last
@@ -226,10 +228,7 @@ export async function topProductsView(
   store: AnalyticsStore,
   limit: number
 ): Promise<TopProductsView> {
-  const [counters, progress] = await Promise.all([
-    store.productCounters.find({}),
-    progressView(store),
-  ])
+  const [counters, progress] = await Promise.all([readProductCounters(store), progressView(store)])
 
   // Ranked by units, tie-broken by revenue then productId. The final tiebreak
   // is what makes the ordering STABLE across requests — without it two

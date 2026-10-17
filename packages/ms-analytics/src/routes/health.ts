@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { getServicePool, pgHealth } from '@ecommerce/shared-database'
 import type { DatabaseConfiguration } from '@ecommerce/shared-database'
 import { checkKafkaHealth } from '@ecommerce/shared-messaging'
 import type { EventConsumer } from '@ecommerce/shared-messaging'
@@ -17,10 +18,14 @@ export interface HealthRouteDeps {
  * `enabled:false, reachable:false` is the repo default and a healthy state.
  *
  * Kafka being down does NOT flip `status`. This service can still serve every
- * analytics route from NeDB; a broker outage means the view stops advancing,
+ * analytics route from Postgres; a broker outage means the view stops advancing,
  * which is degraded, not dead. Failing /health here would take a
  * still-useful service out of rotation — the same call ms-product makes about
  * Elasticsearch.
+ *
+ * Postgres is different: it is the only store, so `database.reachable` comes
+ * from a real SELECT 1 on every call (never from configuration) and an
+ * unreachable database answers 503 with status "unhealthy".
  */
 export function registerHealthRoutes(
   server: FastifyInstance,
@@ -46,6 +51,10 @@ export function registerHealthRoutes(
                 properties: {
                   mode: { type: 'string' },
                   driver: { type: 'string' },
+                  reachable: { type: 'boolean' },
+                  schema: { type: 'string' },
+                  latencyMs: { type: 'number' },
+                  error: { type: 'string' },
                 },
               },
               // Read from a ~10s cache so a liveness probe never blocks on an
@@ -80,14 +89,20 @@ export function registerHealthRoutes(
         },
       },
     },
-    async () => {
+    async (_request, reply) => {
+      const pg = await pgHealth(getServicePool('analytics'))
+      if (!pg.reachable) void reply.code(503)
       return {
-        status: 'ok',
+        status: pg.reachable ? 'ok' : 'unhealthy',
         service: 'ms-analytics',
         timestamp: new Date().toISOString(),
         database: {
           mode: dbConfig.mode,
           driver: dbConfig.document.driver,
+          reachable: pg.reachable,
+          schema: pg.schema,
+          ...(pg.latencyMs !== null ? { latencyMs: pg.latencyMs } : {}),
+          ...(pg.error ? { error: pg.error } : {}),
         },
         events: await checkKafkaHealth(
           kafkaAdminClient,

@@ -6,10 +6,11 @@ export {
   handleOrderCancelled,
   releaseReservation,
   type HandlerDeps,
+  type ReleaseResult,
 } from './handlers'
 export {
-  publishInventoryReserved,
-  publishInventoryReleased,
-  publishInventoryInsufficient,
-  type FanOutResult,
+  enqueueInventoryReserved,
+  enqueueInventoryReleased,
+  enqueueInventoryInsufficient,
+  type EnqueueResult,
 } from './publishers'

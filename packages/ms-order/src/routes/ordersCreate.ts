@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import * as crypto from 'crypto'
-import { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
+import { Prisma, PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import { paymentMethodToProvider, paymentStatusToPaymentRowStatus } from '../seedOrders'
 import { QueueManager } from '../queues'
-import { publishOrderCreated, publishOrderConfirmed } from '../events'
+import { stageOrderCreated, stageOrderConfirmed } from '../events'
 import { toOrderRecord, generateUniqueOrderNumber, CreateOrderBody } from '../orderMapping'
 
 export interface OrdersCreateRouteDeps {
@@ -26,6 +26,13 @@ export function registerOrderCreateRoute(
           type: 'object',
           properties: {
             userId: { type: 'string' },
+            idempotencyKey: {
+              type: 'string',
+              description:
+                'Optional dedupe key (or send the Idempotency-Key header). A repeat with the same ' +
+                'key and the same order returns the original order (200) and emits no new events; ' +
+                'the same key with a DIFFERENT order is a 409.',
+            },
             paymentPreCaptured: {
               type: 'boolean',
               description:
@@ -56,7 +63,9 @@ export function registerOrderCreateRoute(
           ],
         },
         response: {
+          200: { type: 'object', additionalProperties: true },
           201: { type: 'object', additionalProperties: true },
+          409: { type: 'object', properties: { error: { type: 'string' } } },
           400: {
             type: 'object',
             properties: { error: { type: 'string' } },
@@ -92,6 +101,31 @@ export function registerOrderCreateRoute(
       if (typeof body.subtotal !== 'number' || typeof body.totalAmount !== 'number') {
         return reply.status(400).send({ error: 'subtotal and totalAmount must be numbers' })
       }
+
+      // Pattern 2 (idempotency): a retried checkout must converge on ONE order.
+      // The Idempotency-Key header wins over the body field when both are sent.
+      const headerKey = request.headers['idempotency-key']
+      const idempotencyKey =
+        (typeof headerKey === 'string' && headerKey.trim()) || body.idempotencyKey || undefined
+
+      const replay = async (): Promise<FastifyReply | null> => {
+        if (!idempotencyKey) return null
+        const existing = await prisma.order.findUnique({
+          where: { idempotencyKey },
+          include: { items: true, payments: true },
+        })
+        if (!existing) return null
+        if (!sameOrder(existing, body)) {
+          // Same key, different content: ignoring it would silently drop the
+          // caller's second order; honouring it would break the key's meaning.
+          return reply.status(409).send({
+            error: 'Idempotency-Key was already used for a different order',
+          })
+        }
+        return reply.header('Idempotent-Replay', 'true').status(200).send(toOrderRecord(existing))
+      }
+      const replayed = await replay()
+      if (replayed) return replayed
 
       let orderNumber: string
       try {
@@ -138,69 +172,102 @@ export function registerOrderCreateRoute(
       const orderStatus = paymentPreCaptured ? 'CONFIRMED' : 'PENDING'
       const currency = body.currency ?? 'USD'
 
-      const order = await prisma.order.create({
-        data: {
-          orderNumber,
-          userId,
-          customerName: body.customerName,
-          customerEmail: body.customerEmail,
-          status: orderStatus,
-          subtotal: body.subtotal,
-          taxAmount,
-          shippingAmount,
-          discountAmount,
-          totalAmount: body.totalAmount,
-          currency,
-          shippingAddress: JSON.stringify(body.shippingAddress),
-          billingAddress: JSON.stringify(body.shippingAddress),
-          items: { create: itemsWithComputedTotals },
-          payments: {
-            create: [
-              {
-                provider: paymentMethodToProvider(body.paymentMethod),
-                transactionId: `ch_${crypto.randomUUID()}`,
-                paymentMethod: body.paymentMethod,
-                amount: body.totalAmount,
+      // Pattern 1 (outbox): the order rows AND the events describing them commit in one
+      // transaction. A crash can no longer leave an order that nobody was told about.
+      let order
+      try {
+        order = await prisma.$transaction(
+          async (tx) => {
+            const created = await tx.order.create({
+              data: {
+                orderNumber,
+                idempotencyKey: idempotencyKey ?? null,
+                userId,
+                customerName: body.customerName,
+                customerEmail: body.customerEmail,
+                status: orderStatus,
+                subtotal: body.subtotal,
+                taxAmount,
+                shippingAmount,
+                discountAmount,
+                totalAmount: body.totalAmount,
                 currency,
-                status: paymentStatusToPaymentRowStatus(paymentPreCaptured ? 'PAID' : 'PENDING'),
+                shippingAddress: JSON.stringify(body.shippingAddress),
+                billingAddress: JSON.stringify(body.shippingAddress),
+                items: { create: itemsWithComputedTotals },
+                payments: {
+                  create: [
+                    {
+                      provider: paymentMethodToProvider(body.paymentMethod),
+                      transactionId: `ch_${crypto.randomUUID()}`,
+                      paymentMethod: body.paymentMethod,
+                      amount: body.totalAmount,
+                      currency,
+                      status: paymentStatusToPaymentRowStatus(
+                        paymentPreCaptured ? 'PAID' : 'PENDING'
+                      ),
+                    },
+                  ],
+                },
               },
-            ],
+              include: { items: true, payments: true },
+            })
+
+            await stageOrderCreated(
+              tx,
+              {
+                orderId: created.id,
+                orderNumber: created.orderNumber,
+                userId: created.userId,
+                customerEmail: created.customerEmail,
+                status: orderStatus,
+                totalAmount: Number(created.totalAmount),
+                currency: created.currency,
+                items: created.items.map((i) => ({
+                  productId: i.productId,
+                  sku: i.productSku,
+                  quantity: i.quantity,
+                  unitPrice: Number(i.unitPrice),
+                })),
+              },
+              request.id
+            )
+            if (orderStatus === 'CONFIRMED') {
+              // Confirmed at birth, so the confirmation fact belongs on the log too.
+              await stageOrderConfirmed(
+                tx,
+                {
+                  orderId: created.id,
+                  orderNumber: created.orderNumber,
+                  customerEmail: created.customerEmail,
+                  customerName: created.customerName,
+                  totalAmount: Number(created.totalAmount),
+                  currency: created.currency,
+                },
+                request.id
+              )
+            }
+            return created
           },
-        },
-        include: { items: true, payments: true },
-      })
+          { timeout: 20_000 }
+        )
+      } catch (err) {
+        // Two concurrent requests with one key: the loser hits the unique index.
+        if (
+          idempotencyKey &&
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          const raced = await replay()
+          if (raced) return raced
+        }
+        throw err
+      }
 
       // --- Producers -------------------------------------------------------
-      // Enqueue failures are logged and swallowed: the order is already
-      // committed to the database and a Redis outage must not retroactively
-      // fail it.
-
-      // Kafka first: order.created is a FACT about a row that now exists, and
-      // it is what ms-inventory and ms-analytics consume. Publishing is
-      // additive — the BullMQ enqueues below are unchanged, so an unreachable
-      // broker changes nothing about how checkout behaves today.
-      //
-      // Published for BOTH branches: a CONFIRMED order still needs its stock
-      // reserved and still belongs in the analytics funnel. `status` on the
-      // payload is what lets a consumer tell the two apart.
-      await publishOrderCreated(
-        {
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          userId: order.userId,
-          customerEmail: order.customerEmail,
-          status: orderStatus,
-          totalAmount: Number(order.totalAmount),
-          currency: order.currency,
-          items: order.items.map((i) => ({
-            productId: i.productId,
-            sku: i.productSku,
-            quantity: i.quantity,
-            unitPrice: Number(i.unitPrice),
-          })),
-        },
-        request.id
-      )
+      // Kafka events were staged in the transaction above and are delivered by
+      // the outbox relay. The BullMQ enqueues below are best-effort and stay
+      // post-commit: a Redis outage must not retroactively fail the order.
 
       if (orderStatus === 'PENDING') {
         // order-expiration: only reachable for an order that is genuinely
@@ -213,20 +280,6 @@ export function registerOrderCreateRoute(
           })
         )
       } else {
-        // An order created with payment already captured is confirmed at
-        // birth, so the confirmation fact belongs on the log too.
-        await publishOrderConfirmed(
-          {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            customerEmail: order.customerEmail,
-            customerName: order.customerName,
-            totalAmount: Number(order.totalAmount),
-            currency: order.currency,
-          },
-          request.id
-        )
-
         // notification-dispatch: a confirmed order really does warrant a
         // confirmation email and a receipt.
         //
@@ -258,4 +311,23 @@ export function registerOrderCreateRoute(
       return reply.status(201).send(toOrderRecord(order))
     }
   )
+}
+
+/** True when a stored order and a (re)submitted body describe the same purchase. */
+function sameOrder(
+  existing: {
+    customerEmail: string
+    totalAmount: unknown
+    items: { productId: string; quantity: number }[]
+  },
+  body: CreateOrderBody
+): boolean {
+  if (existing.customerEmail !== body.customerEmail) return false
+  if (Number(existing.totalAmount) !== body.totalAmount) return false
+  const key = (xs: { productId: string; quantity: number }[]) =>
+    xs
+      .map((i) => `${i.productId}:${i.quantity}`)
+      .sort()
+      .join('|')
+  return key(existing.items) === key(body.items)
 }

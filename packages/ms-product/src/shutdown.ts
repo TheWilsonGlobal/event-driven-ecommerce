@@ -1,9 +1,12 @@
 import type { FastifyInstance } from 'fastify'
+import { closeServicePools } from '@ecommerce/shared-database'
 import { QueueManager } from './queues'
 
 export interface ShutdownDeps {
   server: FastifyInstance
   queueManager: QueueManager
+  /** True when the Postgres pool exists; false for the legacy embedded driver. */
+  closeDatabase: boolean
 }
 
 /**
@@ -12,7 +15,11 @@ export interface ShutdownDeps {
  * the BullMQ worker's blocking Redis read keeps the event loop alive and
  * ms-product hangs instead of exiting.
  */
-export function registerShutdownHandlers({ server, queueManager }: ShutdownDeps): void {
+export function registerShutdownHandlers({
+  server,
+  queueManager,
+  closeDatabase,
+}: ShutdownDeps): void {
   let shuttingDown = false
 
   const shutdown = async (signal: string) => {
@@ -32,6 +39,16 @@ export function registerShutdownHandlers({ server, queueManager }: ShutdownDeps)
       await queueManager.close()
     } catch (err) {
       console.warn(`[Product Service] Error closing queues: ${(err as Error).message}`)
+    }
+
+    // After the HTTP server and worker are closed so no in-flight query loses
+    // its connection.
+    if (closeDatabase) {
+      try {
+        await closeServicePools()
+      } catch (err) {
+        console.warn(`[Product Service] Error closing database pool: ${(err as Error).message}`)
+      }
     }
 
     console.log('[Product Service] Shutdown complete')

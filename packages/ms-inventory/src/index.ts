@@ -1,15 +1,19 @@
 // MUST be first: loads .env before any module below reads process.env.
 // See loadEnv.ts — import hoisting means no statement in this file's body
 // can run before these imports, so the dotenv calls have to live in one.
-import { REPO_ROOT } from './loadEnv'
+import './loadEnv'
 import type { FastifyInstance } from 'fastify'
 import fastify from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
-import * as path from 'path'
-import { loadDatabaseConfig, createDocumentStore } from '@ecommerce/shared-database'
+import {
+  getServicePool,
+  loadDatabaseConfig,
+  pgHealth,
+  runMigrations,
+} from '@ecommerce/shared-database'
 import {
   registerMetrics,
   buildLoggerOptions,
@@ -23,7 +27,8 @@ import {
   registerKafkaMetrics,
   type KafkaHealth,
 } from '@ecommerce/shared-messaging'
-import type { InventoryDoc, ProcessedEventDoc, ReservationDoc } from './types'
+import { MIGRATIONS_DIR, createInventoryStore } from './db/store'
+import { createInventoryOutboxRelay, registerOutboxRoutes } from './outbox'
 import { registerInventoryRoutes } from './routes/inventory'
 import { seedInventoryIfMissing } from './seed'
 import { QueueManager, registerQueueRoutes, QUEUE_DEFINITIONS } from './queues'
@@ -39,24 +44,25 @@ import { registerShutdownHandlers } from './shutdown'
 const dbConfig = loadDatabaseConfig(process.env)
 const PORT = parseInt(process.env.INVENTORY_SERVICE_PORT || '5466', 10)
 
-// NEDB_DATA_PATH (e.g. "./data/db") is relative-by-convention to the repo root
-// — same as how the .env file itself is located above — not to whatever
-// directory the process happens to be launched from (pnpm/nodemon run this
-// with cwd = packages/ms-inventory, which would otherwise silently nest the
-// real data files under packages/ms-inventory/data/db). Same fix ms-product
-// applies for the same reason.
-if (!path.isAbsolute(dbConfig.document.nedb.dataPath)) {
-  dbConfig.document.nedb.dataPath = path.resolve(REPO_ROOT, dbConfig.document.nedb.dataPath)
+// Postgres is the only supported store: the one-transaction-per-event design
+// (ledger + stock + reservation + outbox commit together) has no NeDB
+// equivalent. Refuse to boot on a contradictory driver instead of quietly
+// constructing a pool that cannot exist.
+if (dbConfig.document.driver !== 'postgres') {
+  throw new Error(
+    `ms-inventory requires DOCUMENT_DB_DRIVER=postgres (got ${dbConfig.document.driver}).`
+  )
 }
 
-// Real NeDB-backed document stores — one physical file per collection under
-// the configured data path (data/db/inventory.db, reservations.db,
-// processed_events.db). NeDB rather than Prisma deliberately: a Prisma client
-// would need a package-local .env holding its own DATABASE_URL, which is
-// gitignored and is repeatedly lost when directories move.
-const inventoryStore = createDocumentStore<InventoryDoc>('inventory', dbConfig)
-const reservationsStore = createDocumentStore<ReservationDoc>('reservations', dbConfig)
-const processedEventsStore = createDocumentStore<ProcessedEventDoc>('processed_events', dbConfig)
+// The inventory, reservations, processed_events and outbox_events tables in
+// schema ms_inventory, owned exclusively by this service. Creating the store
+// opens no connection; the pool connects lazily.
+const store = createInventoryStore()
+
+// Drains ms_inventory.outbox_events to Kafka. Constructed here (it validates
+// the OUTBOX_* config and so fails fast on a bad lease/timeout pair) but only
+// STARTED after the server is listening.
+const outboxRelay = createInventoryOutboxRelay(store, eventProducer)
 
 // BullMQ inventory-reconciliation queue. Constructs no Redis connection at all
 // when KV_CACHE_DRIVER selects the embedded store — see QueueManager's
@@ -68,12 +74,7 @@ const queueManager = new QueueManager()
 // EventConsumer), and GET /api/v1/events still reports its groupId, topics and
 // local counters in that state rather than pretending this service has no
 // consumer.
-const eventConsumer = createInventoryConsumer({
-  inventoryStore,
-  reservationsStore,
-  processedEventsStore,
-  queueManager,
-})
+const eventConsumer = createInventoryConsumer({ store, queueManager })
 
 /**
  * Ceiling on how long /health will wait for a Kafka reading.
@@ -131,6 +132,21 @@ async function kafkaHealthBounded(): Promise<KafkaHealth> {
 let server: FastifyInstance
 
 async function bootstrap() {
+  // Schema before anything that can write to it. Awaited before the server
+  // listens and, above all, before the consumer and the outbox relay start:
+  // the first consumed event must find its tables. A failure is fatal -- a
+  // consumer that cannot persist would otherwise ack events it drops.
+  try {
+    const migrated = await runMigrations('inventory', MIGRATIONS_DIR)
+    console.log(
+      `[Inventory Service] Migrations: applied [${migrated.applied.join(', ')}], ` +
+        `already applied [${migrated.skipped.join(', ')}]`
+    )
+  } catch (err) {
+    console.error(`[Inventory Service] Migration failed: ${(err as Error).message}`)
+    process.exit(1)
+  }
+
   const lokiHost = process.env.LOKI_HOST || 'http://localhost:3100'
   const lokiReachable =
     process.env.LOKI_ENABLED === 'false' ? false : await probeLokiReachable(lokiHost)
@@ -178,6 +194,7 @@ async function bootstrap() {
         { name: 'inventory', description: 'Stock levels' },
         { name: 'reservations', description: 'Per-order stock holds' },
         { name: 'events', description: 'Kafka event-backbone introspection' },
+        { name: 'outbox', description: 'Transactional outbox state and operator actions' },
         { name: 'queues', description: 'Live BullMQ queue introspection' },
         { name: 'endpoints', description: 'Live registered-route inventory' },
       ],
@@ -194,7 +211,9 @@ async function bootstrap() {
     {
       schema: {
         tags: ['health'],
-        description: 'Service liveness/status check, including database/queue driver.',
+        description:
+          'Service liveness/status check, including a real Postgres round trip and the ' +
+          'queue driver. Answers 503 (status "unhealthy") when Postgres is unreachable.',
         response: {
           200: {
             type: 'object',
@@ -202,12 +221,19 @@ async function bootstrap() {
               status: { type: 'string' },
               service: { type: 'string' },
               timestamp: { type: 'string', format: 'date-time' },
+              // Postgres is the only store, so `reachable` comes from a real
+              // SELECT 1 on every call (never from configuration) and an
+              // unreachable database answers 503.
               database: {
                 type: 'object',
                 properties: {
                   mode: { type: 'string' },
                   driver: { type: 'string' },
                   queue: { type: 'string' },
+                  reachable: { type: 'boolean' },
+                  schema: { type: 'string' },
+                  latencyMs: { type: 'number' },
+                  error: { type: 'string' },
                 },
               },
               // Read from a ~10s cache so a liveness probe never blocks on an
@@ -235,15 +261,21 @@ async function bootstrap() {
         },
       },
     },
-    async () => {
+    async (_request, reply) => {
+      const pg = await pgHealth(getServicePool('inventory'))
+      if (!pg.reachable) void reply.code(503)
       return {
-        status: 'ok',
+        status: pg.reachable ? 'ok' : 'unhealthy',
         service: 'ms-inventory',
         timestamp: new Date().toISOString(),
         database: {
           mode: dbConfig.mode,
           driver: dbConfig.document.driver,
           queue: dbConfig.keyValue.driver,
+          reachable: pg.reachable,
+          schema: pg.schema,
+          ...(pg.latencyMs !== null ? { latencyMs: pg.latencyMs } : {}),
+          ...(pg.error ? { error: pg.error } : {}),
         },
         events: {
           ...(await kafkaHealthBounded()),
@@ -253,21 +285,22 @@ async function bootstrap() {
     }
   )
 
-  const seeded = await seedInventoryIfMissing(inventoryStore)
+  const seeded = await seedInventoryIfMissing(store)
   if (seeded > 0) {
     console.log(`[Inventory Service] Self-seeded stock for ${seeded} product(s)`)
   }
 
-  registerInventoryRoutes(server, { inventoryStore, reservationsStore })
+  registerInventoryRoutes(server, { store })
   registerQueueRoutes(server, queueManager)
   registerEventRoutes(server, eventConsumer)
+  registerOutboxRoutes(server, outboxRelay)
   registerEndpointsRoute(server, routeRegistry, 'ms-inventory')
 
   // Started after routes are registered, same ordering ms-product and ms-order
   // use: the worker begins pulling jobs only once the service is otherwise
   // ready.
   if (queueManager.queuesAvailable) {
-    queueManager.startWorker(inventoryStore, reservationsStore)
+    queueManager.startWorker(store)
     console.log(
       `[Inventory Service] BullMQ workers started for: ${QUEUE_DEFINITIONS.map((q) => q.name).join(', ')}`
     )
@@ -280,7 +313,7 @@ async function bootstrap() {
     )
   }
 
-  registerShutdownHandlers({ server, queueManager, eventProducer, eventConsumer })
+  registerShutdownHandlers({ server, queueManager, eventProducer, eventConsumer, outboxRelay })
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' })
@@ -289,6 +322,16 @@ async function bootstrap() {
     server.log.error(err)
     process.exit(1)
   }
+
+  // The relay starts after migrations (its table exists) and after listen()
+  // (the API is up before any background work). start() only schedules a timer:
+  // with Kafka disabled it idles and rows wait in `pending`; with the broker
+  // down it backs off without spending the rows' attempt budget.
+  outboxRelay.start()
+  console.log(
+    `[Inventory Service] Outbox relay started on ${store.schema}.outbox_events ` +
+      `(${eventProducer.enabled ? 'Kafka enabled' : 'idle until KAFKA_ENABLED=true'})`
+  )
 
   // Kafka last, AFTER listen(), and deliberately NOT awaited.
   //

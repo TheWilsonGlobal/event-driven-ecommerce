@@ -10,7 +10,7 @@ export function DatabaseCards({
   openSignal?: OpenSignal
   onRefreshServices: () => void
 }) {
-  // Neither store has its own health endpoint — Prisma/NeDB connectivity is
+  // Neither store has its own health endpoint — Postgres connectivity is
   // reported as part of each owning service's own /health check.
   const userSvc = services.find((s) => s.id === 'ms-user')
   const orderSvc = services.find((s) => s.id === 'ms-order')
@@ -27,7 +27,7 @@ export function DatabaseCards({
         title={
           <>
             <span>Relational Database</span>
-            <span className="chip chip-blue">SQLite</span>
+            <span className="chip chip-blue">PostgreSQL</span>
             <span
               className={`chip ${relationalHealthy === null ? 'chip-amber' : relationalHealthy ? 'chip-green' : 'chip-red'}`}
             >
@@ -51,11 +51,11 @@ export function DatabaseCards({
           </button>
         }
       >
-        <ReadOnlyRow label="Storage Driver" value="SQLite (Prisma ORM)" />
+        <ReadOnlyRow label="Storage Driver" value="PostgreSQL / Supabase (Prisma ORM)" />
         <ReadOnlyRow label="ORM Engine" value="Prisma ^5.10.2" />
         <ReadOnlyRow
           label="Connection URL"
-          value="file:./data/db/ms-user.db, file:./data/db/ms-order.db"
+          value="Supabase Postgres, schemas ms_user and ms_order"
         />
         <div className="config-row">
           <span className="k">Target Services</span>
@@ -71,7 +71,7 @@ export function DatabaseCards({
         title={
           <>
             <span>Document Database</span>
-            <span className="chip chip-blue">NeDB</span>
+            <span className="chip chip-blue">PostgreSQL</span>
             <span
               className={`chip ${documentHealthy === null ? 'chip-amber' : documentHealthy ? 'chip-green' : 'chip-red'}`}
             >
@@ -91,11 +91,11 @@ export function DatabaseCards({
           </button>
         }
       >
-        <ReadOnlyRow label="Storage Driver" value="Embedded NeDB" />
-        <ReadOnlyRow label="Engine" value="NeDB 1.8.0" />
+        <ReadOnlyRow label="Storage Driver" value="PostgreSQL / Supabase (jsonb)" />
+        <ReadOnlyRow label="Engine" value="PostgreSQL 17" />
         <ReadOnlyRow
           label="Connection URL"
-          value="file:./data/db/products.db, file:./data/db/categories.db"
+          value="Supabase Postgres, schema ms_product"
         />
         <div className="config-row">
           <span className="k">Target Services</span>

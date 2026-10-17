@@ -55,6 +55,11 @@ COPY --from=builder /app/packages/ms-analytics/node_modules ./packages/ms-analyt
 COPY --from=builder /app/packages/ms-analytics/dist ./packages/ms-analytics/dist
 COPY --from=builder /app/packages/ms-analytics/package.json ./packages/ms-analytics/package.json
 
+# SQL migrations are not emitted by tsc. The service resolves them at
+# <package root>/migrations (two levels above dist/aggregates), so they have to be
+# copied explicitly or the container dies at boot with ENOENT.
+COPY --from=builder /app/packages/ms-analytics/migrations ./packages/ms-analytics/migrations
+
 # The shared packages are consumed through symlinks into these directories, so
 # their COMPILED output has to be present too — the symlink resolves to a real
 # path that must exist in this stage.
@@ -70,8 +75,7 @@ COPY --from=builder /app/packages/shared ./packages/shared
 # user. The logger mkdirs /app/logs at boot and the process cannot create a
 # directory at the image root as non-root — the container then exits with
 # EACCES before ever listening (measured 2026-09-23).
-RUN mkdir -p /app/data/nedb /app/logs && chown -R nodejs:nodejs /app/data /app/logs
-VOLUME ["/app/data"]
+RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
 
 USER nodejs
 
@@ -81,6 +85,5 @@ EXPOSE 5467
 # Setting PORT here would be silently ignored and the container would listen on
 # the 5467 default by coincidence rather than by configuration.
 ENV ANALYTICS_SERVICE_PORT=5467
-ENV NEDB_DATA_PATH=/app/data/nedb
 
 CMD ["node", "packages/ms-analytics/dist/index.js"]

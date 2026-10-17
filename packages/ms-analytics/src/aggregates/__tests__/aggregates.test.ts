@@ -1,19 +1,21 @@
-import type { DocumentDatabaseAdapter } from '@ecommerce/shared-database'
+import * as crypto from 'crypto'
+import * as dotenv from 'dotenv'
+import * as fs from 'fs'
+import * as path from 'path'
+import { closeServicePools, getServicePool } from '@ecommerce/shared-database'
 import type { EventContext, EventEnvelope } from '@ecommerce/shared-messaging'
-import type {
-  FunnelDoc,
-  HourBucketDoc,
-  PaymentOutcomeDoc,
-  ProcessedEventDoc,
-  ProductCounterDoc,
-  ProgressDoc,
-} from '../../types'
 import {
+  MIGRATIONS_DIR,
   claimEvent,
+  createAnalyticsStoreOn,
   hourKeyOf,
   readFunnel,
+  readHourBuckets,
   readPaymentOutcomes,
+  readProductCounters,
+  readProgress,
   type AnalyticsStore,
+  type Tx,
 } from '../store'
 import { funnelView, ratio, revenueView, summaryView } from '../views'
 import {
@@ -29,7 +31,7 @@ import {
 } from '../../events/handlers'
 
 /**
- * Unit tests for ms-analytics' aggregation core.
+ * Tests for ms-analytics' aggregation core.
  *
  * An aggregate has no self-correcting property: `revenue += 49.99` applied
  * twice yields a perfectly plausible 99.98 that nothing downstream can detect
@@ -38,86 +40,69 @@ import {
  * phantom money and the fabricated zeroes that the source's docblocks call out
  * by name.
  *
- * No Kafka, no NeDB: the six collections are in-memory arrays behind the same
- * DocumentDatabaseAdapter surface, and the handlers read back what they wrote,
- * so an arithmetic regression has nowhere to hide.
+ * ── Real Postgres, throwaway schema ─────────────────────────────────────────
+ * The behaviour under test (ON CONFLICT increments, the one-transaction claim)
+ * lives in SQL, so the handler suites run against the real database from the
+ * root .env, inside a schema named test_analytics_<random> that is created from
+ * the real migration file and DROPPED afterwards. They never touch ms_analytics.
+ * Without ANALYTICS_DATABASE_URL those suites are skipped (visibly, in the jest
+ * summary); the pure-function suites and the fake-transaction suite always run.
+ * No Kafka.
  */
 
-// ─── In-memory stand-in for the six collections ────────────────────────────
+dotenv.config({ path: path.resolve(__dirname, '../../../../../.env') })
+jest.setTimeout(60_000)
 
-function makeStore<T extends object>(): DocumentDatabaseAdapter<T> & { docs: T[] } {
-  const docs: T[] = []
-  const matches = (doc: T, query: Record<string, unknown>): boolean =>
-    Object.entries(query).every(([k, v]) => (doc as Record<string, unknown>)[k] === v)
+const HAS_DB = Boolean(process.env.ANALYTICS_DATABASE_URL)
+const dbDescribe = HAS_DB ? describe : describe.skip
 
-  return {
-    docs,
-    async findOne(query) {
-      return docs.find((d) => matches(d, query)) ?? null
-    },
-    async find(query) {
-      return docs.filter((d) => matches(d, query))
-    },
-    async insert(doc) {
-      docs.push({ ...doc })
-      return doc
-    },
-    async update(query, updateDoc) {
-      let affected = 0
-      for (const doc of docs) {
-        if (matches(doc, query)) {
-          Object.assign(doc, updateDoc)
-          affected += 1
-        }
-      }
-      return affected
-    },
-    async delete(query) {
-      const before = docs.length
-      for (let i = docs.length - 1; i >= 0; i -= 1) {
-        const doc = docs[i]
-        if (doc && matches(doc, query)) docs.splice(i, 1)
-      }
-      return before - docs.length
-    },
+const TEST_SCHEMA = `test_analytics_${crypto.randomBytes(6).toString('hex')}`
+const TABLES = [
+  'processed_events',
+  'hour_buckets',
+  'product_counters',
+  'funnel',
+  'payment_outcomes',
+  'progress',
+]
+
+let dbStore: AnalyticsStore | undefined
+
+beforeAll(async () => {
+  if (!HAS_DB) return
+  const pool = getServicePool('analytics').pool
+  const sql = fs
+    .readFileSync(path.join(MIGRATIONS_DIR, '001_init.sql'), 'utf8')
+    .replace(/\{\{schema\}\}/g, TEST_SCHEMA)
+  await pool.query(`CREATE SCHEMA ${TEST_SCHEMA}`)
+  await pool.query(sql)
+  dbStore = createAnalyticsStoreOn(pool, TEST_SCHEMA)
+})
+
+afterAll(async () => {
+  if (HAS_DB) {
+    await getServicePool('analytics')
+      .pool.query(`DROP SCHEMA IF EXISTS ${TEST_SCHEMA} CASCADE`)
+      .catch(() => undefined)
   }
-}
+  await closeServicePools()
+})
+
+beforeEach(async () => {
+  if (!dbStore) return
+  await dbStore.db.query(`TRUNCATE ${TABLES.map((t) => `${TEST_SCHEMA}.${t}`).join(', ')}`)
+})
 
 interface Harness {
   store: AnalyticsStore
   deps: HandlerDeps
   logs: string[]
-  hourBuckets: { docs: HourBucketDoc[] }
-  productCounters: { docs: ProductCounterDoc[] }
-  processedEvents: { docs: ProcessedEventDoc[] }
-  progress: { docs: ProgressDoc[] }
 }
 
 function harness(): Harness {
-  const hourBuckets = makeStore<HourBucketDoc>()
-  const productCounters = makeStore<ProductCounterDoc>()
-  const processedEvents = makeStore<ProcessedEventDoc>()
-  const progress = makeStore<ProgressDoc>()
-
-  const store: AnalyticsStore = {
-    processedEvents,
-    hourBuckets,
-    productCounters,
-    paymentOutcomes: makeStore<PaymentOutcomeDoc>(),
-    funnel: makeStore<FunnelDoc>(),
-    progress,
-  }
-
+  if (!dbStore) throw new Error('database store not initialised')
   const logs: string[] = []
-  return {
-    store,
-    logs,
-    hourBuckets,
-    productCounters,
-    processedEvents,
-    progress,
-    deps: { store, log: (m: string) => logs.push(m) },
-  }
+  return { store: dbStore, logs, deps: { store: dbStore, log: (m: string) => logs.push(m) } }
 }
 
 const CONTEXT: EventContext = { topic: 'ecommerce.orders.v1', partition: 0, offset: '17' }
@@ -179,7 +164,7 @@ describe('hourKeyOf', () => {
   })
 })
 
-describe('the caller SKIPS the hourly contribution when hourKeyOf returns null', () => {
+dbDescribe('the caller SKIPS the hourly contribution when hourKeyOf returns null', () => {
   /**
    * The half that matters. hourKeyOf returning null is only useful if the
    * handler then files NOTHING — a fallback to the current hour would be
@@ -199,7 +184,7 @@ describe('the caller SKIPS the hourly contribution when hourKeyOf returns null',
       CONTEXT
     )
 
-    expect(h.hourBuckets.docs).toHaveLength(0)
+    expect(await readHourBuckets(h.store)).toHaveLength(0)
     // The funnel still counts it: we KNOW the order happened, we just do not
     // know when. Losing the count too would understate the funnel.
     expect((await readFunnel(h.store))?.created).toBe(1)
@@ -212,27 +197,33 @@ describe('the caller SKIPS the hourly contribution when hourKeyOf returns null',
   ])('%s with an unparseable occurredAt creates no hour bucket', async (type, handler) => {
     const h = harness()
     await handler(h.deps, envelope(type, 'garbage', { orderId: 'o1' }), CONTEXT)
-    expect(h.hourBuckets.docs).toHaveLength(0)
+    expect(await readHourBuckets(h.store)).toHaveLength(0)
   })
 })
 
 // ─── claimEvent ────────────────────────────────────────────────────────────
 
-describe('claimEvent', () => {
-  const doc = (id: string): ProcessedEventDoc & { id: string } => ({
+dbDescribe('claimEvent', () => {
+  const doc = (id: string) => ({
     id,
     eventType: 'order.created',
     occurredAt: '2026-09-23T04:00:00.000Z',
-    processedAt: '2026-09-23T04:00:01.000Z',
     topic: 'ecommerce.orders.v1',
     partition: 0,
     offset: '1',
   })
+  const claim = (h: Harness, id: string) => h.store.transaction((tx) => claimEvent(tx, doc(id)))
+  const ledgerIds = async (h: Harness) =>
+    (
+      await h.store.db.query(
+        `SELECT event_id FROM ${h.store.schema}.processed_events ORDER BY event_id`
+      )
+    ).rows.map((r) => r.event_id as string)
 
   it('returns true for a new id and records it', async () => {
     const h = harness()
-    expect(await claimEvent(h.store, doc('evt-1'))).toBe(true)
-    expect(h.processedEvents.docs).toHaveLength(1)
+    expect(await claim(h, 'evt-1')).toBe(true)
+    expect(await ledgerIds(h)).toEqual(['evt-1'])
   })
 
   /**
@@ -241,17 +232,17 @@ describe('claimEvent', () => {
    */
   it('returns false for an already-applied id and inserts nothing further', async () => {
     const h = harness()
-    await claimEvent(h.store, doc('evt-1'))
+    await claim(h, 'evt-1')
 
-    expect(await claimEvent(h.store, doc('evt-1'))).toBe(false)
-    expect(h.processedEvents.docs).toHaveLength(1)
+    expect(await claim(h, 'evt-1')).toBe(false)
+    expect(await ledgerIds(h)).toEqual(['evt-1'])
   })
 
   it('treats distinct ids as independent claims', async () => {
     const h = harness()
-    expect(await claimEvent(h.store, doc('evt-1'))).toBe(true)
-    expect(await claimEvent(h.store, doc('evt-2'))).toBe(true)
-    expect(h.processedEvents.docs.map((d) => d.id)).toEqual(['evt-1', 'evt-2'])
+    expect(await claim(h, 'evt-1')).toBe(true)
+    expect(await claim(h, 'evt-2')).toBe(true)
+    expect(await ledgerIds(h)).toEqual(['evt-1', 'evt-2'])
   })
 
   /**
@@ -273,17 +264,17 @@ describe('claimEvent', () => {
     await handleOrderCreated(h.deps, env, CONTEXT)
 
     // 49.99, not 99.98.
-    expect(h.hourBuckets.docs[0]?.revenue).toBeCloseTo(49.99, 5)
-    expect(h.hourBuckets.docs[0]?.orders).toBe(1)
+    expect((await readHourBuckets(h.store))[0]?.revenue).toBeCloseTo(49.99, 5)
+    expect((await readHourBuckets(h.store))[0]?.orders).toBe(1)
     expect((await readFunnel(h.store))?.created).toBe(1)
-    expect(h.progress.docs[0]?.eventsProcessed).toBe(1)
-    expect(h.progress.docs[0]?.duplicatesSkipped).toBe(1)
+    expect((await readProgress(h.store))?.eventsProcessed).toBe(1)
+    expect((await readProgress(h.store))?.duplicatesSkipped).toBe(1)
   })
 })
 
 // ─── §3.5 design call: payment.failed carries no money ─────────────────────
 
-describe('payment.failed contributes NO money', () => {
+dbDescribe('payment.failed contributes NO money', () => {
   /**
    * A failure carries the amount that was ATTEMPTED, not one that moved.
    * Accumulating it would put value into a money total that nobody was ever
@@ -321,7 +312,7 @@ describe('payment.failed contributes NO money', () => {
       CONTEXT
     )
 
-    expect(h.hourBuckets.docs).toHaveLength(0)
+    expect(await readHourBuckets(h.store)).toHaveLength(0)
   })
 
   /**
@@ -345,7 +336,7 @@ describe('payment.failed contributes NO money', () => {
 
 // ─── §3.5 design call: refunds are NOT netted against captures ─────────────
 
-describe('refundedAmount is not netted against capturedAmount', () => {
+dbDescribe('refundedAmount is not netted against capturedAmount', () => {
   /**
    * Netting destroys the difference between "captured 100, refunded 40" and
    * "captured 60". The two are the same net position and completely different
@@ -425,7 +416,7 @@ describe('refundedAmount is not netted against capturedAmount', () => {
 
 // ─── §3.5 design call: order.confirmed adds no revenue ─────────────────────
 
-describe('order.confirmed adds NO revenue', () => {
+dbDescribe('order.confirmed adds NO revenue', () => {
   /**
    * order.created already banked this order's totalAmount. The confirmation
    * legitimately carries a totalAmount field that looks perfectly usable —
@@ -452,7 +443,7 @@ describe('order.confirmed adds NO revenue', () => {
       CONTEXT
     )
 
-    const bucket = h.hourBuckets.docs[0]
+    const bucket = (await readHourBuckets(h.store))[0]
     // 100, not 200.
     expect(bucket?.revenue).toBe(100)
     expect(bucket?.orders).toBe(1)
@@ -474,11 +465,11 @@ describe('order.confirmed adds NO revenue', () => {
       CONTEXT
     )
 
-    expect(h.hourBuckets.docs[0]?.revenue).toBe(0)
-    expect(h.hourBuckets.docs[0]?.confirmed).toBe(1)
-    expect(h.hourBuckets.docs[0]?.orders).toBe(0)
+    expect((await readHourBuckets(h.store))[0]?.revenue).toBe(0)
+    expect((await readHourBuckets(h.store))[0]?.confirmed).toBe(1)
+    expect((await readHourBuckets(h.store))[0]?.orders).toBe(0)
     // No priced event landed, so the bucket carries no currency label.
-    expect(h.hourBuckets.docs[0]?.currency).toBeNull()
+    expect((await readHourBuckets(h.store))[0]?.currency).toBeNull()
   })
 
   /**
@@ -506,14 +497,14 @@ describe('order.confirmed adds NO revenue', () => {
       CONTEXT
     )
 
-    expect(h.hourBuckets.docs[0]?.revenue).toBe(100)
-    expect(h.hourBuckets.docs[0]?.cancelled).toBe(1)
+    expect((await readHourBuckets(h.store))[0]?.revenue).toBe(100)
+    expect((await readHourBuckets(h.store))[0]?.cancelled).toBe(1)
   })
 })
 
 // ─── §3.5 design call: shortfall rate is denominated on ATTEMPTS ───────────
 
-describe('reservationShortfallRate is denominated on reservation ATTEMPTS', () => {
+dbDescribe('reservationShortfallRate is denominated on reservation ATTEMPTS', () => {
   async function reserveAndShortfall(h: Harness, reserved: number, insufficient: number) {
     for (let i = 0; i < reserved; i += 1) {
       await handleInventoryReserved(
@@ -600,7 +591,9 @@ describe('reservationShortfallRate is denominated on reservation ATTEMPTS', () =
     // the shortfall rate needs its own denominator.
     expect(view.conversion.createdToReserved).toBe(0)
   })
+})
 
+describe('ratio', () => {
   /** ratio() itself: null on a zero denominator, never NaN and never 0. */
   it.each([
     [1, 0],
@@ -615,7 +608,7 @@ describe('reservationShortfallRate is denominated on reservation ATTEMPTS', () =
 
 // ─── §3.5 design call: no zero-filled hours ────────────────────────────────
 
-describe('hours with no data are ABSENT from the revenue series', () => {
+dbDescribe('hours with no data are ABSENT from the revenue series', () => {
   /**
    * "No orders in that hour" and "this service was not running in that hour"
    * are different claims. The store only supports the second, so a zero-filled
@@ -727,7 +720,7 @@ describe('hours with no data are ABSENT from the revenue series', () => {
 
 // ─── averageOrderValue: null rather than a fabricated 0 ────────────────────
 
-describe('averageOrderValue', () => {
+dbDescribe('averageOrderValue', () => {
   /** Zero orders means the average is unmeasured, not zero. */
   it('is null when no order has been counted', async () => {
     const h = harness()
@@ -751,5 +744,237 @@ describe('averageOrderValue', () => {
     const view = await summaryView(h.store)
     expect(view.revenue).toBe(150)
     expect(view.averageOrderValue).toBe(75)
+  })
+})
+
+// ─── Idempotency gate, without a database ──────────────────────────────────
+
+describe('the idempotency gate (fake transaction, no database)', () => {
+  function fakeStore(claimRowCount: number) {
+    const calls: string[] = []
+    let transactions = 0
+    const tx: Tx = {
+      schema: 'fake',
+      query: async (text) => {
+        calls.push(text)
+        return { rows: [], rowCount: text.includes('processed_events') ? claimRowCount : 1 }
+      },
+    }
+    const store: AnalyticsStore = {
+      schema: 'fake',
+      db: tx,
+      transaction: (fn) => {
+        transactions += 1
+        return fn(tx)
+      },
+    }
+    return { store, calls, transactions: () => transactions }
+  }
+
+  const env = envelope('order.created', '2026-09-23T04:15:00.000Z', {
+    orderId: 'o1',
+    totalAmount: 10,
+    currency: 'USD',
+    items: [],
+  })
+
+  /**
+   * rowCount 0 from INSERT ... ON CONFLICT DO NOTHING is the duplicate signal.
+   * Past the claim the handler may only bump the duplicate counter: not the
+   * funnel, not an hour bucket, not progress.
+   */
+  it('touches no aggregate when the claim reports a duplicate', async () => {
+    const f = fakeStore(0)
+    const logs: string[] = []
+    await handleOrderCreated({ store: f.store, log: (m) => logs.push(m) }, env, CONTEXT)
+
+    expect(f.transactions()).toBe(1)
+    expect(f.calls).toHaveLength(2)
+    expect(f.calls[0]).toContain('processed_events')
+    expect(f.calls[0]).toContain('ON CONFLICT (event_id) DO NOTHING')
+    expect(f.calls[1]).toContain('duplicates_skipped')
+    expect(f.calls.some((c) => /\.funnel|\.hour_buckets/.test(c))).toBe(false)
+    expect(logs.some((m) => m.includes('Skipped duplicate'))).toBe(true)
+  })
+
+  it('makes the claim the FIRST statement and progress the last, in one transaction', async () => {
+    const f = fakeStore(1)
+    await handleOrderCreated({ store: f.store, log: () => undefined }, env, CONTEXT)
+
+    expect(f.transactions()).toBe(1)
+    expect(f.calls[0]).toContain('processed_events')
+    expect(f.calls[f.calls.length - 1]).toContain('.progress')
+    expect(f.calls.some((c) => c.includes('.funnel'))).toBe(true)
+    expect(f.calls.some((c) => c.includes('.hour_buckets'))).toBe(true)
+  })
+})
+
+// ─── Atomicity against the real database ───────────────────────────────────
+
+dbDescribe('atomic counters and transactional idempotency', () => {
+  const orderCreated = (id: string, amount = 10) =>
+    envelope(
+      'order.created',
+      '2026-09-23T04:15:00.000Z',
+      {
+        orderId: id,
+        totalAmount: amount,
+        currency: 'USD',
+        items: [{ productId: 'p1', sku: 'SKU-1', quantity: 2, unitPrice: 5 }],
+      },
+      id
+    )
+
+  /**
+   * The weakness this design removes: with read-modify-write, concurrent
+   * writers lose increments. The pool has 3 connections, so these 8 handlers
+   * genuinely overlap. (Kept small on purpose: every event hits the same hot
+   * rows and they serialise at cloud latency, so a bigger burst only measures
+   * the pool's 10s connect timeout.)
+   */
+  it('loses no increment when 8 distinct events are applied concurrently', async () => {
+    const h = harness()
+    await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        handleOrderCreated(h.deps, orderCreated(`e${i}`), CONTEXT)
+      )
+    )
+
+    expect((await readFunnel(h.store))?.created).toBe(8)
+    const [bucket] = await readHourBuckets(h.store)
+    expect(bucket?.orders).toBe(8)
+    expect(bucket?.revenue).toBe(80)
+    const [product] = await readProductCounters(h.store)
+    expect(product).toMatchObject({
+      productId: 'p1',
+      timesOrdered: 8,
+      unitsOrdered: 16,
+      revenue: 80,
+    })
+    expect((await readProgress(h.store))?.eventsProcessed).toBe(8)
+  })
+
+  /** Ten simultaneous deliveries of ONE event: exactly one applies. */
+  it('applies a concurrently redelivered event exactly once', async () => {
+    const h = harness()
+    await Promise.all(
+      Array.from({ length: 10 }, () => handleOrderCreated(h.deps, orderCreated('same'), CONTEXT))
+    )
+
+    expect((await readFunnel(h.store))?.created).toBe(1)
+    expect((await readHourBuckets(h.store))[0]?.revenue).toBe(10)
+    const progress = await readProgress(h.store)
+    expect(progress?.eventsProcessed).toBe(1)
+    expect(progress?.duplicatesSkipped).toBe(9)
+    const ledger = await h.store.db.query(`SELECT 1 FROM ${h.store.schema}.processed_events`)
+    expect(ledger.rows).toHaveLength(1)
+  })
+
+  /**
+   * The claim and the bumps are one commit: a failure after the claim leaves
+   * neither behind, so a retry applies the event once instead of being
+   * rejected as a duplicate of a half-applied one.
+   */
+  it('rolls back the claim together with the counters when the transaction fails', async () => {
+    const h = harness()
+    await expect(
+      h.store.transaction(async (tx) => {
+        await claimEvent(tx, {
+          id: 'boom',
+          eventType: 'order.created',
+          occurredAt: '2026-09-23T04:15:00.000Z',
+          topic: 't',
+          partition: 0,
+          offset: '1',
+        })
+        throw new Error('crash after claim')
+      })
+    ).rejects.toThrow('crash after claim')
+
+    const ledger = await h.store.db.query(`SELECT 1 FROM ${h.store.schema}.processed_events`)
+    expect(ledger.rows).toHaveLength(0)
+
+    await handleOrderCreated(h.deps, orderCreated('boom'), CONTEXT)
+    expect((await readFunnel(h.store))?.created).toBe(1)
+  })
+
+  /**
+   * A handler whose LAST bump fails (product revenue overflows numeric(18,4))
+   * leaves no trace of the earlier funnel/hour bumps or the claim.
+   */
+  it('leaves no partial application when a bump fails inside a handler', async () => {
+    const h = harness()
+    const bad = envelope(
+      'order.created',
+      '2026-09-23T04:15:00.000Z',
+      {
+        orderId: 'bad',
+        totalAmount: 10,
+        currency: 'USD',
+        items: [{ productId: 'p9', sku: 'S', quantity: 1e12, unitPrice: 1e12 }],
+      },
+      'bad'
+    )
+    await expect(handleOrderCreated(h.deps, bad, CONTEXT)).rejects.toThrow()
+
+    expect(await readFunnel(h.store)).toBeNull()
+    expect(await readHourBuckets(h.store)).toHaveLength(0)
+    expect(await readProgress(h.store)).toBeNull()
+  })
+
+  /** A missing row is "never applied", not zero: the readers return null. */
+  it('reports never-written singletons as null, not as zeroes', async () => {
+    const h = harness()
+    expect(await readFunnel(h.store)).toBeNull()
+    expect(await readPaymentOutcomes(h.store)).toBeNull()
+    expect(await readProgress(h.store)).toBeNull()
+    expect((await funnelView(h.store)).created).toBe(0)
+  })
+
+  it('keeps the FIRST observed currency in an hour', async () => {
+    const h = harness()
+    const hour = '2026-09-23T04:15:00.000Z'
+    const make = (id: string, currency: string) =>
+      envelope('order.created', hour, { orderId: id, totalAmount: 5, currency, items: [] }, id)
+    await handleOrderCreated(h.deps, make('a', 'USD'), CONTEXT)
+    await handleOrderCreated(h.deps, make('b', 'EUR'), CONTEXT)
+
+    const [bucket] = await readHourBuckets(h.store)
+    expect(bucket?.currency).toBe('USD')
+    expect(bucket?.revenue).toBe(10)
+  })
+
+  /** A later empty sku never erases a learned one; a real one replaces an empty one. */
+  it('lets a real sku replace an empty one but never the reverse', async () => {
+    const h = harness()
+    const order = (id: string, sku: string) =>
+      envelope(
+        'order.created',
+        '2026-09-23T04:15:00.000Z',
+        { orderId: id, items: [{ productId: 'p1', sku, quantity: 1, unitPrice: 1 }] },
+        id
+      )
+    await handleOrderCreated(h.deps, order('a', ''), CONTEXT)
+    await handleOrderCreated(h.deps, order('b', 'SKU-REAL'), CONTEXT)
+    await handleOrderCreated(h.deps, order('c', ''), CONTEXT)
+
+    expect((await readProductCounters(h.store))[0]?.sku).toBe('SKU-REAL')
+  })
+
+  /** Kafka orders only within a partition, so lastEventAt must never move backwards. */
+  it('keeps lastEventAt monotonic when an older event is consumed later', async () => {
+    const h = harness()
+    await handleOrderConfirmed(
+      h.deps,
+      envelope('order.confirmed', '2026-09-23T06:00:00.000Z', {}, 'late'),
+      CONTEXT
+    )
+    await handleOrderConfirmed(
+      h.deps,
+      envelope('order.confirmed', '2026-09-23T04:00:00.000Z', {}, 'early'),
+      CONTEXT
+    )
+
+    expect((await readProgress(h.store))?.lastEventAt).toBe('2026-09-23T06:00:00.000Z')
   })
 })

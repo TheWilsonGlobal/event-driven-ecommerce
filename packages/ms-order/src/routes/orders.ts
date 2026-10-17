@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { PrismaClient, Prisma } from '../../node_modules/.prisma-ms-order/client'
 import { QueueManager } from '../queues'
 import { ORDER_STATUSES, toOrderRecord } from '../orderMapping'
-import { publishOrderCancelled } from '../events'
+import { stageOrderCancelled } from '../events'
 import { registerOrderCreateRoute } from './ordersCreate'
 
 export interface OrdersRouteDeps {
@@ -149,32 +149,34 @@ export function registerOrderRoutes(
       }
 
       try {
-        const order = await prisma.order.update({
-          where: { id: request.params.id },
-          data: { status },
-          include: { items: true, payments: true },
+        // Status change and the cancellation event commit together (outbox).
+        // The fact is staged only on the transition INTO CANCELLED; the other
+        // status values have no consumer today.
+        const order = await prisma.$transaction(async (tx) => {
+          const updated = await tx.order.update({
+            where: { id: request.params.id },
+            data: { status },
+            include: { items: true, payments: true },
+          })
+          if (status === 'CANCELLED') {
+            await stageOrderCancelled(
+              tx,
+              {
+                orderId: updated.id,
+                orderNumber: updated.orderNumber,
+                reason: 'status-updated-to-cancelled',
+                items: updated.items.map((i) => ({
+                  productId: i.productId,
+                  sku: i.productSku,
+                  quantity: i.quantity,
+                  unitPrice: Number(i.unitPrice),
+                })),
+              },
+              request.id
+            )
+          }
+          return updated
         })
-
-        // A cancellation is the fact ms-inventory needs in order to release
-        // whatever it reserved. Published only on the transition INTO
-        // CANCELLED; the other status values have no consumer today and
-        // publishing them would put events on the log that nothing reads.
-        if (status === 'CANCELLED') {
-          await publishOrderCancelled(
-            {
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              reason: 'status-updated-to-cancelled',
-              items: order.items.map((i) => ({
-                productId: i.productId,
-                sku: i.productSku,
-                quantity: i.quantity,
-                unitPrice: Number(i.unitPrice),
-              })),
-            },
-            request.id
-          )
-        }
 
         return toOrderRecord(order)
       } catch (err) {

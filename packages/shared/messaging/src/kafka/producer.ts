@@ -271,7 +271,23 @@ export class EventProducer {
       payload,
       correlationId,
     })
+    return this.publishEnvelope(topic, key, envelope)
+  }
 
+  /**
+   * Sends an envelope that ALREADY exists, unchanged.
+   *
+   * This is what the transactional outbox relay calls: the envelope (and so the
+   * eventId) was minted once, inside the business transaction. Re-sending it on
+   * a retry keeps the eventId stable, which is what lets consumers dedupe on it.
+   * `publish` above mints a fresh eventId every call and must NOT be used to
+   * retry. THROWS on failure.
+   */
+  async publishEnvelope<T>(
+    topic: TopicName,
+    key: string,
+    envelope: EventEnvelope<T>
+  ): Promise<EventEnvelope<T>> {
     // Breaker: a broker known to be down in the last BREAKER_WINDOW_MS fails
     // instantly rather than making this caller wait out another full timeout.
     if (this.breakerOpenedAt > 0 && Date.now() - this.breakerOpenedAt < BREAKER_WINDOW_MS) {

@@ -1,7 +1,16 @@
 import type { FastifyInstance } from 'fastify'
 import type { DatabaseConfiguration } from '@ecommerce/shared-database'
 
-export function registerHealthRoute(server: FastifyInstance, dbConfig: DatabaseConfiguration) {
+/** Minimal Prisma surface the health check needs — a real round trip, never a config echo. */
+export interface PingablePrisma {
+  $queryRaw: (query: TemplateStringsArray) => Promise<unknown>
+}
+
+export function registerHealthRoute(
+  server: FastifyInstance,
+  dbConfig: DatabaseConfiguration,
+  prisma: PingablePrisma
+) {
   server.get(
     '/health',
     {
@@ -20,6 +29,9 @@ export function registerHealthRoute(server: FastifyInstance, dbConfig: DatabaseC
                 properties: {
                   mode: { type: 'string' },
                   driver: { type: 'string' },
+                  reachable: { type: 'boolean' },
+                  latencyMs: { type: ['number', 'null'] },
+                  error: { type: 'string' },
                 },
               },
             },
@@ -27,14 +39,27 @@ export function registerHealthRoute(server: FastifyInstance, dbConfig: DatabaseC
         },
       },
     },
-    async () => {
+    async (_request, reply) => {
+      const started = Date.now()
+      let reachable = true
+      let error: string | undefined
+      try {
+        await prisma.$queryRaw`SELECT 1`
+      } catch (err) {
+        reachable = false
+        error = err instanceof Error ? err.message.trim().split('\n').pop() : String(err)
+      }
+      if (!reachable) reply.status(503)
       return {
-        status: 'ok',
+        status: reachable ? 'ok' : 'unhealthy',
         service: 'ms-user',
         timestamp: new Date().toISOString(),
         database: {
           mode: dbConfig.mode,
           driver: dbConfig.relational.driver,
+          reachable,
+          latencyMs: reachable ? Date.now() - started : null,
+          ...(error ? { error } : {}),
         },
       }
     }

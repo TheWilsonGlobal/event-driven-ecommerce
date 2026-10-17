@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '../node_modules/.prisma-ms-order/client'
 import type { KeyValueStoreAdapter } from '@ecommerce/shared-database'
 import { QueueManager } from './queues'
-import type { EventProducer } from '@ecommerce/shared-messaging'
+import type { EventProducer, OutboxRelay } from '@ecommerce/shared-messaging'
+import { closeServicePools } from '@ecommerce/shared-database'
 
 export interface ShutdownDeps {
   server: FastifyInstance
@@ -10,6 +11,7 @@ export interface ShutdownDeps {
   kvStore: KeyValueStoreAdapter | undefined
   prisma: PrismaClient
   eventProducer: EventProducer
+  outboxRelay: OutboxRelay
 }
 
 /**
@@ -23,6 +25,7 @@ export function registerShutdownHandlers({
   kvStore,
   prisma,
   eventProducer,
+  outboxRelay,
 }: ShutdownDeps): void {
   let shuttingDown = false
 
@@ -37,6 +40,14 @@ export function registerShutdownHandlers({
       await server.close()
     } catch (err) {
       console.warn(`[Order Service] Error closing HTTP server: ${(err as Error).message}`)
+    }
+
+    // First: stop claiming, and let an in-flight send finish so its lease is not
+    // left dangling. Must precede closing the producer the relay publishes through.
+    try {
+      await outboxRelay.stop()
+    } catch (err) {
+      console.warn(`[Order Service] Error stopping outbox relay: ${(err as Error).message}`)
     }
 
     try {
@@ -59,6 +70,12 @@ export function registerShutdownHandlers({
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[Order Service] Error closing KV store: ${(err as Error).message}`)
+    }
+
+    try {
+      await closeServicePools()
+    } catch (err) {
+      console.warn(`[Order Service] Error closing pg pools: ${(err as Error).message}`)
     }
 
     try {

@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("ORDER_DATABASE_URL")
+  directUrl = env("ORDER_DIRECT_URL")
 }
 
 model Order {
@@ -16,11 +17,11 @@ model Order {
   customerName    String   @map("customer_name")
   customerEmail   String   @map("customer_email")
   status          String   @default("PENDING")
-  subtotal        Decimal
-  taxAmount       Decimal  @default(0.00) @map("tax_amount")
-  shippingAmount  Decimal  @default(0.00) @map("shipping_amount")
-  discountAmount  Decimal  @default(0.00) @map("discount_amount")
-  totalAmount     Decimal  @map("total_amount")
+  subtotal        Decimal @db.Decimal(12, 2)
+  taxAmount       Decimal @db.Decimal(12, 2)  @default(0.00) @map("tax_amount")
+  shippingAmount  Decimal @db.Decimal(12, 2)  @default(0.00) @map("shipping_amount")
+  discountAmount  Decimal @db.Decimal(12, 2)  @default(0.00) @map("discount_amount")
+  totalAmount     Decimal @db.Decimal(12, 2)  @map("total_amount")
   currency        String   @default("USD")
   shippingAddress String   @map("shipping_address")
   billingAddress  String   @map("billing_address")
@@ -40,9 +41,9 @@ model OrderItem {
   productId    String   @map("product_id")
   productSku   String   @map("product_sku")
   productTitle String   @map("product_title")
-  unitPrice    Decimal  @map("unit_price")
+  unitPrice    Decimal @db.Decimal(12, 2)  @map("unit_price")
   quantity     Int
-  totalPrice   Decimal  @map("total_price")
+  totalPrice   Decimal @db.Decimal(12, 2)  @map("total_price")
   createdAt    DateTime @default(now()) @map("created_at")
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -56,7 +57,7 @@ model Payment {
   provider      String
   transactionId String   @unique @map("transaction_id")
   paymentMethod String   @map("payment_method")
-  amount        Decimal
+  amount        Decimal @db.Decimal(12, 2)
   currency      String   @default("USD")
   status        String   @default("PENDING")
   rawResponse   String?  @map("raw_response")
@@ -66,4 +67,31 @@ model Payment {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+/// Transactional outbox (pattern 1). Rows are written in the SAME transaction
+/// as the order/payment change they describe; OutboxRelay drains them to Kafka.
+/// `eventId` is minted once, at insert, so every retry carries the same id and
+/// consumers can dedupe on it. Claiming uses FOR UPDATE SKIP LOCKED + a lease
+/// (pattern 3) in raw SQL — see src/outbox/relay.ts. A partial claim index is
+/// added by hand in the migration; Prisma cannot express it.
+model OutboxEvent {
+  seq           BigInt    @id @default(autoincrement())
+  eventId       String    @unique @map("event_id") @db.Uuid
+  topic         String
+  partitionKey  String    @map("partition_key")
+  eventType     String    @map("event_type")
+  envelope      Json
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(10) @map("max_attempts")
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  lockedBy      String?   @map("locked_by")
+  lockedUntil   DateTime? @map("locked_until") @db.Timestamptz(6)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz(6)
+
+  @@index([partitionKey, seq])
+  @@map("outbox_events")
 }

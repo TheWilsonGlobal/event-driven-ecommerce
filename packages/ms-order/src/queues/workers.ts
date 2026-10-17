@@ -1,5 +1,5 @@
 import type { Job } from 'bullmq'
-import type { PrismaClient } from '../../node_modules/.prisma-ms-order/client'
+import type { Prisma, PrismaClient } from '../../node_modules/.prisma-ms-order/client'
 import * as crypto from 'crypto'
 import type {
   ExpireOrderJob,
@@ -43,21 +43,26 @@ const EXPIRABLE_STATUSES = new Set(['PENDING'])
 export interface ExpireOrderDeps {
   prisma: PrismaClient
   /**
-   * Publishes order.cancelled after a real expiry.
+   * Stages order.cancelled in the outbox, inside the SAME transaction that
+   * cancels the order.
    *
    * Injected rather than imported so this module stays free of the event
-   * layer — the same reason startWorkers takes `enqueueRefundPayment` as a
+   * layer, the same reason startWorkers takes `enqueueRefundPayment` as a
    * parameter instead of closing over a QueueManager.
    *
    * This hand-off is load-bearing: an expired order releases nothing without
-   * it, so ms-inventory would hold that stock reserved forever.
+   * it, so ms-inventory would hold that stock reserved forever. Sharing the
+   * transaction is what guarantees the two cannot diverge.
    */
-  onOrderCancelled: (data: {
-    orderId: string
-    orderNumber: string
-    reason: string
-    items: { productId: string; sku: string; quantity: number; unitPrice: number }[]
-  }) => Promise<void>
+  onOrderCancelled: (
+    tx: Prisma.TransactionClient,
+    data: {
+      orderId: string
+      orderNumber: string
+      reason: string
+      items: { productId: string; sku: string; quantity: number; unitPrice: number }[]
+    }
+  ) => Promise<void>
 }
 
 export function makeExpireOrderProcessor({ prisma, onOrderCancelled }: ExpireOrderDeps) {
@@ -91,25 +96,31 @@ export function makeExpireOrderProcessor({ prisma, onOrderCancelled }: ExpireOrd
       return { outcome: 'skipped', reason: 'order-already-paid', orderId, orderNumber }
     }
 
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { status: 'CANCELLED' },
+    // Status change + cancellation event commit together. The WHERE on status
+    // makes a racing capture win cleanly: if the order was paid between the
+    // read above and here, zero rows match and nothing is cancelled or staged.
+    const cancelled = await prisma.$transaction(async (tx) => {
+      const r = await tx.order.updateMany({
+        where: { id: orderId, status: { in: [...EXPIRABLE_STATUSES] } },
+        data: { status: 'CANCELLED' },
+      })
+      if (r.count === 0) return false
+      await onOrderCancelled(tx, {
+        orderId,
+        orderNumber,
+        reason: 'expired-unpaid',
+        items: order.items.map((i) => ({
+          productId: i.productId,
+          sku: i.productSku,
+          quantity: i.quantity,
+          unitPrice: Number(i.unitPrice),
+        })),
+      })
+      return true
     })
-
-    // The order is now genuinely cancelled and committed. Publishing failures
-    // are swallowed inside the publisher, so a broker outage cannot fail the
-    // job and cause BullMQ to retry a cancellation that already happened.
-    await onOrderCancelled({
-      orderId,
-      orderNumber,
-      reason: 'expired-unpaid',
-      items: order.items.map((i) => ({
-        productId: i.productId,
-        sku: i.productSku,
-        quantity: i.quantity,
-        unitPrice: Number(i.unitPrice),
-      })),
-    })
+    if (!cancelled) {
+      return { outcome: 'skipped', reason: 'order-moved-on-during-expiry', orderId, orderNumber }
+    }
 
     return { outcome: 'cancelled', orderId, orderNumber }
   }

@@ -1,23 +1,21 @@
 /**
- * The four aggregate shapes plus the idempotency ledger, as they are stored.
- *
- * Every one carries an explicit `id` because EmbeddedDocumentStore mirrors
- * `id` into nedb's `_id` on insert — giving each document a NATURAL key
- * (the hour, the productId, the eventId) rather than a generated one. That
- * is what makes an upsert a single `update({ id }, ...)`, and what makes the
- * idempotency check below a single `findOne({ id: eventId })`.
+ * The aggregate shapes the read layer returns, plus the idempotency ledger
+ * input. Each maps to one table in schema ms_analytics (migrations/001_init.sql);
+ * the natural key of each table (the hour, the productId, the eventId) is its
+ * PRIMARY KEY, which is what makes an upsert a single INSERT ... ON CONFLICT
+ * and the idempotency check a single INSERT ... ON CONFLICT DO NOTHING.
  */
 
-/** Idempotency ledger. One row per eventId this service has already applied. */
+/**
+ * What the idempotency ledger records for an event. `processed_at` is stamped
+ * by the database clock, so it is not part of the input.
+ */
 export interface ProcessedEventDoc {
   /** === envelope.eventId. The whole point: the natural key IS the dedupe key. */
-  id?: string | undefined
-  _id?: string | undefined
+  id: string
   eventType: string
   /** When the FACT occurred (envelope.occurredAt), not when we consumed it. */
   occurredAt: string
-  /** When this service applied it. The gap between the two is consumer lag. */
-  processedAt: string
   topic: string
   partition: number
   offset: string
@@ -34,8 +32,6 @@ export interface ProcessedEventDoc {
  */
 export interface HourBucketDoc {
   /** 'YYYY-MM-DDTHH' in UTC — the natural key, and also sortable as a string. */
-  id?: string | undefined
-  _id?: string | undefined
   hourKey: string
   orders: number
   confirmed: number
@@ -52,8 +48,6 @@ export interface HourBucketDoc {
 
 /** Per-product counters, keyed on productId. */
 export interface ProductCounterDoc {
-  id?: string | undefined
-  _id?: string | undefined
   productId: string
   sku: string
   /** Sum of line-item quantities across orders. */
@@ -69,8 +63,6 @@ export interface ProductCounterDoc {
 
 /** Payment outcomes. A singleton document. */
 export interface PaymentOutcomeDoc {
-  id?: string | undefined
-  _id?: string | undefined
   captured: number
   failed: number
   refunded: number
@@ -88,8 +80,6 @@ export interface PaymentOutcomeDoc {
 
 /** The five funnel counts. A singleton document. */
 export interface FunnelDoc {
-  id?: string | undefined
-  _id?: string | undefined
   created: number
   confirmed: number
   cancelled: number
@@ -107,8 +97,6 @@ export interface FunnelDoc {
  * queue endpoints were built to avoid.
  */
 export interface ProgressDoc {
-  id?: string | undefined
-  _id?: string | undefined
   /** Events APPLIED (duplicates excluded). Durable, unlike the consumer's counters. */
   eventsProcessed: number
   /** Duplicates skipped by the idempotency check. Proof it is doing something. */

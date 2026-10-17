@@ -55,21 +55,21 @@ COPY --from=builder /app/packages/ms-inventory/node_modules ./packages/ms-invent
 COPY --from=builder /app/packages/ms-inventory/dist ./packages/ms-inventory/dist
 COPY --from=builder /app/packages/ms-inventory/package.json ./packages/ms-inventory/package.json
 
+# SQL migrations are not emitted by tsc. The service resolves them at
+# <package root>/migrations (two levels above dist/db) and applies them at boot.
+COPY --from=builder /app/packages/ms-inventory/migrations ./packages/ms-inventory/migrations
+
 # The shared packages are consumed through symlinks into these directories, so
 # their COMPILED output has to be present too — the symlink resolves to a real
 # path that must exist in this stage.
 COPY --from=builder /app/packages/shared ./packages/shared
 
-# NeDB writes its .db files here. Declared as a volume so stock levels and the
-# processed-event ledger survive `docker compose up --build` — without it the
-# idempotency ledger is wiped on every rebuild and a redelivered order would
-# reserve stock a second time.
-# Both directories are created and chowned BEFORE dropping to the nodejs
-# user. The logger mkdirs /app/logs at boot and the process cannot create a
-# directory at the image root as non-root — the container then exits with
-# EACCES before ever listening (measured 2026-09-23).
-RUN mkdir -p /app/data/nedb /app/logs && chown -R nodejs:nodejs /app/data /app/logs
-VOLUME ["/app/data"]
+# Only the logger needs a writable directory now: all service data lives in the
+# single Supabase Postgres (schema ms_inventory), so there is no data volume.
+# Created and chowned BEFORE dropping to the nodejs user: the logger mkdirs
+# /app/logs at boot and cannot create a directory at the image root as non-root
+# (the container then exits with EACCES before listening, measured 2026-09-23).
+RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
 
 USER nodejs
 
@@ -79,6 +79,5 @@ EXPOSE 5466
 # Setting PORT here would be silently ignored and the container would listen on
 # the 5466 default by coincidence rather than by configuration.
 ENV INVENTORY_SERVICE_PORT=5466
-ENV NEDB_DATA_PATH=/app/data/nedb
 
 CMD ["node", "packages/ms-inventory/dist/index.js"]

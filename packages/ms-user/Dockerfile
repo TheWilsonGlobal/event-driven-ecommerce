@@ -42,13 +42,12 @@ COPY --from=builder /app/packages/ms-user/package.json ./packages/ms-user/packag
 COPY --from=builder /app/packages/ms-user/prisma ./packages/ms-user/prisma
 COPY --from=builder /app/packages/shared ./packages/shared
 
-RUN mkdir -p /app/logs /app/data/db && chown -R nodejs:nodejs /app/logs /app/data
+RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs /app/data
 
 USER nodejs
 
 EXPOSE 5463
 
 ENV PORT=5463
-ENV DATABASE_URL="file:../../../data/db/ms-user.db"
 
 CMD ["node", "packages/ms-user/dist/index.js"]
