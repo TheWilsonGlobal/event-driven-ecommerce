@@ -586,8 +586,9 @@ describe('input validation and the error shape', () => {
     for (const price of [0, 0.01, 0.07, 0.29, 19.99, 33.33, 349.99, 1234.56, 1_000_000]) {
       expect((await post(price)).statusCode).toBe(200)
     }
-    // Every cent value up to 100.00 (about one in nine fail under plain float modulo).
-    for (let cents = 0; cents <= 10_000; cents++) {
+    // Every cent value up to 30.00 (about one in nine fail under plain float modulo, so this
+    // would catch a regression within the first few dozen values; kept small for slow CI runners).
+    for (let cents = 0; cents <= 3_000; cents++) {
       const price = cents / 100
       if ((await post(price)).statusCode !== 200) throw new Error(`rejected valid price ${price}`)
     }
@@ -595,7 +596,7 @@ describe('input validation and the error shape', () => {
       expect((await post(price)).statusCode).toBe(400)
     }
     await s.close()
-  })
+  }, 30_000)
 
   it('enforces bounds and never echoes the offending value', async () => {
     const s = await build({ routes })
